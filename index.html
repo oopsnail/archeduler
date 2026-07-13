@@ -1434,7 +1434,7 @@ let events={
   '2026-5-20': [{name:'월간 리뷰',time:'오전 11:00',color:'#1a7a4a'}],
 };
 function key(y,m,d){return `${y}-${m+1}-${d}`;}
-function _timeMins(t){const mm=(t||'').match(/(오전|오후)\s*(\d+):(\d+)/);if(!mm)return 24*60+1;let h=parseInt(mm[2])%12;if(mm[1]==='오후')h+=12;return h*60+parseInt(mm[3]);}
+function _timeMins(t){t=t||'';const mm=t.match(/(오전|오후)\s*(\d+):(\d+)/);if(mm){let h=parseInt(mm[2])%12;if(mm[1]==='오후')h+=12;return h*60+parseInt(mm[3]);}const h24=t.match(/^(\d{1,2}):(\d{2})$/);if(h24)return parseInt(h24[1])*60+parseInt(h24[2]);return 24*60+1;}
 function sortDayEvents(k){if(events[k])events[k].sort((a,b)=>_timeMins(a.time)-_timeMins(b.time));}
 Object.keys(events).forEach(sortDayEvents);
 const track=document.getElementById('calTrack'),viewport=document.getElementById('calViewport');
@@ -1554,7 +1554,7 @@ function openDelPicker(k,evs,y,m,day){const dt=new Date(y,m,day);document.getEle
 function doDelete(k,idx,name){if(!events[k])return;events[k].splice(idx,1);if(!events[k].length)delete events[k];buildPages();renderEvs();showToast(`"${name}" 삭제됐어요`,'del','ti-trash');}
 let _detailEv=null,_detailY=null,_detailM=null,_detailDay=null;
 function saveMemo(){const ta=document.getElementById('memoInput');if(!_detailEv)return;_detailEv.memo=ta.value;if(document.getElementById('wheelOverlay').classList.contains('show'))buildWheel();closeDetail();}
-function openDetail(ev,y,m,day){_detailEv=ev;_detailY=y;_detailM=m;_detailDay=day;
+function openDetail(ev,y,m,day){_detailEv=ev;_detailY=y;_detailM=m;_detailDay=day;if(!ev.k)ev.k=key(y,m,day);
   document.getElementById('detailBar').style.background=ev.color||'#1a7a4a';
   document.getElementById('detailTitle').textContent=ev.name;
   const dt=new Date(y,m,day),WKF=['일','월','화','수','목','금','토'];
@@ -6140,7 +6140,10 @@ document.getElementById('timePickerConfirm').addEventListener('click',()=>{
   const timeStr=`${h}:${m}`;
   _detailEv.time=timeStr;
   const el=document.getElementById('detailTimeVal');
-  if(el)el.textContent=timeStr;
+  if(el)el.textContent=_timeRangeLabel(_detailEv);
+  if(_detailEv.k)sortDayEvents(_detailEv.k);
+  buildPages();renderEvs();
+  if(document.getElementById('wheelOverlay').classList.contains('show')){wheelCards=getAllEvs();buildWheel();}
   closeTimePicker();
 });
 document.getElementById('timePickerDim').addEventListener('click',closeTimePicker);
