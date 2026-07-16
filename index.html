@@ -64,7 +64,7 @@
   .wdays span{font-size:9px;color:#9a9a93;text-align:center;font-weight:500;}
   .dates{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
 .dc{display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 1px 3px;cursor:pointer;-webkit-user-select:none;user-select:none;position:relative;min-height:44px;}
-  .dc{position:relative;min-width:0;overflow:hidden;}
+  .dc{position:relative;min-width:0;}
   .range-bar{position:absolute;bottom:-2px;left:-2px;right:-2px;height:4px;border-radius:0;}
   .range-bar.range-start{left:50%;border-radius:2px 0 0 2px;}
   .range-bar.range-end{right:50%;border-radius:0 2px 2px 0;}
@@ -83,7 +83,7 @@
   .dc.today.selected .dn{background:#111;color:#fff;}
   .dc.pressing .dn{transform:scale(1.25);background:#111!important;color:#fff!important;}
   .dbars{display:flex;gap:2px;height:3px;justify-content:center;}
-  .dpills{display:flex;flex-direction:column;gap:1px;width:100%;padding:0 1px;min-width:0;overflow:hidden;}
+  .dpills{display:flex;flex-direction:column;gap:1px;width:100%;padding:0 1px;min-width:0;}
   .dpill{font-size:7px;line-height:1.35;border-radius:2px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
   .dpill.rec{background:transparent!important;border:0.5px solid;box-sizing:border-box;}
   .dpill.pdone{text-decoration:line-through;opacity:0.5;}
@@ -1585,14 +1585,11 @@ function mkDay(cls,num,evs,y,m,day,isDim){const d=document.createElement('div');
       var lv=Math.min(evs.length,4);
       var heatBg=['#f4efe2','#e9dcc0','#ddc99a','#cfb373'][lv-1]||'#f4efe2';
       recHeat=heatBg;
-      var show=evs.slice(0,2);
-      pills=show.map(function(e){
+      pills=evs.map(function(e){
         return '<div class="dpill rectxt">'+(e.name||'기록')+'</div>';
       }).join('');
-      if(evs.length>2)pills+='<div class="dpill-more" style="color:#8a7440;">+'+(evs.length-2)+'</div>';
     } else {
-      var show2=evs.slice(0,2);
-      pills=show2.map(function(e){
+      pills=evs.map(function(e){
         var c=_evPillColors(e.color);
         if(e.done){
           // 완료된 일정: 선/네모 없이 흐린 글자색만
@@ -1600,7 +1597,6 @@ function mkDay(cls,num,evs,y,m,day,isDim){const d=document.createElement('div');
         }
         return '<div class="dpill" style="background:'+c[0]+';color:'+c[1]+';">'+(e.name||'일정')+'</div>';
       }).join('');
-      if(evs.length>2)pills+='<div class="dpill-more">+'+(evs.length-2)+'</div>';
     }
   }
   d.innerHTML=`<div class="dn">${num}</div><div class="dpills">${pills}</div>`;
