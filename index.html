@@ -64,7 +64,7 @@
   .wdays span{font-size:9px;color:#9a9a93;text-align:center;font-weight:500;}
   .dates{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
 .dc{display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 1px 3px;cursor:pointer;-webkit-user-select:none;user-select:none;position:relative;min-height:44px;}
-  .dc{position:relative;}
+  .dc{position:relative;min-width:0;overflow:hidden;}
   .range-bar{position:absolute;bottom:-2px;left:-2px;right:-2px;height:4px;border-radius:0;}
   .range-bar.range-start{left:50%;border-radius:2px 0 0 2px;}
   .range-bar.range-end{right:50%;border-radius:0 2px 2px 0;}
@@ -83,13 +83,13 @@
   .dc.today.selected .dn{background:#111;color:#fff;}
   .dc.pressing .dn{transform:scale(1.25);background:#111!important;color:#fff!important;}
   .dbars{display:flex;gap:2px;height:3px;justify-content:center;}
-  .dpills{display:flex;flex-direction:column;gap:1px;width:100%;padding:0 1px;}
+  .dpills{display:flex;flex-direction:column;gap:1px;width:100%;padding:0 1px;min-width:0;overflow:hidden;}
   .dpill{font-size:7px;line-height:1.35;border-radius:2px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
   .dpill.rec{background:transparent!important;border:0.5px solid;box-sizing:border-box;}
   .dpill.pdone{text-decoration:line-through;opacity:0.5;}
   .rec-heat{position:absolute;top:1px;left:1px;right:1px;bottom:1px;border-radius:7px;z-index:0;}
   .dc .dn,.dc .dpills{position:relative;z-index:1;}
-  .dpill.rectxt{background:transparent;color:#5c4718;font-weight:700;border-radius:0;padding:0 2px;}
+  .dpill.rectxt{background:transparent;color:#5c4718;font-weight:700;border-radius:0;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .dpill-more{font-size:6.5px;color:#a0a09a;padding-left:2px;line-height:1.2;font-weight:600;}
   .db{width:4px;height:4px;border-radius:50%;}
   .db.g{background:#1a7a4a;}.db.m{background:#74c69d;}.db.c{background:#d4c090;}
@@ -856,10 +856,6 @@
       <button class="dock-btn" id="dockChat" aria-label="채팅">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2.3-2.9A8 8 0 1 1 21 12z"/></svg>
         <span class="dock-label">채팅</span>
-      </button>
-      <button class="dock-btn" id="dockMy" aria-label="마이페이지">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/></svg>
-        <span class="dock-label">마이</span>
       </button>
     </div>
     <div class="nav">
@@ -1748,7 +1744,7 @@ function renderEvs(){
   const k=key(selectedYear,selectedMonth,selectedDay);
   let evs=events[k]||[];
   if(_calCatFilter)evs=evs.filter(_catMatch);
-  if(_recordMode)evs=evs.filter(e=>e.done); // 기록 모드: 완료된 일정만
+  if(_recordMode)evs=[]; // 기록 모드: 일정은 타임라인에 안 나오게 (기록만)
   const isT=selectedYear===_ty&&selectedMonth===_tm&&selectedDay===_td;
   document.getElementById('evLbl').textContent=isT?'오늘':`${selectedMonth+1}월 ${selectedDay}일`;
   const rows=document.getElementById('evRows');
@@ -2980,7 +2976,7 @@ function renderCheckPage(container){
   if(_ckto)_ckto.addEventListener('click',function(e){e.stopPropagation();openTemplatePicker(container);});
 
   var list=document.createElement('div');
-  list.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 6px;scrollbar-width:none;-ms-overflow-style:none;';
+  list.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 40px;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;';
 
   // 리마인드 배너
   var due=_dueBookmarks();
@@ -3263,7 +3259,7 @@ function renderRoutinePage(container){
   header.innerHTML='<div style="font-size:11px;color:#7d7d77;font-weight:600;">오늘의 루틴</div>'+(best>0?'<div style="font-size:10px;font-weight:700;color:#e58a3a;">🔥 최고 '+best+'일 연속</div>':'');
   container.appendChild(header);
   var list=document.createElement('div');
-  list.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 6px;scrollbar-width:none;-ms-overflow-style:none;';
+  list.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 40px;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;';
   if(!_routines.length){
     list.innerHTML='<div style="text-align:center;padding:40px 0;color:#9a9a93;font-size:12px;">루틴을 만들어보세요<br><span style="font-size:10px;">좋은 습관은 체크로, 나쁜 습관은 참기로</span></div>';
   }else{
@@ -3619,7 +3615,7 @@ function openLogoMenu(){
   dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.12);';
   dim.addEventListener('click',function(){wrap.remove();});
   var pop=document.createElement('div');
-  pop.style.cssText='position:absolute;top:56px;right:14px;background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.16);padding:6px;width:172px;animation:logoMenuIn 0.16s ease;';
+  pop.style.cssText='position:absolute;top:56px;right:14px;background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.16);padding:6px;width:172px;max-height:78vh;overflow-y:auto;scrollbar-width:none;animation:logoMenuIn 0.16s ease;';
   var n=(typeof _notifCount==='function')?_notifCount():0;
   function item(icon,label,badge,fn){
     var it=document.createElement('div');
@@ -3637,6 +3633,13 @@ function openLogoMenu(){
   item('<svg '+IC+'><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>','체크리스트 템플릿',null,function(){setHomePage(3);setTimeout(function(){try{openTemplatePicker(document.getElementById('checkPage'));}catch(e){}},60);});
   sep();
   item('<svg '+IC+'><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg>','내 프로필',null,function(){try{_mypageSub='profile';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="9"/></svg>','통계',null,function(){try{_mypageSub='stats';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>','알림 설정',null,function(){try{_mypageSub='notif';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>','테마',null,function(){try{_mypageSub='theme';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/><path d="M21 21v-2a4 4 0 0 0-3-3.9"/></svg>','친구',null,function(){try{setActiveTab('friendsTab');openFriendsPanel();}catch(e){}});
+  item('<svg '+IC+'><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>','관심사',null,function(){try{_mypageSub='interest';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><path d="M5 17l-2-9 5 3 4-6 4 6 5-3-2 9z"/><path d="M5 17h14v3H5z"/></svg>','요금제',null,function(){try{_mypageSub='plan';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  sep();
   item('<svg '+IC+'><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>','설정',null,function(){try{setActiveTab('loginTab');}catch(e){}});
   wrap.appendChild(dim);wrap.appendChild(pop);
   host.appendChild(wrap);
@@ -3654,7 +3657,7 @@ function openCalLogoMenu(){
   dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.12);';
   dim.addEventListener('click',function(){wrap.remove();});
   var pop=document.createElement('div');
-  pop.style.cssText='position:absolute;top:60px;right:16px;background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.16);padding:6px;width:186px;animation:logoMenuIn 0.16s ease;';
+  pop.style.cssText='position:absolute;top:60px;right:16px;background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.16);padding:6px;width:186px;max-height:78vh;overflow-y:auto;scrollbar-width:none;animation:logoMenuIn 0.16s ease;';
   var n=(typeof _notifCount==='function')?_notifCount():0;
   function item(icon,label,badge,fn){
     var it=document.createElement('div');
@@ -3672,6 +3675,13 @@ function openCalLogoMenu(){
   item('<svg '+IC+'><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>','오늘로 이동',null,function(){try{const delta=(new Date(_ty,_tm)-new Date(viewYear,viewMonth))/(1000*60*60*24*28);viewYear=_ty;viewMonth=_tm;selectedYear=_ty;selectedMonth=_tm;selectedDay=_td;updateHdr(delta>0?1:-1);buildPages();renderEvs();}catch(e){}});
   sep();
   item('<svg '+IC+'><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg>','내 프로필',null,function(){try{_mypageSub='profile';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="9"/></svg>','통계',null,function(){try{_mypageSub='stats';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>','알림 설정',null,function(){try{_mypageSub='notif';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>','테마',null,function(){try{_mypageSub='theme';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/><path d="M21 21v-2a4 4 0 0 0-3-3.9"/></svg>','친구',null,function(){try{setActiveTab('friendsTab');openFriendsPanel();}catch(e){}});
+  item('<svg '+IC+'><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>','관심사',null,function(){try{_mypageSub='interest';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  item('<svg '+IC+'><path d="M5 17l-2-9 5 3 4-6 4 6 5-3-2 9z"/><path d="M5 17h14v3H5z"/></svg>','요금제',null,function(){try{_mypageSub='plan';window._keepMypageSub=true;setActiveTab('loginTab');}catch(e){}});
+  sep();
   item('<svg '+IC+'><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>','설정',null,function(){try{setActiveTab('loginTab');}catch(e){}});
   wrap.appendChild(dim);wrap.appendChild(pop);
   host.appendChild(wrap);
@@ -4346,7 +4356,9 @@ function getBudgetData(){
       (_dailyLogs[k]||[]).forEach(function(lg,li){
         var r=parseBudget(lg.text||'');
         if(r.income===0&&r.expense===0)return;
-        var disp=stripMoney(lg.text||'')||lg.text;
+        var disp=stripMoney(lg.text||'')||lg.text||'';
+        disp=(disp||'').trim();
+        if(!disp)disp=(lg.emoji?lg.emoji+' ':'')+'내역';
         if(r.income>0){income+=r.income;list.push({name:disp,amount:r.income,nat:r.natIncome,cur:r.cur,type:'income',date:k,src:lg.text,li:li});}
         if(r.expense>0){expense+=r.expense;list.push({name:disp,amount:r.expense,nat:r.natExpense,cur:r.cur,type:'expense',date:k,src:lg.text,li:li});}
       });
@@ -4484,9 +4496,79 @@ function renderBudgetArchive(container,d){
   update();
 }
 
+var _budgetInputDate=null;
+function _bdChipLabel(){
+  var n=_budgetInputDate||new Date();
+  var tk=getTodayLogKey();
+  var k=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
+  var yd=new Date();yd.setDate(yd.getDate()-1);
+  var yk=yd.getFullYear()+'-'+(yd.getMonth()+1)+'-'+yd.getDate();
+  if(k===tk)return '오늘';
+  if(k===yk)return '어제';
+  return (n.getMonth()+1)+'/'+n.getDate();
+}
+function _makeBudgetDateChip(container){
+  if(!_budgetInputDate)_budgetInputDate=new Date();
+  var dChip=document.createElement('button');
+  dChip.setAttribute('aria-label','날짜 선택');
+  dChip.className='bd-chip';
+  dChip.style.cssText='flex-shrink:0;display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;color:#8a7a3a;background:#f4eed6;border:none;border-radius:13px;padding:5px 9px;cursor:pointer;font-family:inherit;line-height:1;';
+  dChip.innerHTML='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span class="bd-chip-label">'+_bdChipLabel()+'</span>';
+  dChip.addEventListener('click',function(e){e.stopPropagation();_openBudgetDatePicker(container);});
+  return dChip;
+}
+function _openBudgetDatePicker(container){
+  var old=document.getElementById('bdPicker');if(old){old.remove();return;}
+  var host=container.closest('#homeView')||document.getElementById('homeView')||container;
+  if(getComputedStyle(host).position==='static')host.style.position='relative';
+  var wrap=document.createElement('div');wrap.id='bdPicker';wrap.style.cssText='position:absolute;inset:0;z-index:3000;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.15);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:absolute;left:14px;right:14px;bottom:72px;background:#fff;border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,0.2);padding:14px;animation:logoMenuIn 0.18s ease;';
+  var base=_budgetInputDate||new Date();
+  var vy=base.getFullYear(),vm=base.getMonth();
+  function draw(){
+    var first=new Date(vy,vm,1).getDay();
+    var total=new Date(vy,vm+1,0).getDate();
+    var todayK=getTodayLogKey();
+    var cells='';
+    for(var i=0;i<first;i++)cells+='<div></div>';
+    for(var dd=1;dd<=total;dd++){
+      var k=vy+'-'+(vm+1)+'-'+dd;
+      var isSel=_budgetInputDate&&_budgetInputDate.getFullYear()===vy&&_budgetInputDate.getMonth()===vm&&_budgetInputDate.getDate()===dd;
+      var isToday=k===todayK;
+      var isFuture=new Date(vy,vm,dd)>new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+      cells+='<div data-d="'+dd+'" style="text-align:center;font-size:11px;padding:6px 0;border-radius:8px;cursor:'+(isFuture?'default':'pointer')+';'
+        +(isSel?'background:#8a6d1a;color:#fff;font-weight:700;':(isToday?'color:#8a6d1a;font-weight:700;':(isFuture?'color:#d8d8d2;':'color:#333;')))+'">'+dd+'</div>';
+    }
+    sheet.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+      +'<button class="bd-prev" style="border:none;background:#f4f4f1;border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:14px;color:#666;">‹</button>'
+      +'<div style="font-size:12px;font-weight:700;color:#111;">'+vy+'년 '+(vm+1)+'월</div>'
+      +'<button class="bd-next" style="border:none;background:#f4f4f1;border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:14px;color:#666;">›</button></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:8px;color:#a0a09a;text-align:center;margin-bottom:4px;"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">'+cells+'</div>';
+    sheet.querySelector('.bd-prev').addEventListener('click',function(e){e.stopPropagation();vm--;if(vm<0){vm=11;vy--;}draw();});
+    sheet.querySelector('.bd-next').addEventListener('click',function(e){e.stopPropagation();vm++;if(vm>11){vm=0;vy++;}draw();});
+    sheet.querySelectorAll('[data-d]').forEach(function(el){
+      el.addEventListener('click',function(e){
+        e.stopPropagation();
+        var dd=parseInt(el.getAttribute('data-d'));
+        if(new Date(vy,vm,dd)>new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()))return;
+        _budgetInputDate=new Date(vy,vm,dd);
+        wrap.remove();
+        var lbls=container.querySelectorAll('.bd-chip-label');
+        lbls.forEach(function(l){l.textContent=_bdChipLabel();});
+      });
+    });
+  }
+  draw();
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+}
 function _budgetInputBar(container){
   var bWrap=document.createElement('div');
-  bWrap.style.cssText='margin:auto 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 15px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
+  bWrap.style.cssText='margin:auto 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 8px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
+  var dChip=_makeBudgetDateChip(container);
   var bInp=document.createElement('input');
   bInp.id='budgetInput';
   bInp.placeholder='예: 점심 12000원 · 라멘 1200엔';
@@ -4500,7 +4582,8 @@ function _budgetInputBar(container){
     if(!txt)return;
     var r=parseBudget(txt);
     if(r.income===0&&r.expense===0){showToast('금액을 함께 적어주세요 (예: 점심 12000원)','del','ti-x');return;}
-    var vk=(function(){var n=null;try{if(_homeDate)n=_homeDate;}catch(e){}if(!n)n=new Date();return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();})();
+    var n=_budgetInputDate||new Date();
+    var vk=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
     addLog(txt,vk);
     _budgetWeekSel=null;
     renderBudgetPage(container);
@@ -4511,7 +4594,7 @@ function _budgetInputBar(container){
   }
   bBtn.addEventListener('click',submit);
   bInp.addEventListener('keydown',function(e){if(e.key==='Enter')submit();});
-  bWrap.appendChild(bInp);bWrap.appendChild(bBtn);
+  bWrap.appendChild(dChip);bWrap.appendChild(bInp);bWrap.appendChild(bBtn);
   container.appendChild(bWrap);
 }
 function renderBudgetToday(container,d){
@@ -4617,10 +4700,10 @@ function renderBudgetPage(container){
         +'<button class="bg-edit" data-bi="'+bi+'" aria-label="수정" style="width:38px;height:calc(100% - 8px);border:0.5px solid #e0d9a0;border-radius:9px;background:#f3ecc9;color:#6d5c17;cursor:pointer;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>'
         +'<button class="bg-del" data-bi="'+bi+'" aria-label="삭제" style="width:38px;height:calc(100% - 8px);border:none;border-radius:9px;background:#c0392b;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
         +'</div>'
-        +'<div class="bg-row" data-bi="'+bi+'" style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:6px 0;background:#fafaf8;transition:transform 0.2s ease;touch-action:pan-y;">'
-        +'<div style="display:flex;align-items:center;gap:6px;min-width:0;">'
+        +'<div class="bg-row" data-bi="'+bi+'" style="position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;background:#fafaf8;transition:transform 0.2s ease;touch-action:pan-y;">'
+        +'<div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">'
         +'<span style="font-size:8px;font-weight:700;color:#a08f52;background:#f7f1dc;border-radius:7px;padding:2px 6px;flex-shrink:0;">'+mo+'/'+day+'</span>'
-        +'<span style="font-size:10px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+shortName+'</span>'
+        +'<span style="font-size:10px;color:#3a3a36;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">'+shortName+'</span>'
         +'</div>'
         +'<span style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:1px;"><span style="font-size:11px;font-weight:700;color:'+(it.type==='income'?'#1a7a4a':'#c0392b')+';">'+(it.type==='income'?'+':'-')+fmtCur(it.nat!=null?it.nat:it.amount,it.cur||'원')+'</span>'+((it.cur&&it.cur!=='원')?'<span style="font-size:7px;color:#a08f52;">≈ '+fmt(it.amount)+'원</span>':'')+'</span>'
         +'</div></div>';
@@ -4700,8 +4783,10 @@ function renderBudgetPage(container){
       var it=selList[parseInt(el.getAttribute('data-bi'))];
       if(!it)return;
       var src=it.src||'';
+      var _itDate=it.date?it.date.split('-'):null;
       if(_removeBudgetLog(it)){
         _budgetItemSel=null;
+        if(_itDate)_budgetInputDate=new Date(parseInt(_itDate[0]),parseInt(_itDate[1])-1,parseInt(_itDate[2]));
         renderBudgetPage(container);
         try{renderLogPage(document.getElementById('logPage'));}catch(e){}
         var bi3=document.getElementById('budgetInput');
@@ -4724,7 +4809,8 @@ function renderBudgetPage(container){
 
   // 가계부 자연어 입력바 (원필드 캡슐)
   var bWrap=document.createElement('div');
-  bWrap.style.cssText='margin:auto 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 15px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
+  bWrap.style.cssText='margin:auto 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 8px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
+  var dChip=_makeBudgetDateChip(container);
   var bInp=document.createElement('input');
   bInp.id='budgetInput';
   bInp.placeholder='예: 점심 12000원 · 라멘 1200엔';
@@ -4741,7 +4827,8 @@ function renderBudgetPage(container){
       showToast('금액을 함께 적어주세요 (예: 점심 12000원)','del','ti-x');
       return;
     }
-    var vk=(function(){var n=null;try{if(_homeDate)n=_homeDate;}catch(e){}if(!n)n=new Date();return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();})();
+    var n=_budgetInputDate||new Date();
+    var vk=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
     addLog(txt,vk);
     _budgetWeekSel=null;
     renderBudgetPage(container);
@@ -4754,7 +4841,7 @@ function renderBudgetPage(container){
   }
   bBtn.addEventListener('click',_budgetSubmit);
   bInp.addEventListener('keydown',function(e){if(e.key==='Enter')_budgetSubmit();});
-  bWrap.appendChild(bInp);bWrap.appendChild(bBtn);
+  bWrap.appendChild(dChip);bWrap.appendChild(bInp);bWrap.appendChild(bBtn);
   container.appendChild(bWrap);
 }
 
