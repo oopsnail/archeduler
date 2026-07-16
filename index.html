@@ -1587,9 +1587,11 @@ function mkDay(cls,num,evs,y,m,day,isDim){const d=document.createElement('div');
       var lv=Math.min(evs.length,4);
       var heatBg=['#f4efe2','#e9dcc0','#ddc99a','#cfb373'][lv-1]||'#f4efe2';
       recHeat=heatBg;
-      pills=evs.map(function(e){
+      var recShow=evs.slice(0,3);
+      pills=recShow.map(function(e){
         return '<div class="dpill rectxt">'+(e.name||'기록')+'</div>';
       }).join('');
+      if(evs.length>3)pills+='<div class="dpill-more" style="color:#8a7440;">+'+(evs.length-3)+'</div>';
     } else {
       pills=evs.map(function(e){
         var c=_evPillColors(e.color);
