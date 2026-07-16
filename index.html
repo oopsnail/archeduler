@@ -590,6 +590,10 @@
   .cal-view{display:flex;flex-direction:column;flex:1;min-height:0;}
   .cal-view.hidden{display:none;}
   #mypageView.hidden{display:none!important;}
+  #crewView.hidden{display:none!important;}
+  #crewView{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;}
+  #shopView.hidden{display:none!important;}
+  #shopView{display:flex;flex-direction:column;flex:1;min-height:0;}
   #mypageView{display:flex;flex:1;min-height:0;scrollbar-width:none;-ms-overflow-style:none;}
   #mypageView::-webkit-scrollbar{display:none;}
   .home-header{padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;cursor:ew-resize;-webkit-user-select:none;user-select:none;}
@@ -684,7 +688,7 @@
   .memo-topbar-title{font-size:15px;font-weight:800;color:#111;line-height:1;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;-webkit-user-select:none;user-select:none;}
   .memo-topbar-count{font-size:9px;color:#9a9a93;line-height:1;}
   .chip-edit-btn{flex-shrink:0;margin-left:auto;padding:0 0 6px 4px;cursor:pointer;color:#111;display:flex;align-items:center;-webkit-user-select:none;user-select:none;}
-  .dock-bar{display:flex;justify-content:center;align-items:center;gap:9px;padding:7px 0 10px;flex-shrink:0;background:transparent;}
+  .dock-bar{display:flex;justify-content:center;align-items:center;gap:7px;padding:7px 0 10px;flex-shrink:0;background:transparent;}
   .dock-btn{height:38px;min-width:38px;padding:0;border-radius:19px;background:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;color:#a8a8a2;box-shadow:0 4px 12px rgba(0,0,0,0.1);transition:color 0.2s,box-shadow 0.2s;}
   .dock-btn:active{transform:scale(0.94);}
   .dock-btn svg{width:17px;height:17px;flex-shrink:0;}
@@ -848,6 +852,20 @@
     <div id="mypageView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;">
       <div style="padding:20px;" id="mypageBody"></div>
     </div>
+    <div id="crewView" class="hidden">
+      <div style="padding:20px 20px 16px;flex-shrink:0;" id="crewTopHead">
+        <div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">Crew</div>
+        <div style="font-size:11px;color:#9a948a;margin-top:2px;">같은 목표를 가진 사람들과 함께해요</div>
+      </div>
+      <div id="crewBody" style="flex:1;min-height:0;padding:0 20px 40px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </div>
+    <div id="shopView" class="hidden">
+      <div style="padding:20px 20px 14px;flex-shrink:0;">
+        <div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">쇼핑</div>
+        <div style="font-size:11px;color:#9a948a;margin-top:2px;">내 일정·기록에 맞춘 추천</div>
+      </div>
+      <div id="shopBody" style="flex:1;min-height:0;position:relative;"></div>
+    </div>
     <div class="dock-bar" id="dockBar">
       <button class="dock-btn" id="dockToday" aria-label="일정">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
@@ -860,6 +878,14 @@
       <button class="dock-btn" id="dockChat" aria-label="채팅">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2.3-2.9A8 8 0 1 1 21 12z"/></svg>
         <span class="dock-label">채팅</span>
+      </button>
+      <button class="dock-btn" id="dockCrew" aria-label="Crew">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v4a6 6 0 0 1-12 0V4z"/><path d="M6 6H4a2 2 0 0 0 0 4h2"/><path d="M18 6h2a2 2 0 0 1 0 4h-2"/><path d="M12 14v3"/><path d="M9 21h6"/><path d="M9 21a3 3 0 0 1 3-3 3 3 0 0 1 3 3"/></svg>
+        <span class="dock-label">Crew</span>
+      </button>
+      <button class="dock-btn" id="dockShop" aria-label="쇼핑">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>
+        <span class="dock-label">쇼핑</span>
       </button>
     </div>
     <div class="nav">
@@ -4060,6 +4086,58 @@ function _goalAutoTick(text){
 }
 var _goalView='all';
 var _goalFolders=[];
+function _goalAmountPopover(anchor,g,onDone){
+  var old=document.getElementById('goalAmtPop');if(old)old.remove();
+  var host=document.getElementById('homeView')||document.body;
+  if(getComputedStyle(host).position==='static')host.style.position='relative';
+  var wrap=document.createElement('div');wrap.id='goalAmtPop';wrap.style.cssText='position:absolute;inset:0;z-index:3200;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.28);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,0.22);padding:18px;animation:logoMenuIn 0.18s ease;';
+  var cur=g.cur||0;
+  sheet.innerHTML='<div style="font-size:12px;font-weight:800;color:#111;margin-bottom:2px;">'+g.title+'</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-bottom:14px;">현재 '+cur+' / '+g.target+'</div>'
+    +'<div style="font-size:9px;font-weight:800;color:#b0a894;margin-bottom:6px;">얼마나 진행했나요?</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:12px;">'
+      +'<button class="ga-add" data-v="10" style="flex:1;font-size:12px;font-weight:700;color:#1a7a4a;background:#eafaf1;border:none;border-radius:10px;padding:9px 0;cursor:pointer;font-family:inherit;">+10</button>'
+      +'<button class="ga-add" data-v="50" style="flex:1;font-size:12px;font-weight:700;color:#1a7a4a;background:#eafaf1;border:none;border-radius:10px;padding:9px 0;cursor:pointer;font-family:inherit;">+50</button>'
+      +'<button class="ga-add" data-v="100" style="flex:1;font-size:12px;font-weight:700;color:#1a7a4a;background:#eafaf1;border:none;border-radius:10px;padding:9px 0;cursor:pointer;font-family:inherit;">+100</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">'
+      +'<input id="gaInput" type="number" inputmode="numeric" placeholder="추가할 양 입력" style="flex:1;border:1.5px solid #e2e0da;border-radius:10px;padding:9px 11px;font-size:12px;outline:none;font-family:inherit;color:#111;min-width:0;"/>'
+      +'<button id="gaAddBtn" style="font-size:12px;font-weight:700;color:#fff;background:#111;border:none;border-radius:10px;padding:9px 14px;cursor:pointer;font-family:inherit;flex-shrink:0;">추가</button>'
+    +'</div>'
+    +'<button id="gaSetBtn" style="width:100%;margin-top:4px;font-size:10.5px;font-weight:600;color:#85857f;background:none;border:none;cursor:pointer;font-family:inherit;padding:6px;">또는 현재값을 직접 설정 ›</button>';
+  function commit(newCur){
+    g.cur=Math.max(0,Math.min(g.target,newCur));
+    if(g.cur>=g.target){g.cur=g.target;g.done=true;wrap.remove();showToast('목표 달성! 🎉 "'+g.title+'"','add','ti-target');}
+    else{g.done=false;wrap.remove();}
+    if(onDone)onDone();
+  }
+  sheet.querySelectorAll('.ga-add').forEach(function(b){
+    b.addEventListener('click',function(){commit((g.cur||0)+parseInt(b.getAttribute('data-v')));});
+  });
+  sheet.querySelector('#gaAddBtn').addEventListener('click',function(){
+    var v=parseInt(document.getElementById('gaInput').value);
+    if(!isNaN(v))commit((g.cur||0)+v);
+  });
+  sheet.querySelector('#gaInput').addEventListener('keydown',function(e){
+    if(e.key==='Enter'){var v=parseInt(this.value);if(!isNaN(v))commit((g.cur||0)+v);}
+  });
+  sheet.querySelector('#gaSetBtn').addEventListener('click',function(){
+    var inp=document.getElementById('gaInput');
+    inp.placeholder='현재값 (0~'+g.target+')';
+    inp.focus();
+    this.textContent='입력한 값으로 현재값 설정됨';
+    document.getElementById('gaAddBtn').textContent='설정';
+    document.getElementById('gaAddBtn').onclick=function(){var v=parseInt(inp.value);if(!isNaN(v))commit(v);};
+    inp.onkeydown=function(e){if(e.key==='Enter'){var v=parseInt(this.value);if(!isNaN(v))commit(v);}};
+  });
+  sheet.addEventListener('click',function(e){e.stopPropagation();});
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  setTimeout(function(){try{document.getElementById('gaInput').focus();}catch(e){}},60);
+}
 function _goalFolderPopover(anchor,current,onPick){
   var old=anchor.parentElement.querySelector('.goal-fold-pop');
   if(old){old.remove();return;}
@@ -4202,7 +4280,7 @@ function renderGoalPage(container){
           +'<div style="font-size:11px;font-weight:600;color:'+(g.done?'#3d8a5f':'#222')+';word-break:break-word;">'+g.title+(g.done?' 🎉':'')+'</div>'
           +'<div style="height:4px;background:'+(g.done?'#d8ecdf':'#f0f0ee')+';border-radius:2px;margin-top:6px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+(g.done?'#1a7a4a':'#111')+';border-radius:2px;transition:width 0.25s;"></div></div>'
           +'</div>'
-          +'<span class="g-cnt" style="font-size:10px;font-weight:800;color:'+(g.done?'#1a7a4a':'#111')+';flex-shrink:0;cursor:pointer;" title="탭하면 -1">'+(g.cur||0)+'/'+g.target+'</span>'
+          +'<span class="g-cnt" style="font-size:10px;font-weight:800;color:'+(g.done?'#1a7a4a':'#111')+';flex-shrink:0;cursor:pointer;background:#f4f3ee;border-radius:8px;padding:3px 7px;" title="탭해서 진행 입력">'+(g.cur||0)+'/'+g.target+'</span>'
           +(g.done?'':'<button class="g-plus" aria-label="+1" style="width:24px;height:24px;border-radius:50%;background:#111;color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;line-height:1;">+</button>')
           +starBtn+foldBtn+xBtn;
         var plus=row.querySelector('.g-plus');
@@ -4214,7 +4292,7 @@ function renderGoalPage(container){
         });
         row.querySelector('.g-cnt').addEventListener('click',function(e){
           e.stopPropagation();
-          if((g.cur||0)>0){g.cur--;g.done=false;renderGoalPage(container);}
+          _goalAmountPopover(e.currentTarget,g,function(){renderGoalPage(container);});
         });
       }else{
         row.style.cssText='display:flex;align-items:center;gap:7px;padding:10px 12px;background:'+(g.done?'#f4faf6':'#fff')+';border:1.5px solid '+(g.done?'#d8ecdf':'#f0f0ee')+';border-radius:12px;margin-bottom:7px;cursor:pointer;-webkit-user-select:none;user-select:none;position:relative;';
@@ -5442,6 +5520,390 @@ function openWidgetPicker(){
 function openWidgetModal(){openWidgetPicker();}
 function closeWidgetModal(){document.getElementById('widgetModal').classList.remove('show');}
 
+var _shopItems=[];
+function _shopSave(){try{if(window._saveState)window._saveState();}catch(e){}}
+function _shopSignals(){
+  // 내 일정(events) + 기록(_dailyLogs) + 가계부를 훑어 관심 키워드 집계
+  var counts={};
+  function bump(cat,w){counts[cat]=(counts[cat]||0)+(w||1);}
+  var KW=[
+    ['fitness',/헬스|운동|러닝|조깅|달리기|스쿼트|요가|필라테스|pt|짐|gym|홈트|스트레칭|등산|자전거|수영/i],
+    ['study',/공부|독서|책|스터디|강의|인강|시험|자격증|영어|토익|토플|학습|읽기/i],
+    ['coffee',/커피|카페|아메리카노|라떼|에스프레소|스타벅스|coffee/i],
+    ['morning',/기상|아침|새벽|모닝|일찍|알람/i],
+    ['food',/점심|저녁|아침밥|식사|요리|밀키트|다이어트|샐러드|한끼|라멘|밥|맛집/i],
+    ['sleep',/수면|잠|취침|불면|숙면|자기|일찍 자/i],
+    ['work',/회의|업무|출근|프로젝트|보고서|미팅|마감|작업|코딩|개발/i],
+    ['beauty',/스킨|화장|뷰티|피부|마스크팩|네일|미용|헤어/i],
+    ['travel',/여행|출장|비행기|호텔|공항|캠핑|드라이브/i],
+    ['pet',/강아지|고양이|반려|산책|펫|사료/i]
+  ];
+  function scan(text,w){
+    if(!text)return;
+    KW.forEach(function(k){if(k[1].test(text))bump(k[0],w);});
+  }
+  // events
+  try{Object.keys(events||{}).forEach(function(key){(events[key]||[]).forEach(function(e){scan((e.name||'')+' '+(e.tag||''),2);});});}catch(e){}
+  // daily logs (기록)
+  try{Object.keys(_dailyLogs||{}).forEach(function(key){(_dailyLogs[key]||[]).forEach(function(l){scan(l.text,1);});});}catch(e){}
+  var arr=Object.keys(counts).map(function(c){return {cat:c,n:counts[c]};});
+  arr.sort(function(a,b){return b.n-a.n;});
+  return arr;
+}
+var _shopCatalog={
+  fitness:{label:'운동',emoji:'🏋️',reason:'운동 일정·기록이 많아요',items:[
+    {name:'웨이 프로틴 2kg',price:'42,900원',tag:'베스트',emoji:'🥤'},
+    {name:'논슬립 요가매트',price:'19,800원',emoji:'🧘'},
+    {name:'스마트 워치 밴드',price:'34,000원',emoji:'⌚'},
+    {name:'헬스 장갑',price:'12,500원',emoji:'🧤'}
+  ]},
+  study:{label:'공부·독서',emoji:'📚',reason:'공부·독서 기록이 있어요',items:[
+    {name:'전자책 리더기',price:'139,000원',tag:'인기',emoji:'📖'},
+    {name:'블루라이트 안경',price:'23,000원',emoji:'👓'},
+    {name:'독서대 접이식',price:'15,900원',emoji:'📐'},
+    {name:'집중 타이머',price:'18,000원',emoji:'⏱️'}
+  ]},
+  coffee:{label:'커피',emoji:'☕',reason:'커피·카페 기록이 잦아요',items:[
+    {name:'홈카페 드립세트',price:'38,000원',tag:'추천',emoji:'☕'},
+    {name:'원두 1kg 구독',price:'29,900원/월',emoji:'🫘'},
+    {name:'텀블러 보온병',price:'24,000원',emoji:'🥤'}
+  ]},
+  morning:{label:'모닝 루틴',emoji:'🌅',reason:'새벽 기상 목표가 있어요',items:[
+    {name:'무드등 알람시계',price:'45,000원',tag:'베스트',emoji:'⏰'},
+    {name:'모닝 스트레칭 밴드',price:'9,900원',emoji:'🧘'},
+    {name:'비타민 D 90정',price:'16,500원',emoji:'💊'}
+  ]},
+  food:{label:'식사·다이어트',emoji:'🥗',reason:'식사·다이어트 기록 기반',items:[
+    {name:'닭가슴살 30팩',price:'32,900원',tag:'인기',emoji:'🍗'},
+    {name:'샐러드 밀키트 세트',price:'27,000원',emoji:'🥗'},
+    {name:'전자 주방저울',price:'14,000원',emoji:'⚖️'}
+  ]},
+  sleep:{label:'수면',emoji:'😴',reason:'수면 관련 기록이 있어요',items:[
+    {name:'메모리폼 베개',price:'39,000원',emoji:'🛏️'},
+    {name:'수면 안대·귀마개',price:'11,900원',emoji:'😴'},
+    {name:'라벤더 필로우 미스트',price:'17,000원',emoji:'🌿'}
+  ]},
+  work:{label:'업무',emoji:'💼',reason:'업무·회의 일정이 많아요',items:[
+    {name:'인체공학 마우스',price:'49,000원',emoji:'🖱️'},
+    {name:'노트북 거치대',price:'26,000원',emoji:'💻'},
+    {name:'노이즈캔슬 이어폰',price:'119,000원',tag:'베스트',emoji:'🎧'}
+  ]},
+  beauty:{label:'뷰티',emoji:'💄',reason:'뷰티·피부 기록 기반',items:[
+    {name:'수분 마스크팩 30매',price:'21,900원',emoji:'🧖'},
+    {name:'비타민C 세럼',price:'28,000원',emoji:'💧'}
+  ]},
+  travel:{label:'여행',emoji:'✈️',reason:'여행·출장 일정이 있어요',items:[
+    {name:'기내용 캐리어',price:'89,000원',tag:'인기',emoji:'🧳'},
+    {name:'여행용 파우치 세트',price:'16,500원',emoji:'👝'}
+  ]},
+  pet:{label:'반려동물',emoji:'🐾',reason:'반려동물 기록이 있어요',items:[
+    {name:'자동 급식기',price:'54,000원',emoji:'🍚'},
+    {name:'산책 리드줄',price:'18,000원',emoji:'🦮'}
+  ]}
+};
+function renderShop(){
+  var host=document.getElementById('shopBody');
+  if(!host)return;
+  var sig=_shopSignals();
+  var top=sig.filter(function(s){return _shopCatalog[s.cat];});
+  var wrap='<div style="position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 40px;">';
+  if(!top.length){
+    wrap+='<div style="text-align:center;padding:46px 20px;color:#b8b3a8;font-size:12px;line-height:1.7;">일정과 기록을 남기면<br>거기에 맞는 상품을 추천해드려요<br><span style="font-size:10px;color:#c8c3b8;">예: 헬스 기록 → 프로틴·요가매트</span></div>';
+    host.innerHTML=wrap+'</div>';
+    return;
+  }
+  // 배너: 가장 강한 관심사
+  var lead=_shopCatalog[top[0].cat];
+  wrap+='<div style="background:linear-gradient(135deg,#1a7a4a,#0f5c37);border-radius:16px;padding:16px 18px;margin-bottom:18px;color:#fff;">'
+    +'<div style="font-size:10px;opacity:0.85;font-weight:700;">내 활동 맞춤 추천</div>'
+    +'<div style="font-size:16px;font-weight:800;margin-top:3px;">'+lead.emoji+' '+lead.label+' 관심 있으시죠?</div>'
+    +'<div style="font-size:10.5px;opacity:0.9;margin-top:3px;">'+lead.reason+' · 딱 맞는 상품을 모았어요</div></div>';
+  // 카테고리별 섹션 (상위 4개)
+  top.slice(0,4).forEach(function(s){
+    var cat=_shopCatalog[s.cat];
+    wrap+='<div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 9px;">'
+      +'<div style="font-size:13px;font-weight:800;color:#111;">'+cat.emoji+' '+cat.label+'</div>'
+      +'<div style="font-size:9px;color:#b0a894;font-weight:600;">'+cat.reason+'</div></div>';
+    wrap+='<div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:16px;">';
+    cat.items.forEach(function(it){
+      wrap+='<div class="shop-card" data-name="'+it.name+'" data-price="'+it.price+'" style="flex:0 0 128px;background:#fff;border:0.5px solid #eee;border-radius:13px;overflow:hidden;cursor:pointer;">'
+        +'<div style="height:96px;background:#f5f3ee;display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;">'+it.emoji
+        +(it.tag?'<span style="position:absolute;top:7px;left:7px;font-size:8px;font-weight:800;color:#fff;background:#e0653e;border-radius:6px;padding:2px 6px;">'+it.tag+'</span>':'')
+        +'</div>'
+        +'<div style="padding:9px 10px 11px;">'
+        +'<div style="font-size:10.5px;color:#333;line-height:1.35;height:28px;overflow:hidden;">'+it.name+'</div>'
+        +'<div style="font-size:12px;font-weight:800;color:#111;margin-top:5px;">'+it.price+'</div>'
+        +'<button class="shop-buy" data-name="'+it.name+'" style="width:100%;margin-top:8px;font-size:10px;font-weight:700;color:#fff;background:#111;border:none;border-radius:9px;padding:7px;cursor:pointer;font-family:inherit;">구매하기</button>'
+        +'</div></div>';
+    });
+    wrap+='</div>';
+  });
+  wrap+='<div style="font-size:9px;color:#c0bcb2;text-align:center;margin-top:6px;line-height:1.6;">추천 상품은 내 일정·기록을 바탕으로 자동 선정돼요<br>광고 · 실제 결제는 준비 중이에요</div>';
+  wrap+='</div>';
+  host.innerHTML=wrap;
+  host.querySelectorAll('.shop-buy').forEach(function(b){
+    b.addEventListener('click',function(e){
+      e.stopPropagation();
+      var nm=b.getAttribute('data-name');
+      showToast('"'+nm+'" 구매 기능은 곧 열려요','add','ti-shopping-cart');
+    });
+  });
+  host.querySelectorAll('.shop-card').forEach(function(c){
+    c.addEventListener('click',function(){
+      showToast('"'+c.getAttribute('data-name')+'" 상세는 준비 중이에요','add','ti-eye');
+    });
+  });
+}
+
+var _crewTab='challenge';
+var _crewDetailId=null;
+var _crewDetailFilter='all';
+var _crewData={
+  challenges:[
+    {id:'run30',emoji:'🏃',name:'매일 30분 운동',members:1240,streak:21,joined:true,progress:0.7,tag:'운동',posts:[
+      {who:'민준',color:'#ffd9b0',ago:'8분 전',kind:'tip',text:'운동 전에 옷 미리 입고 있으면 미루기가 어려워져요. 소파에 앉기 전에 바로 나가기 👟',likes:31,comments:5,liked:false},
+      {who:'수아',color:'#cfe4d8',ago:'40분 전',kind:'proof',text:'퇴근 후 러닝 5km 완료! 오늘 유난히 가벼웠다',likes:18,comments:2,liked:false,img:true},
+      {who:'현우',color:'#b7d4f0',ago:'2시간 전',kind:'talk',text:'다들 아침파 저녁파? 저는 아침에 해야 하루가 개운하더라구요',likes:9,comments:14,liked:false}
+    ]},
+    {id:'wake5',emoji:'🌅',name:'새벽 5시 기상',members:856,streak:7,joined:true,progress:0.4,tag:'생활',posts:[
+      {who:'민준',color:'#ffd9b0',ago:'12분 전',kind:'tip',text:'알람을 침대에서 3걸음 떨어진 곳에 두면 무조건 일어나게 됨. 이거 진짜 효과봄 👍',likes:42,comments:8,liked:false},
+      {who:'서연',color:'#cfe4d8',ago:'28분 전',kind:'proof',text:'7일 연속 성공 🔥 오늘 커피 대신 물 마셨더니 더 잘 깨네요',likes:15,comments:2,liked:false,img:true},
+      {who:'하늘',color:'#c8b6e8',ago:'1시간 전',kind:'talk',text:'다들 몇 시에 자요? 저는 아무리 일찍 자도 5시가 힘드네요 😭',likes:6,comments:23,liked:false}
+    ]},
+    {id:'read20',emoji:'📖',name:'하루 20p 독서',members:2103,streak:0,joined:false,progress:0,tag:'공부',posts:[
+      {who:'지우',color:'#f4c0d1',ago:'30분 전',kind:'tip',text:'출퇴근 지하철에서만 읽어도 하루 20p는 금방이에요',likes:22,comments:3,liked:false}
+    ]},
+    {id:'water',emoji:'💧',name:'물 2L 마시기',members:640,streak:0,joined:false,progress:0,tag:'건강',posts:[]},
+    {id:'nosugar',emoji:'🍰',name:'디저트 끊기 21일',members:390,streak:0,joined:false,progress:0,tag:'식습관',posts:[]}
+  ],
+  feed:[
+    {who:'서연',color:'#cfe4d8',ago:'5분 전',chal:'새벽 5시 기상',text:'7일 연속 성공 🔥 오늘도 해냈다',img:true},
+    {who:'민준',color:'#ffd9b0',ago:'22분 전',chal:'매일 30분 운동',text:'퇴근 후 러닝 5km 완료',img:false},
+    {who:'하늘',color:'#c8b6e8',ago:'1시간 전',chal:'하루 20p 독서',text:'미움받을 용기 34p까지 📚',img:true},
+    {who:'지우',color:'#f4c0d1',ago:'3시간 전',chal:'물 2L 마시기',text:'벌써 1.5L 마심 💧',img:false}
+  ],
+  ranking:{
+    운동:[{n:'민준',c:'#ffd9b0',d:42},{n:'수아',c:'#cfe4d8',d:38},{n:'현우',c:'#b7d4f0',d:33},{n:'나',c:'#c8b6e8',d:21,me:true},{n:'예린',c:'#f4c0d1',d:18}],
+    생활:[{n:'서연',c:'#cfe4d8',d:29},{n:'나',c:'#c8b6e8',d:7,me:true},{n:'도윤',c:'#ffd9b0',d:5}]
+  }
+};
+var _crewRankTab='운동';
+
+function renderCrew(){
+  var body=document.getElementById('crewBody');
+  if(!body)return;
+  var topHead=document.getElementById('crewTopHead');
+  if(topHead)topHead.style.display=_crewDetailId?'none':'';
+  if(_crewDetailId){_crewRenderDetail(body);return;}
+  var tabs=[['challenge','챌린지'],['feed','피드'],['rank','랭킹'],['mine','내 현황']];
+  var segHtml='<div style="display:flex;gap:5px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;">';
+  tabs.forEach(function(t){
+    var on=_crewTab===t[0];
+    segHtml+='<button class="crew-seg" data-ct="'+t[0]+'" style="flex-shrink:0;font-size:11px;font-weight:700;padding:6px 13px;border-radius:16px;border:none;cursor:pointer;font-family:inherit;'
+      +(on?'background:#111;color:#fff;':'background:#f0eee8;color:#8a867c;')+'">'+t[1]+'</button>';
+  });
+  segHtml+='</div>';
+  body.innerHTML=segHtml+'<div id="crewSection"></div>';
+  body.querySelectorAll('.crew-seg').forEach(function(b){
+    b.addEventListener('click',function(){_crewTab=b.getAttribute('data-ct');renderCrew();});
+  });
+  var sec=document.getElementById('crewSection');
+  if(_crewTab==='challenge')_crewRenderChallenges(sec);
+  else if(_crewTab==='feed')_crewRenderFeed(sec);
+  else if(_crewTab==='rank')_crewRenderRank(sec);
+  else _crewRenderMine(sec);
+}
+
+function _crewKindTag(kind){
+  if(kind==='tip')return '<span style="font-size:9px;color:#8a6d1a;background:#f7f0e0;border-radius:7px;padding:1px 6px;">💡 꿀팁</span>';
+  if(kind==='proof')return '<span style="font-size:9px;color:#1a7a4a;background:#e3f3ea;border-radius:7px;padding:1px 6px;">✅ 인증</span>';
+  return '';
+}
+function _crewPostHtml(p,idx){
+  return '<div style="border-bottom:0.5px solid #f0f0ee;padding:11px 0;">'
+    +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">'
+    +'<div style="width:24px;height:24px;border-radius:50%;background:'+p.color+';flex-shrink:0;"></div>'
+    +'<span style="font-size:11px;font-weight:700;color:#111;">'+p.who+'</span>'
+    +_crewKindTag(p.kind)
+    +'<span style="font-size:9px;color:#b0aaa0;margin-left:auto;">'+p.ago+'</span></div>'
+    +'<div style="font-size:12px;color:#333;line-height:1.55;">'+p.text+'</div>'
+    +(p.img?'<div style="height:64px;background:linear-gradient(135deg,#dfeee6,#cfe4d8);border-radius:9px;margin-top:8px;"></div>':'')
+    +'<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#9a948a;">'
+    +'<span class="crew-plike" data-i="'+idx+'" style="cursor:pointer;">'+(p.liked?'♥':'♡')+' '+p.likes+'</span>'
+    +'<span style="cursor:pointer;">💬 '+p.comments+'</span></div>'
+    +'</div>';
+}
+function _crewRenderDetail(body){
+  var c=_crewData.challenges.find(function(x){return x.id===_crewDetailId;});
+  if(!c){_crewDetailId=null;renderCrew();return;}
+  var tagColors={운동:['#fff0e0'],생활:['#e6ecf8'],공부:['#eafaf1'],건강:['#e0f4f4'],식습관:['#fbeaf0']};
+  var tc=(tagColors[c.tag]||['#f0f0ee'])[0];
+  var h='<div style="display:flex;align-items:center;gap:8px;margin:2px 0 14px;">'
+    +'<button id="crewBack" aria-label="뒤로" style="border:none;background:none;padding:2px;cursor:pointer;color:#555;font-size:18px;line-height:1;">‹</button>'
+    +'<div style="width:34px;height:34px;border-radius:9px;background:'+tc+';display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">'+c.emoji+'</div>'
+    +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:800;color:#111;">'+c.name+'</div>'
+    +'<div style="font-size:10px;color:#9a948a;">'+c.members.toLocaleString()+'명'+(c.joined&&c.streak>0?' · 나 '+c.streak+'일째 🔥':'')+'</div></div>'
+    +(c.joined
+      ? '<span style="font-size:10px;font-weight:700;color:#8a867c;background:#f0eee8;border-radius:11px;padding:5px 10px;flex-shrink:0;">참여 중</span>'
+      : '<button id="crewDetailJoin" style="font-size:10px;font-weight:700;color:#fff;background:#1a7a4a;border:none;border-radius:11px;padding:6px 12px;flex-shrink:0;cursor:pointer;font-family:inherit;">참여</button>')
+    +'</div>';
+  var filters=[['all','전체'],['tip','💡 꿀팁'],['proof','✅ 인증']];
+  h+='<div style="display:flex;gap:6px;margin-bottom:14px;">';
+  filters.forEach(function(f){
+    var on=_crewDetailFilter===f[0];
+    h+='<button class="crew-dfilter" data-f="'+f[0]+'" style="font-size:10px;font-weight:700;padding:5px 11px;border-radius:14px;cursor:pointer;font-family:inherit;'+(on?'background:#111;color:#fff;border:none;':'background:#fff;border:0.5px solid #e2e0da;color:#8a867c;')+'">'+f[1]+'</button>';
+  });
+  h+='</div>';
+  if(c.joined){
+    h+='<div style="display:flex;gap:8px;background:#fff;border:0.5px solid #e8e6e0;border-radius:12px;padding:8px 10px;margin-bottom:14px;">'
+      +'<input id="crewPostInp" placeholder="꿀팁이나 오늘 인증을 남겨보세요…" style="flex:1;border:none;background:transparent;font-size:11px;outline:none;font-family:inherit;min-width:0;color:#111;"/>'
+      +'<button id="crewPostSend" aria-label="올리기" style="border:none;background:#111;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;flex-shrink:0;font-size:12px;">↑</button></div>';
+  }
+  var posts=c.posts||[];
+  var shown=posts.map(function(p,i){return {p:p,i:i};}).filter(function(o){return _crewDetailFilter==='all'||o.p.kind===_crewDetailFilter;});
+  if(!shown.length){
+    h+='<div style="text-align:center;padding:34px 0;color:#b8b3a8;font-size:11px;">아직 글이 없어요'+(c.joined?'<br><span style="font-size:10px;">첫 글을 남겨보세요</span>':'')+'</div>';
+  }else{
+    h+='<div id="crewPostList">'+shown.map(function(o){return _crewPostHtml(o.p,o.i);}).join('')+'</div>';
+  }
+  body.innerHTML=h;
+  var back=document.getElementById('crewBack');
+  if(back)back.addEventListener('click',function(){_crewDetailId=null;renderCrew();});
+  body.querySelectorAll('.crew-dfilter').forEach(function(b){
+    b.addEventListener('click',function(){_crewDetailFilter=b.getAttribute('data-f');renderCrew();});
+  });
+  var dj=document.getElementById('crewDetailJoin');
+  if(dj)dj.addEventListener('click',function(){c.joined=true;c.streak=0;showToast(c.name+' 챌린지에 참여했어요','add','ti-flag');renderCrew();});
+  body.querySelectorAll('.crew-plike').forEach(function(el){
+    el.addEventListener('click',function(){
+      var i=parseInt(el.getAttribute('data-i'));
+      var p=c.posts[i];
+      if(!p)return;
+      p.liked=!p.liked;p.likes+=p.liked?1:-1;
+      el.innerHTML=(p.liked?'♥':'♡')+' '+p.likes;
+      el.style.color=p.liked?'#e0653e':'#9a948a';
+    });
+  });
+  var send=document.getElementById('crewPostSend');
+  var inp=document.getElementById('crewPostInp');
+  function post(){
+    var t=(inp.value||'').trim();
+    if(!t)return;
+    var kind='talk';
+    if(/팁|방법|추천|하면|하세요|해보|효과|꿀/.test(t))kind='tip';
+    if(/완료|성공|인증|일째|끝|했다|달성/.test(t))kind='proof';
+    c.posts.unshift({who:'나',color:'#c8b6e8',ago:'방금',kind:kind,text:t,likes:0,comments:0,liked:false});
+    inp.value='';
+    renderCrew();
+  }
+  if(send)send.addEventListener('click',post);
+  if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter')post();});
+}
+function _crewChalRow(c){
+  var tagColors={운동:['#fff0e0','#b5732a'],생활:['#e6ecf8','#3a5bd9'],공부:['#eafaf1','#1a7a4a'],건강:['#e0f4f4','#1a8a8a'],식습관:['#fbeaf0','#c04a78']};
+  var tc=tagColors[c.tag]||['#f0f0ee','#85857f'];
+  return '<div class="crew-chal" data-cid="'+c.id+'" style="display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #eee;border-radius:12px;padding:11px;margin-bottom:8px;cursor:pointer;">'
+    +'<div style="width:38px;height:38px;border-radius:10px;background:'+tc[0]+';display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">'+c.emoji+'</div>'
+    +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:#111;">'+c.name+'</div>'
+    +'<div style="font-size:9.5px;color:#9a948a;margin-top:2px;">'+c.members.toLocaleString()+'명 참여'+(c.joined&&c.streak>0?' · '+c.streak+'일째':'')+'</div></div>'
+    +(c.joined
+      ? '<span style="font-size:10px;font-weight:700;color:#8a867c;background:#f0eee8;border-radius:11px;padding:5px 11px;flex-shrink:0;">참여 중</span>'
+      : '<button class="crew-join" data-cid="'+c.id+'" style="font-size:10px;font-weight:700;color:#fff;background:#1a7a4a;border:none;border-radius:11px;padding:6px 12px;flex-shrink:0;cursor:pointer;font-family:inherit;">참여</button>')
+    +'</div>';
+}
+
+function _crewRenderChallenges(sec){
+  var joined=_crewData.challenges.filter(function(c){return c.joined;});
+  var open=_crewData.challenges.filter(function(c){return !c.joined;});
+  var h='';
+  if(joined.length){h+='<div style="font-size:10px;font-weight:800;color:#b0a894;margin:2px 0 7px;">참여 중</div>';h+=joined.map(_crewChalRow).join('');}
+  h+='<div style="font-size:10px;font-weight:800;color:#b0a894;margin:14px 0 7px;">🔥 인기 챌린지</div>';
+  h+=open.map(_crewChalRow).join('');
+  h+='<button id="crewNew" style="width:100%;margin-top:10px;font-size:12px;font-weight:700;color:#1a7a4a;background:#eafaf1;border:none;border-radius:12px;padding:12px;cursor:pointer;font-family:inherit;">＋ 새 챌린지 만들기</button>';
+  sec.innerHTML=h;
+  sec.querySelectorAll('.crew-chal').forEach(function(row){
+    row.addEventListener('click',function(){_crewDetailId=row.getAttribute('data-cid');_crewDetailFilter='all';renderCrew();});
+  });
+  sec.querySelectorAll('.crew-join').forEach(function(b){
+    b.addEventListener('click',function(e){
+      e.stopPropagation();
+      var id=b.getAttribute('data-cid');
+      var c=_crewData.challenges.find(function(x){return x.id===id;});
+      if(c){c.joined=true;c.streak=0;showToast(c.name+' 챌린지에 참여했어요','add','ti-flag');renderCrew();}
+    });
+  });
+  var nb=document.getElementById('crewNew');
+  if(nb)nb.addEventListener('click',function(){showToast('새 챌린지 만들기는 곧 열려요','add','ti-plus');});
+}
+
+function _crewRenderFeed(sec){
+  var h=_crewData.feed.map(function(f){
+    return '<div style="background:#fff;border:0.5px solid #eee;border-radius:12px;padding:11px;margin-bottom:8px;">'
+      +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;">'
+      +'<div style="width:24px;height:24px;border-radius:50%;background:'+f.color+';flex-shrink:0;"></div>'
+      +'<span style="font-size:11px;font-weight:700;color:#111;">'+f.who+'</span>'
+      +'<span style="font-size:8.5px;color:#c04a78;background:#fbeaf0;border-radius:8px;padding:2px 6px;">'+f.chal+'</span>'
+      +'<span style="font-size:8.5px;color:#b0aaa0;margin-left:auto;">'+f.ago+'</span></div>'
+      +'<div style="font-size:11px;color:#444;line-height:1.5;">'+f.text+'</div>'
+      +(f.img?'<div style="height:80px;background:linear-gradient(135deg,#dfeee6,#cfe4d8);border-radius:9px;margin-top:8px;"></div>':'')
+      +'<div style="display:flex;gap:14px;margin-top:8px;color:#b0aaa0;font-size:11px;">'
+      +'<span class="crew-like" style="cursor:pointer;">♡ 응원</span><span>💬 댓글</span></div>'
+      +'</div>';
+  }).join('');
+  sec.innerHTML=h;
+  sec.querySelectorAll('.crew-like').forEach(function(el){
+    el.addEventListener('click',function(){el.innerHTML='♥ 응원함';el.style.color='#e0653e';});
+  });
+}
+
+function _crewRenderRank(sec){
+  var cats=Object.keys(_crewData.ranking);
+  var seg='<div style="display:flex;gap:5px;margin-bottom:12px;">';
+  cats.forEach(function(cat){
+    var on=_crewRankTab===cat;
+    seg+='<button class="crew-rseg" data-rc="'+cat+'" style="font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:14px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#111;color:#fff;':'background:#f0eee8;color:#8a867c;')+'">'+cat+'</button>';
+  });
+  seg+='</div>';
+  var list=_crewData.ranking[_crewRankTab]||[];
+  var rows='<div style="background:#fff;border:0.5px solid #eee;border-radius:12px;padding:4px 12px;">';
+  list.forEach(function(r,i){
+    var rank=i+1;
+    var medal=rank===1?'#e0a020':rank===2?'#9aa0a8':rank===3?'#c77b3a':'#b0aaa0';
+    rows+='<div style="display:flex;align-items:center;gap:9px;padding:9px 0;'+(i<list.length-1?'border-bottom:0.5px solid #f2f0ea;':'')+(r.me?'background:#fff8e8;border-radius:8px;margin:2px -6px;padding-left:6px;padding-right:6px;':'')+'">'
+      +'<span style="font-size:13px;font-weight:800;width:18px;text-align:center;color:'+medal+';">'+rank+'</span>'
+      +'<div style="width:26px;height:26px;border-radius:50%;background:'+r.c+';flex-shrink:0;"></div>'
+      +'<span style="flex:1;font-size:11px;font-weight:'+(r.me?'800':'600')+';color:'+(r.me?'#8a6d1a':'#111')+';">'+r.n+'</span>'
+      +'<span style="font-size:11px;font-weight:800;color:'+(r.me?'#8a6d1a':'#e0653e')+';">'+r.d+'일</span></div>';
+  });
+  rows+='</div>';
+  sec.innerHTML=seg+rows;
+  sec.querySelectorAll('.crew-rseg').forEach(function(b){
+    b.addEventListener('click',function(){_crewRankTab=b.getAttribute('data-rc');renderCrew();});
+  });
+}
+
+function _crewRenderMine(sec){
+  var joined=_crewData.challenges.filter(function(c){return c.joined;});
+  if(!joined.length){
+    sec.innerHTML='<div style="text-align:center;padding:40px 20px;color:#b0aca2;font-size:12px;">아직 참여한 챌린지가 없어요<br><span style="font-size:10px;">챌린지 탭에서 참여해보세요</span></div>';
+    return;
+  }
+  var totalStreak=joined.reduce(function(a,c){return a+c.streak;},0);
+  var h='<div style="display:flex;gap:10px;margin-bottom:14px;">'
+    +'<div style="flex:1;background:#f7f5ef;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:800;color:#1a7a4a;line-height:1;">'+joined.length+'</div><div style="font-size:9px;color:#9a948a;margin-top:4px;">참여 챌린지</div></div>'
+    +'<div style="flex:1;background:#f7f5ef;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:800;color:#e0653e;line-height:1;">'+totalStreak+'</div><div style="font-size:9px;color:#9a948a;margin-top:4px;">누적 연속일</div></div></div>';
+  h+=joined.map(function(c){
+    var pct=Math.round(c.progress*100);
+    return '<div style="background:#fff;border:0.5px solid #eee;border-radius:12px;padding:12px;margin-bottom:8px;">'
+      +'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:17px;">'+c.emoji+'</span>'
+      +'<span style="font-size:12px;font-weight:700;flex:1;">'+c.name+'</span>'
+      +'<span style="font-size:11px;font-weight:800;color:#1a7a4a;">'+c.streak+'일째</span></div>'
+      +'<div style="height:6px;background:#eee;border-radius:3px;margin-top:9px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:#1a7a4a;border-radius:3px;"></div></div>'
+      +'<div style="font-size:9px;color:#9a948a;margin-top:5px;">이번 목표 '+pct+'% 달성</div></div>';
+  }).join('');
+  sec.innerHTML=h;
+}
+
 function setActiveTab(id){
   const fromCal=!document.getElementById('calView').classList.contains('hidden');
   ['homeTab','calTab','friendsTab','chatTab','loginTab'].forEach(t=>{
@@ -5450,6 +5912,8 @@ function setActiveTab(id){
   const homeView=document.getElementById('homeView');
   const calView=document.getElementById('calView');
   const mypageView=document.getElementById('mypageView');
+  const crewView=document.getElementById('crewView');
+  const shopView=document.getElementById('shopView');
   // 채팅/친구는 오버레이 — 밑에 깔린 화면(캘린더든 홈이든)을 그대로 두어 리플로우를 피함
   if(id==='friendsTab'||id==='chatTab'){
     return;
@@ -5457,6 +5921,16 @@ function setActiveTab(id){
   homeView.classList.add('hidden');
   calView.classList.add('hidden');
   mypageView.classList.add('hidden');
+  if(crewView)crewView.classList.add('hidden');
+  if(shopView)shopView.classList.add('hidden');
+  if(id==='crewTab'){
+    if(crewView){crewView.classList.remove('hidden');try{renderCrew();}catch(e){}}
+    return;
+  }
+  if(id==='shopTab'){
+    if(shopView){shopView.classList.remove('hidden');try{renderShop();}catch(e){}}
+    return;
+  }
   if(id==='homeTab'){
     if(fromCal&&typeof selectedYear!=='undefined'&&selectedDay){
       _homeDate=new Date(selectedYear,selectedMonth,selectedDay);
@@ -6678,7 +7152,8 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       chipTabs:_chipTabs,
       customCats:_customCats,
       hiddenCats:_hiddenBaseCats,
-      catRenames:_baseCatRenames
+      catRenames:_baseCatRenames,
+      shop:_shopItems
     });
   }
   window._saveState=function(){try{localStorage.setItem(KEY,snap());}catch(e){}};
@@ -6708,6 +7183,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.customCats){_customCats.length=0;d.customCats.forEach(function(c){_customCats.push(c);});}
       if(d.hiddenCats){_hiddenBaseCats.length=0;d.hiddenCats.forEach(function(c){_hiddenBaseCats.push(c);});}
       if(d.catRenames){Object.keys(_baseCatRenames).forEach(function(k){delete _baseCatRenames[k];});Object.assign(_baseCatRenames,d.catRenames);}
+      if(d.shop&&Array.isArray(d.shop)){_shopItems.length=0;d.shop.forEach(function(s){_shopItems.push(s);});}
       try{buildHomeSlider();}catch(e){}
       try{buildPages();renderEvs();renderCalCatFilter();}catch(e){}
       try{renderHomeView();}catch(e){}
@@ -6859,16 +7335,22 @@ function _updateDock(){
   var fo=document.getElementById('friendsOverlay');
   var onFr=fo?fo.classList.contains('show'):false;
   var overlayOn=onCh||onFr;
+  var cv=document.getElementById('crewView');
+  var onCrew=(cv?!cv.classList.contains('hidden'):false)&&!overlayOn;
+  var sv=document.getElementById('shopView');
+  var onShop=(sv?!sv.classList.contains('hidden'):false)&&!overlayOn;
   var onCal=!document.getElementById('calView').classList.contains('hidden')&&!overlayOn;
   var mv=document.getElementById('mypageView');
   var onMy=(mv?!mv.classList.contains('hidden'):false)&&!overlayOn;
-  var onHome=!document.getElementById('homeView').classList.contains('hidden')&&!overlayOn;
+  var onHome=!document.getElementById('homeView').classList.contains('hidden')&&!overlayOn&&!onCrew&&!onShop;
   var dc=document.getElementById('dockCal'),dt=document.getElementById('dockToday');
-  var dch=document.getElementById('dockChat'),dmy=document.getElementById('dockMy');
+  var dch=document.getElementById('dockChat'),dmy=document.getElementById('dockMy'),dcr=document.getElementById('dockCrew'),dsh=document.getElementById('dockShop');
   if(dt)dt.classList.toggle('dock-active',onHome&&_homePage===0);
   if(dc)dc.classList.toggle('dock-active',onCal);
   if(dch)dch.classList.toggle('dock-active',onCh);
   if(dmy)dmy.classList.toggle('dock-active',onMy);
+  if(dcr)dcr.classList.toggle('dock-active',onCrew);
+  if(dsh)dsh.classList.toggle('dock-active',onShop);
 }
 function _dockCloseOverlays(){
   try{closeChatPanel();}catch(e){}
@@ -6879,6 +7361,8 @@ function _dockCloseOverlays(){
   var dt=document.getElementById('dockToday');
   var dch=document.getElementById('dockChat');
   var dmy=document.getElementById('dockMy');
+  var dcr=document.getElementById('dockCrew');
+  var dsh=document.getElementById('dockShop');
   if(dt)dt.addEventListener('click',function(){
     _dockCloseOverlays();
     setActiveTab('homeTab');
@@ -6905,6 +7389,22 @@ function _dockCloseOverlays(){
     _dockCloseOverlays();
     if(onMy){setActiveTab('homeTab');}
     else{setActiveTab('loginTab');}
+    _updateDock();
+  });
+  if(dcr)dcr.addEventListener('click',function(){
+    var cv=document.getElementById('crewView');
+    var onCrew=cv&&!cv.classList.contains('hidden');
+    _dockCloseOverlays();
+    if(onCrew){setActiveTab('homeTab');setHomePage(0);}
+    else{setActiveTab('crewTab');}
+    _updateDock();
+  });
+  if(dsh)dsh.addEventListener('click',function(){
+    var sv=document.getElementById('shopView');
+    var onShop=sv&&!sv.classList.contains('hidden');
+    _dockCloseOverlays();
+    if(onShop){setActiveTab('homeTab');setHomePage(0);}
+    else{setActiveTab('shopTab');}
     _updateDock();
   });
 })();
