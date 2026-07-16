@@ -88,7 +88,9 @@
   .dpill.rec{background:transparent!important;border:0.5px solid;box-sizing:border-box;}
   .dpill.pdone{text-decoration:line-through;opacity:0.5;}
   .dpill.ddone{background:transparent!important;color:#bcbcb5;font-weight:600;border:none;text-decoration:none;padding:0 2px;}
-  .rec-heat{position:absolute;top:1px;left:1px;right:1px;bottom:1px;border-radius:7px;z-index:0;}
+  .rec-heat{position:absolute;top:0;left:0;right:0;bottom:0;border-radius:2px;z-index:0;}
+  .cal-view.rec-mode .dates{gap:0;}
+  .cal-view.rec-mode .rec-heat{border-radius:0;}
   .dc .dn,.dc .dpills{position:relative;z-index:1;}
   .dpill.rectxt{background:transparent;color:#5c4718;font-weight:700;border-radius:0;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .dpill-more{font-size:6.5px;color:#a0a09a;padding-left:2px;line-height:1.2;font-weight:600;}
@@ -2704,27 +2706,30 @@ function renderLogPage(container){
   if(logs.length===0){
     list.innerHTML='<div style="text-align:center;padding:40px 0;color:#9a9a93;font-size:12px;">오늘 한 일을 기록해보세요<br><span style="font-size:10px;">예: 헬스 1시간, 독서 30분</span></div>';
   } else {
-    // 타임라인
+    // 타임라인 (점 + 끊김 없는 연결선)
     logs.forEach(function(log,i){
       var row=document.createElement('div');
-      row.style.cssText='display:flex;gap:10px;padding:8px 0;position:relative;';
-      
-      // 타임라인 선
+      row.style.cssText='display:flex;gap:10px;position:relative;';
+
+      // 타임라인 선 (위→점→아래로 이어져 끊김 없음)
       var line=document.createElement('div');
-      line.style.cssText='display:flex;flex-direction:column;align-items:center;flex-shrink:0;';
+      line.style.cssText='display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:8px;';
+      var vtop=document.createElement('div');
+      vtop.style.cssText='width:1px;height:10px;background:#e8e8e4;'+(i===0?'opacity:0;':'');
       var dot=document.createElement('div');
-      dot.style.cssText='width:8px;height:8px;border-radius:50%;background:#1a7a4a;margin-top:4px;flex-shrink:0;';
-      var vline=document.createElement('div');
-      vline.style.cssText='width:1px;flex:1;background:#e8e8e4;margin-top:3px;'+(i===logs.length-1?'opacity:0;':'');
+      dot.style.cssText='width:8px;height:8px;border-radius:50%;background:#1a7a4a;flex-shrink:0;';
+      var vbot=document.createElement('div');
+      vbot.style.cssText='width:1px;flex:1;background:#e8e8e4;'+(i===logs.length-1?'opacity:0;':'');
+      line.appendChild(vtop);
       line.appendChild(dot);
-      line.appendChild(vline);
+      line.appendChild(vbot);
       row.appendChild(line);
 
-      // 내용 (소요시간에 비례한 높이 + 시작–종료 시각)
+      // 내용
       var dur=(log.dur!=null)?log.dur:_logDuration(log.text);
       var timeLabel=log.time+(dur?' – '+_logEndTime(log.time,dur)+' <span style="color:#b5b5b0;">·</span> <span style="color:#1a7a4a;font-weight:700;">'+_logDurLabel(dur)+'</span>':'');
       var content=document.createElement('div');
-      content.style.cssText='flex:1;padding-bottom:8px;';
+      content.style.cssText='flex:1;padding:6px 0 12px;';
       content.innerHTML=
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
           '<span style="font-size:16px;">'+log.emoji+'</span>'+
