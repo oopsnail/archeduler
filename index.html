@@ -87,6 +87,7 @@
   .dpill{font-size:7px;line-height:1.35;border-radius:2px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
   .dpill.rec{background:transparent!important;border:0.5px solid;box-sizing:border-box;}
   .dpill.pdone{text-decoration:line-through;opacity:0.5;}
+  .dpill.ddone{background:transparent!important;color:#bcbcb5;font-weight:600;border:none;text-decoration:none;padding:0 2px;}
   .rec-heat{position:absolute;top:1px;left:1px;right:1px;bottom:1px;border-radius:7px;z-index:0;}
   .dc .dn,.dc .dpills{position:relative;z-index:1;}
   .dpill.rectxt{background:transparent;color:#5c4718;font-weight:700;border-radius:0;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
@@ -1593,10 +1594,11 @@ function mkDay(cls,num,evs,y,m,day,isDim){const d=document.createElement('div');
       var show2=evs.slice(0,2);
       pills=show2.map(function(e){
         var c=_evPillColors(e.color);
-        var isRec=e.kind==='record';
-        var cls2='dpill'+(isRec?' rec':'')+(e.done?' pdone':'');
-        var style=isRec?('color:'+c[1]+';border-color:'+c[1]+';'):('background:'+c[0]+';color:'+c[1]+';');
-        return '<div class="'+cls2+'" style="'+style+'">'+(e.name||'일정')+'</div>';
+        if(e.done){
+          // 완료된 일정: 선/네모 없이 흐린 글자색만
+          return '<div class="dpill ddone">'+(e.name||'일정')+'</div>';
+        }
+        return '<div class="dpill" style="background:'+c[0]+';color:'+c[1]+';">'+(e.name||'일정')+'</div>';
       }).join('');
       if(evs.length>2)pills+='<div class="dpill-more">+'+(evs.length-2)+'</div>';
     }
@@ -4410,7 +4412,7 @@ function renderBudgetArchive(container,d){
     var p=k.split('-');
     return p[1]+'월 '+p[2]+'일';
   }
-  container.innerHTML='<div style="padding:14px 14px 60px;display:block;flex:1;min-height:0;border:none;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fafaf8;scrollbar-width:none;">'
+  container.innerHTML='<div style="position:absolute;top:0;left:0;right:0;bottom:0;padding:14px;border:none;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fafaf8;scrollbar-width:none;">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">'
     +'<span style="font-size:12px;font-weight:800;color:#8a7a3a;">전체 내역 · '+d.list.length+'건</span>'
     +'<button id="bgArcClose" style="font-size:9px;font-weight:600;border:1px solid #e0d9a0;background:#fff;color:#8a7a3a;border-radius:11px;padding:4px 11px;cursor:pointer;font-family:inherit;">닫기</button></div>'
@@ -4568,7 +4570,7 @@ function _openBudgetDatePicker(container){
 }
 function _budgetInputBar(container){
   var bWrap=document.createElement('div');
-  bWrap.style.cssText='margin:auto 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 8px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
+  bWrap.style.cssText='position:absolute;left:14px;right:14px;bottom:10px;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 8px;box-shadow:0 3px 14px rgba(0,0,0,0.08);box-sizing:border-box;z-index:5;';
   var dChip=_makeBudgetDateChip(container);
   var bInp=document.createElement('input');
   bInp.id='budgetInput';
@@ -4604,6 +4606,16 @@ function renderBudgetToday(container,d){
   var fmtCur=function(n,c){c=c||'원';return c==='원'?fmt(n)+'원':(SYM[c]||'')+fmt(n)+(SYM[c]?'':c);};
   var tk=getTodayLogKey();
   var todayList=d.list.filter(function(it){return it.date===tk;});
+  var showingRecent=false;
+  var displayList=todayList;
+  if(!todayList.length && d.list.length){
+    // 오늘 내역이 없으면 최근 내역을 대신 보여줌 (날짜와 함께)
+    showingRecent=true;
+    displayList=d.list.slice().sort(function(a,b){
+      var pa=a.date.split('-').map(Number),pb=b.date.split('-').map(Number);
+      return (pb[0]-pa[0])||(pb[1]-pa[1])||(pb[2]-pa[2]);
+    }).slice(0,12);
+  }
   var inc=0,exp=0;
   todayList.forEach(function(it){var v=it.nat!=null?it.nat:it.amount;if(it.type==='income')inc+=v;else exp+=v;});
   var net=inc-exp;
@@ -4611,25 +4623,31 @@ function renderBudgetToday(container,d){
   var netStr=(net>0?'+':net<0?'−':'')+fmt(Math.abs(net));
 
   var rowsHtml='';
-  if(!todayList.length){
+  if(!displayList.length){
     rowsHtml='<div style="text-align:center;padding:22px 0;color:#ccc;font-size:11px;">오늘 기록이 없어요<br><span style="font-size:9px;">예: 점심 12000원 지출</span></div>';
   }else{
-    rowsHtml=todayList.map(function(it,bi){
+    if(showingRecent){
+      rowsHtml='<div style="font-size:9px;color:#b0a894;font-weight:700;margin:12px 0 2px;">최근 내역</div>';
+    }
+    rowsHtml+=displayList.map(function(it,bi){
       var em=(typeof guessEmoji==='function')?guessEmoji(it.name):'💰';
       var nm=it.name.length>12?it.name.slice(0,12)+'..':it.name;
+      var dparts=it.date.split('-');
+      var dateBadge=showingRecent?('<span style="font-size:8px;font-weight:700;color:#a08f52;background:#f7f1dc;border-radius:7px;padding:2px 6px;flex-shrink:0;margin-right:6px;">'+dparts[1]+'/'+dparts[2]+'</span>'):'';
       var tm=(function(){var arr=_dailyLogs[it.date]||[];var lg=arr[it.li]||arr.find(function(l){return l.text===it.src;});return lg&&lg.time?lg.time:'';})();
       return '<div class="bt-row" data-bi="'+bi+'" style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:0.5px solid #f4f4f1;">'
-        +'<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
+        +'<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">'
+        +dateBadge
         +'<span style="width:26px;height:26px;border-radius:8px;background:#f6f6f3;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">'+em+'</span>'
-        +'<span style="min-width:0;"><div style="font-size:11px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+nm+'</div>'+(tm?'<div style="font-size:8px;color:#b5b5b0;">'+tm+'</div>':'')+'</span>'
+        +'<span style="min-width:0;flex:1;"><div style="font-size:11px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+nm+'</div>'+(tm?'<div style="font-size:8px;color:#b5b5b0;">'+tm+'</div>':'')+'</span>'
         +'</div>'
-        +'<span style="font-size:11px;font-weight:600;color:'+(it.type==='income'?'#1a7a4a':'#c0392b')+';flex-shrink:0;">'+(it.type==='income'?'+':'-')+fmtCur(it.nat!=null?it.nat:it.amount,it.cur||'원')+'</span>'
+        +'<span style="font-size:11px;font-weight:600;color:'+(it.type==='income'?'#1a7a4a':'#c0392b')+';flex-shrink:0;margin-left:8px;">'+(it.type==='income'?'+':'-')+fmtCur(it.nat!=null?it.nat:it.amount,it.cur||'원')+'</span>'
         +'</div>';
     }).join('');
   }
 
   container.innerHTML=
-    '<div style="padding:14px 14px 60px;display:block;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fafaf8;scrollbar-width:none;-ms-overflow-style:none;">'+
+    '<div style="position:absolute;top:0;left:0;right:0;bottom:56px;padding:14px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fafaf8;scrollbar-width:none;-ms-overflow-style:none;">'+
       '<div style="background:#fff;border:0.5px solid #eee;border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,0.04);padding:16px;">'+
         '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><span id="budgetSeeAll" style="font-size:9px;color:#b0b0aa;cursor:pointer;">전체보기 ›</span></div>'+
         '<div style="font-size:25px;font-weight:500;color:'+netColor+';letter-spacing:-0.5px;line-height:1;">'+netStr+'<span style="font-size:13px;color:#a0a09a;">원</span></div>'+
@@ -4712,7 +4730,7 @@ function renderBudgetPage(container){
   }
 
   container.innerHTML=
-    '<div id="budgetInner" style="padding:14px 14px 60px;display:block;flex:1;min-height:0;border:none;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fafaf8;scrollbar-width:none;-ms-overflow-style:none;">'+
+    '<div id="budgetInner" style="position:absolute;top:0;left:0;right:0;bottom:56px;padding:14px 14px 14px;border:none;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fafaf8;scrollbar-width:none;-ms-overflow-style:none;">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;"><button id="budgetTodayBack" style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:600;color:#8a7a3a;background:#f4eed6;border:none;border-radius:11px;padding:4px 10px;cursor:pointer;font-family:inherit;">‹ 오늘 요약</button><button id="budgetSearchOpen" style="font-size:9px;font-weight:600;color:#a08f52;background:none;border:none;cursor:pointer;font-family:inherit;">전체 내역 · 검색 ↓</button></div>'+
     // 헤더: 월 + 잔액
     '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">'+
@@ -4810,7 +4828,7 @@ function renderBudgetPage(container){
 
   // 가계부 자연어 입력바 (원필드 캡슐)
   var bWrap=document.createElement('div');
-  bWrap.style.cssText='margin:auto 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 8px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
+  bWrap.style.cssText='position:absolute;left:14px;right:14px;bottom:10px;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 8px;box-shadow:0 3px 14px rgba(0,0,0,0.08);box-sizing:border-box;z-index:5;';
   var dChip=_makeBudgetDateChip(container);
   var bInp=document.createElement('input');
   bInp.id='budgetInput';
@@ -4934,10 +4952,10 @@ function buildHomeSlider(){
 
   // 탭 5: 가계부/운동
   var budgetPage=document.createElement('div');
-  budgetPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;';
+  budgetPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;overflow:hidden;box-sizing:border-box;';
   var bc=document.createElement('div');
   bc.id='budgetCard';
-  bc.style.cssText='flex:1;display:flex;flex-direction:column;min-height:0;';
+  bc.style.cssText='height:100%;position:relative;box-sizing:border-box;';
   renderBudgetPage(bc);
   budgetPage.appendChild(bc);
   slider.appendChild(budgetPage);
@@ -5061,7 +5079,7 @@ function buildHomeSlider(){
 function initHomeSwipe(){
   var slider=document.getElementById('homeSlider');
   if(!slider)return;
-  var sx=0,sy=0,isH=false,blocked=false;
+  var sx=0,sy=0,isH=false,isV=false,blocked=false;
 
   function isOnCard(el){
     while(el){
@@ -5075,25 +5093,30 @@ function initHomeSwipe(){
   }
 
   slider.addEventListener('touchstart',function(e){
-    sx=e.touches[0].clientX;sy=e.touches[0].clientY;isH=false;
+    sx=e.touches[0].clientX;sy=e.touches[0].clientY;isH=false;isV=false;
     blocked=isOnCard(e.target);
   },{passive:true});
   slider.addEventListener('touchmove',function(e){
-    if(blocked)return;
+    if(blocked||isV)return;
     var dx=e.touches[0].clientX-sx;
     var dy=e.touches[0].clientY-sy;
-    if(!isH&&Math.abs(dx)>Math.abs(dy))isH=true;
+    var adx=Math.abs(dx),ady=Math.abs(dy);
+    // 축이 아직 안 정해졌으면: 충분히 움직였을 때만 판정
+    if(!isH){
+      if(ady>8 && ady>=adx){isV=true;return;}          // 세로 스크롤로 확정 → 스와이프 차단
+      if(adx>14 && adx>ady*1.5){isH=true;}              // 확실히 가로일 때만 스와이프
+    }
   },{passive:true});
   slider.addEventListener('touchend',function(e){
-    if(!isH||blocked)return;
+    if(!isH||blocked||isV)return;
     var dx=e.changedTouches[0].clientX-sx;
     var total=(document.getElementById('homeSlider')&&document.getElementById('homeSlider').children.length)||4;
-    if(dx<-30&&_homePage<total-1)setHomePage(_homePage+1);
-    else if(dx>30&&_homePage>0)setHomePage(_homePage-1);
+    if(dx<-45&&_homePage<total-1)setHomePage(_homePage+1);
+    else if(dx>45&&_homePage>0)setHomePage(_homePage-1);
   });
 
   slider.addEventListener('mousedown',function(e){
-    sx=e.clientX;sy=e.clientY;isH=false;
+    sx=e.clientX;sy=e.clientY;isH=false;isV=false;
     blocked=isOnCard(e.target);
   });
   document.addEventListener('mouseup',function(e){
@@ -5101,7 +5124,7 @@ function initHomeSwipe(){
     var dx=e.clientX-sx;
     var dy=e.clientY-sy;
     var total=(document.getElementById('homeSlider')&&document.getElementById('homeSlider').children.length)||4;
-    if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>30){
+    if(Math.abs(dx)>Math.abs(dy)*1.5&&Math.abs(dx)>45){
       if(dx<0&&_homePage<total-1)setHomePage(_homePage+1);
       else if(dx>0&&_homePage>0)setHomePage(_homePage-1);
     }
