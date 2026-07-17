@@ -19,7 +19,7 @@
   .outer{display:flex;justify-content:center;align-items:flex-start;padding:28px 16px;background:#f0f4f0;border-radius:20px;gap:16px;flex-wrap:wrap;}
   .phone{width:280px;height:560px;background:#fafaf8;border-radius:48px;border:8px solid #111;display:flex;flex-direction:column;position:relative;overflow:hidden;}
   .sb{height:28px;background:#fafaf8;display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0;font-size:11px;font-weight:600;color:#111;flex-shrink:0;}
-  .hdr{padding:16px 20px 8px;display:flex;align-items:flex-end;justify-content:space-between;flex-shrink:0;cursor:ew-resize;-webkit-user-select:none;user-select:none;}
+  .hdr{padding:16px 20px 10px;display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;cursor:ew-resize;-webkit-user-select:none;user-select:none;min-height:74px;box-sizing:border-box;}
   .cal-cat-wrap{display:flex;align-items:flex-end;border-bottom:1.5px solid #f0f0ee;flex-shrink:0;}
   .cal-cat-filter{display:flex;gap:0;padding:10px 0 0 20px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;}
   .cal-cat-filter::-webkit-scrollbar{display:none;}
@@ -596,7 +596,7 @@
   #shopView{display:flex;flex-direction:column;flex:1;min-height:0;}
   #mypageView{display:flex;flex:1;min-height:0;scrollbar-width:none;-ms-overflow-style:none;}
   #mypageView::-webkit-scrollbar{display:none;}
-  .home-header{padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;cursor:ew-resize;-webkit-user-select:none;user-select:none;}
+  .home-header{padding:16px 20px 10px;display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;cursor:ew-resize;-webkit-user-select:none;user-select:none;min-height:74px;box-sizing:border-box;}
   .home-greet{font-size:10px;color:#72726c;}
   .home-date-row{display:flex;align-items:center;gap:8px;margin-top:3px;}
   .home-date-num{font-size:34px;font-weight:700;color:#111;line-height:1;}
@@ -605,8 +605,8 @@
   .home-date-ym{font-size:9px;color:#85857f;}
   .home-ring{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-end;margin-bottom:3px;transition:opacity 0.25s;}
   .home-ring-inner{width:27px;height:27px;border-radius:50%;background:#fafaf8;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;color:#111;}
-  .home-logo-btn{position:relative;width:38px;height:38px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0;align-self:flex-end;margin-bottom:3px;transition:opacity 0.25s;}
-  .sub-logo-btn{position:relative;width:38px;height:38px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0;transition:transform 0.15s;}
+  .home-logo-btn{position:relative;width:38px;height:38px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:8px;transition:opacity 0.25s;}
+  .sub-logo-btn{position:relative;width:38px;height:38px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0;margin-top:8px;transition:transform 0.15s;}
   .sub-logo-btn:active{transform:scale(0.92);}
   .home-logo-ring{position:absolute;top:0;left:0;display:block;pointer-events:none;}
   .home-logo-img{position:absolute;top:0;left:0;width:38px;height:38px;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,0.10);background-image:url(data:image/png;base64,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);background-size:cover;background-position:center;}
@@ -722,7 +722,7 @@
             </div>
           </div>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:8px;margin-top:14px;">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
           <button class="home-logo-btn" id="homeLogoBtn" aria-label="메뉴">
             <svg width="40" height="40" viewBox="0 0 56 56" style="display:block;">
               <circle cx="28" cy="28" r="25.5" fill="none" stroke="#e6e2d8" stroke-width="2.4"/>
@@ -778,7 +778,7 @@
           </button>
         </div>
       </div>
-      <button class="home-logo-btn" id="calLogoBtn" aria-label="메뉴" style="align-self:flex-end;margin-bottom:0;">
+      <button class="home-logo-btn" id="calLogoBtn" aria-label="메뉴" style="align-self:flex-start;margin-top:8px;margin-bottom:0;">
         <svg width="40" height="40" viewBox="0 0 56 56" style="display:block;">
           <circle cx="28" cy="28" r="25.5" fill="none" stroke="#e6e2d8" stroke-width="2.4"/>
           <circle id="calLogoRingFg" cx="28" cy="28" r="25.5" fill="none" stroke="#20304a" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="160.22" stroke-dashoffset="160.22" transform="rotate(-90 28 28)"/>
@@ -858,16 +858,16 @@
       <div style="padding:20px;" id="mypageBody"></div>
     </div>
     <div id="crewView" class="hidden">
-      <div style="padding:18px 20px 14px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;" id="crewTopHead">
-        <div><div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">모험</div>
+      <div style="padding:16px 20px 10px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-height:74px;box-sizing:border-box;" id="crewTopHead">
+        <div style="margin-top:8px;"><div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">모험</div>
         <div style="font-size:11px;color:#9a948a;margin-top:2px;">같은 목표를 가진 사람들과 함께해요</div></div>
         <button class="sub-logo-btn" data-logo="1" aria-label="메뉴"><svg width="40" height="40" viewBox="0 0 56 56" style="display:block;"><circle cx="28" cy="28" r="25.5" fill="none" stroke="#e6e2d8" stroke-width="2.4"/><circle class="sub-logo-ring" cx="28" cy="28" r="25.5" fill="none" stroke="#20304a" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="160.22" stroke-dashoffset="160.22" transform="rotate(-90 28 28)"/><g transform="translate(9.5 9.5) scale(0.77)"><path fill="#20304a" fill-rule="evenodd" d="M 39.56 41.53 L 37.14 41.53 L 36.39 40.77 L 36.24 36.69 L 35.63 36.69 L 32.31 39.41 L 27.47 41.22 L 21.73 41.53 L 21.43 41.22 L 19.92 41.22 L 17.81 40.62 L 15.09 39.41 L 11.46 36.69 L 9.19 33.82 L 7.68 30.80 L 8.14 29.44 L 11.16 29.44 L 13.12 32.31 L 15.39 34.58 L 18.41 36.39 L 20.22 36.69 L 21.43 37.29 L 25.36 37.29 L 27.78 36.69 L 31.71 34.58 L 33.67 32.61 L 36.09 28.08 L 36.39 26.87 L 36.39 21.13 L 34.58 16.90 L 31.55 13.58 L 30.19 12.52 L 26.57 11.01 L 25.36 11.01 L 25.06 10.71 L 20.53 11.01 L 16.29 12.82 L 14.78 14.03 L 12.82 16.29 L 11.16 19.47 L 10.55 19.77 L 8.44 19.77 L 7.38 18.71 L 7.68 17.20 L 10.10 12.97 L 13.27 9.80 L 17.81 7.38 L 21.43 6.47 L 25.36 6.47 L 28.99 7.38 L 33.22 9.50 L 36.99 12.97 L 38.20 14.78 L 39.41 17.20 L 40.32 20.22 L 40.32 21.73 L 40.62 22.04 L 40.62 40.47 L 39.56 41.53 Z"/><rect x="5.42" y="22.04" width="5.14" height="5.44" rx="1.3" fill="#e0653e"/></g></svg><span class="home-logo-badge sub-logo-badge" style="display:none;">0</span></button>
       </div>
       <div id="crewBody" style="flex:1;min-height:0;padding:0 20px 40px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </div>
     <div id="shopView" class="hidden">
-      <div style="padding:18px 20px 14px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <div><div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">쇼핑</div>
+      <div style="padding:16px 20px 10px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-height:74px;box-sizing:border-box;">
+        <div style="margin-top:8px;"><div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">쇼핑</div>
         <div style="font-size:11px;color:#9a948a;margin-top:2px;">내 일정·기록에 맞춘 추천</div></div>
         <button class="sub-logo-btn" data-logo="1" aria-label="메뉴"><svg width="40" height="40" viewBox="0 0 56 56" style="display:block;"><circle cx="28" cy="28" r="25.5" fill="none" stroke="#e6e2d8" stroke-width="2.4"/><circle class="sub-logo-ring" cx="28" cy="28" r="25.5" fill="none" stroke="#20304a" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="160.22" stroke-dashoffset="160.22" transform="rotate(-90 28 28)"/><g transform="translate(9.5 9.5) scale(0.77)"><path fill="#20304a" fill-rule="evenodd" d="M 39.56 41.53 L 37.14 41.53 L 36.39 40.77 L 36.24 36.69 L 35.63 36.69 L 32.31 39.41 L 27.47 41.22 L 21.73 41.53 L 21.43 41.22 L 19.92 41.22 L 17.81 40.62 L 15.09 39.41 L 11.46 36.69 L 9.19 33.82 L 7.68 30.80 L 8.14 29.44 L 11.16 29.44 L 13.12 32.31 L 15.39 34.58 L 18.41 36.39 L 20.22 36.69 L 21.43 37.29 L 25.36 37.29 L 27.78 36.69 L 31.71 34.58 L 33.67 32.61 L 36.09 28.08 L 36.39 26.87 L 36.39 21.13 L 34.58 16.90 L 31.55 13.58 L 30.19 12.52 L 26.57 11.01 L 25.36 11.01 L 25.06 10.71 L 20.53 11.01 L 16.29 12.82 L 14.78 14.03 L 12.82 16.29 L 11.16 19.47 L 10.55 19.77 L 8.44 19.77 L 7.38 18.71 L 7.68 17.20 L 10.10 12.97 L 13.27 9.80 L 17.81 7.38 L 21.43 6.47 L 25.36 6.47 L 28.99 7.38 L 33.22 9.50 L 36.99 12.97 L 38.20 14.78 L 39.41 17.20 L 40.32 20.22 L 40.32 21.73 L 40.62 22.04 L 40.62 40.47 L 39.56 41.53 Z"/><rect x="5.42" y="22.04" width="5.14" height="5.44" rx="1.3" fill="#e0653e"/></g></svg><span class="home-logo-badge sub-logo-badge" style="display:none;">0</span></button>
       </div>
@@ -1051,8 +1051,8 @@
     </div>
     <!-- 채팅 화면 -->
     <div class="chat-overlay" id="chatOverlay">
-      <div class="chat-header" style="padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <div><div class="chat-title">채팅</div>
+      <div class="chat-header" style="padding:16px 20px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-height:74px;box-sizing:border-box;">
+        <div style="margin-top:8px;"><div class="chat-title">채팅</div>
         <div class="chat-sub">친구와 일정에 대해 대화해보세요</div></div>
         <button class="sub-logo-btn" data-logo="1" aria-label="메뉴"><svg width="40" height="40" viewBox="0 0 56 56" style="display:block;"><circle cx="28" cy="28" r="25.5" fill="none" stroke="#e6e2d8" stroke-width="2.4"/><circle class="sub-logo-ring" cx="28" cy="28" r="25.5" fill="none" stroke="#20304a" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="160.22" stroke-dashoffset="160.22" transform="rotate(-90 28 28)"/><g transform="translate(9.5 9.5) scale(0.77)"><path fill="#20304a" fill-rule="evenodd" d="M 39.56 41.53 L 37.14 41.53 L 36.39 40.77 L 36.24 36.69 L 35.63 36.69 L 32.31 39.41 L 27.47 41.22 L 21.73 41.53 L 21.43 41.22 L 19.92 41.22 L 17.81 40.62 L 15.09 39.41 L 11.46 36.69 L 9.19 33.82 L 7.68 30.80 L 8.14 29.44 L 11.16 29.44 L 13.12 32.31 L 15.39 34.58 L 18.41 36.39 L 20.22 36.69 L 21.43 37.29 L 25.36 37.29 L 27.78 36.69 L 31.71 34.58 L 33.67 32.61 L 36.09 28.08 L 36.39 26.87 L 36.39 21.13 L 34.58 16.90 L 31.55 13.58 L 30.19 12.52 L 26.57 11.01 L 25.36 11.01 L 25.06 10.71 L 20.53 11.01 L 16.29 12.82 L 14.78 14.03 L 12.82 16.29 L 11.16 19.47 L 10.55 19.77 L 8.44 19.77 L 7.38 18.71 L 7.68 17.20 L 10.10 12.97 L 13.27 9.80 L 17.81 7.38 L 21.43 6.47 L 25.36 6.47 L 28.99 7.38 L 33.22 9.50 L 36.99 12.97 L 38.20 14.78 L 39.41 17.20 L 40.32 20.22 L 40.32 21.73 L 40.62 22.04 L 40.62 40.47 L 39.56 41.53 Z"/><rect x="5.42" y="22.04" width="5.14" height="5.44" rx="1.3" fill="#e0653e"/></g></svg><span class="home-logo-badge sub-logo-badge" style="display:none;">0</span></button>
       </div>
@@ -1682,6 +1682,9 @@ function _openRepeatSheet(ev,onApply){
   var WKN=['일','월','화','수','목','금','토'];
   var sel=[];
   var preset=null;
+  var _rpMonths=(ev.repeatMonths!=null)?ev.repeatMonths:0; // 0=계속
+  var _rpCustom=false; // 직접 입력 모드
+  var _rpDays=(ev.repeatDays!=null)?ev.repeatDays:0; // 직접 입력 일수
   if(ev.repeat){
     if(/매일/.test(ev.repeat)){sel=[0,1,2,3,4,5,6];preset='매일';}
     else if(ev.repeat==='평일'){sel=[1,2,3,4,5];preset='평일';}
@@ -1715,6 +1718,21 @@ function _openRepeatSheet(ev,onApply){
       h+='<button class="rp-day" data-d="'+i+'" style="width:34px;height:34px;border-radius:50%;border:0.5px solid '+(on?'#1a7a4a':'#e2e0da')+';cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;'+(on?'background:#1a7a4a;color:#fff;':'background:#fff;color:'+col+';')+'">'+w+'</button>';
     });
     h+='</div>';
+    // 반복 기간
+    h+='<div style="font-size:10px;font-weight:700;color:#8a867c;margin-bottom:8px;">반복 기간</div>';
+    h+='<div style="display:flex;gap:5px;margin-bottom:'+(_rpCustom?'8px':'16px')+';flex-wrap:wrap;">';
+    [['0','계속'],['1','1개월'],['3','3개월'],['6','6개월'],['12','1년'],['-1','직접']].forEach(function(p){
+      var on=(p[0]==='-1')?_rpCustom:(!_rpCustom&&String(_rpMonths)===p[0]);
+      h+='<button class="rp-per" data-m="'+p[0]+'" style="flex:1;min-width:0;font-size:10.5px;font-weight:700;padding:7px 4px;border-radius:11px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;'+(on?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;')+'">'+p[1]+'</button>';
+    });
+    h+='</div>';
+    if(_rpCustom){
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;background:#f6f5f0;border-radius:11px;padding:9px 13px;">';
+      h+='<span style="font-size:11px;color:#8a867c;font-weight:600;flex-shrink:0;">기간</span>';
+      h+='<input id="rpCustomInp" type="number" min="1" max="730" inputmode="numeric" value="'+(_rpDays>0?_rpDays:30)+'" style="flex:1;min-width:0;border:none;background:none;outline:none;font-size:15px;font-weight:800;color:#111;font-family:inherit;text-align:right;">';
+      h+='<span style="font-size:12px;color:#111;font-weight:700;flex-shrink:0;">일</span>';
+      h+='</div>';
+    }
     var lbl=labelFromSel();
     h+='<div style="font-size:11px;color:'+(lbl?'#1a7a4a':'#b0aaa0')+';text-align:center;font-weight:700;margin-bottom:14px;min-height:15px;">'+(lbl?lbl+' 반복':'반복 안 함')+'</div>';
     h+='<div style="display:flex;gap:8px;">';
@@ -1739,11 +1757,33 @@ function _openRepeatSheet(ev,onApply){
         draw();
       });
     });
+    sheet.querySelectorAll('.rp-per').forEach(function(b){
+      b.addEventListener('click',function(){
+        var m=parseInt(b.getAttribute('data-m'));
+        if(m===-1){_rpCustom=true;if(_rpDays<=0)_rpDays=30;}
+        else{_rpCustom=false;_rpMonths=m;}
+        draw();
+      });
+    });
+    var cinp=document.getElementById('rpCustomInp');
+    if(cinp){
+      cinp.addEventListener('input',function(){var v=parseInt(cinp.value);if(!isNaN(v))_rpDays=v;});
+      cinp.addEventListener('focus',function(){cinp.select();});
+    }
     var off=document.getElementById('rpOff');
     if(off)off.addEventListener('click',function(){_applyRepeat(ev,null);if(onApply)onApply(null);wrap.remove();});
     document.getElementById('rpSave').addEventListener('click',function(){
       var lbl=labelFromSel();
-      _applyRepeat(ev,lbl?{days:sel.slice().sort(),label:lbl}:null);
+      var rec=lbl?{days:sel.slice().sort(),label:lbl}:null;
+      if(rec){
+        if(_rpCustom){
+          var ci=document.getElementById('rpCustomInp');var v=ci?parseInt(ci.value):_rpDays;
+          rec.customDays=(!isNaN(v)&&v>0)?Math.min(v,730):30;
+        }else{
+          rec.months=_rpMonths;
+        }
+      }
+      _applyRepeat(ev,rec);
       if(onApply)onApply(lbl||null);
       wrap.remove();
     });
@@ -1770,21 +1810,33 @@ function _applyRepeat(ev,rec){
     if(window._saveState)window._saveState();
     return;
   }
-  // 새 반복 생성: 시작일(ev.k)부터 12주
+  // 새 반복 생성: 시작일(ev.k)부터 지정 기간 (0=계속이면 기본치)
   var rid='r'+Date.now()+Math.floor(Math.random()*1000);
   var kind=(rec.days.length===7)?'daily':'weekly';
-  var horizon=(kind==='daily')?60:84;
+  var months=(rec.months!=null)?rec.months:0;
+  var customDays=(rec.customDays!=null)?rec.customDays:0;
+  var horizon;
+  if(customDays>0){
+    horizon=customDays;
+  }else if(months>0){
+    // months개월 후까지
+    var endD=new Date(ev.y,ev.m+months,ev.d);
+    var startD0=new Date(ev.y,ev.m,ev.d);
+    horizon=Math.round((endD-startD0)/(1000*60*60*24))+1;
+  }else{
+    horizon=(kind==='daily')?60:84;
+  }
   var start=new Date(ev.y,ev.m,ev.d);
   for(var off2=0;off2<horizon;off2++){
     var dcur=new Date(start);dcur.setDate(start.getDate()+off2);
     if(rec.days.indexOf(dcur.getDay())<0)continue;
     var rk=key(dcur.getFullYear(),dcur.getMonth(),dcur.getDate());
     if(!events[rk])events[rk]=[];
-    events[rk].push({name:ev.name,time:ev.time,duration:ev.duration||null,color:ev.color||'#1a7a4a',sharedWith:ev.sharedWith||[],repeat:rec.label,repeatId:rid});
+    events[rk].push({name:ev.name,time:ev.time,duration:ev.duration||null,color:ev.color||'#1a7a4a',sharedWith:ev.sharedWith||[],repeat:rec.label,repeatId:rid,repeatMonths:months,repeatDays:customDays});
     sortDayEvents(rk);
   }
   try{closeSheet();}catch(e){} buildPages();renderEvs();try{if(typeof wheelCards!=='undefined'){wheelCards=getAllEvs();var _wOpen=document.getElementById('wheelOverlay');if(_wOpen&&_wOpen.classList.contains('show')){if(!wheelCards.length){closeWheel();}else{wheelIdx=Math.min(wheelIdx,wheelCards.length-1);buildWheel();}}}}catch(e){}
-  showToast('반복 설정 · '+rec.label,'add','ti-repeat');
+  showToast('반복 설정 · '+rec.label+(customDays>0?' · '+customDays+'일':(months>0?' · '+months+'개월':'')),'add','ti-repeat');
   if(window._saveState)window._saveState();
 }
 document.getElementById('saShare').addEventListener('click',()=>{const ev=wheelCards[activeCardIdx];closeSheet();showToast(`"${ev.name}" 공유 링크 복사됨`,'shr','ti-share');});
