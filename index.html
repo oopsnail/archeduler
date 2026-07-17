@@ -2557,7 +2557,7 @@ function renderHomeCal(){
   pop.querySelectorAll('.hcal-day[data-d]').forEach(el=>{
     el.addEventListener('click',()=>{
       _homeDate=new Date(_hcalY,_hcalM,parseInt(el.getAttribute('data-d')));
-      renderHomeView();
+      if(typeof _refreshDateViews==='function')_refreshDateViews();else renderHomeView();
       closeHomeCal();
     });
   });
@@ -7557,6 +7557,12 @@ document.getElementById('addEvModalClose').addEventListener('click',closeAiBox);
 document.getElementById('addEvModalDim').addEventListener('click',closeAiBox);
 document.getElementById('aiInp').addEventListener('keydown',e=>{if(e.key==='Escape')closeAiBox();});
 document.getElementById('calAddBtn').addEventListener('click',openAiBox);
+// 날짜가 바뀌면 날짜 의존 페이지(기록·가계부 등)도 새로고침
+function _refreshDateViews(){
+  try{renderHomeView();}catch(e){}
+  try{var lp=document.getElementById('logPage');if(lp)renderLogPage(lp);}catch(e){}
+  try{var bc=document.getElementById('budgetCard');if(bc)renderBudgetPage(bc);}catch(e){}
+}
 // 홈 헤더 스와이프로 날짜 이동
 (function(){
   const hdr=document.getElementById('homeHeader');
@@ -7569,7 +7575,7 @@ document.getElementById('calAddBtn').addEventListener('click',openAiBox);
       const nd=new Date(_homeDate);
       nd.setDate(nd.getDate()+(dx<0?1:-1));
       _homeDate=nd;
-      renderHomeView();
+      _refreshDateViews();
     }
   });
   hdr.addEventListener('mousedown',e=>{sx=e.clientX;sy=e.clientY;});
@@ -7580,7 +7586,7 @@ document.getElementById('calAddBtn').addEventListener('click',openAiBox);
       const nd=new Date(_homeDate);
       nd.setDate(nd.getDate()+(dx<0?1:-1));
       _homeDate=nd;
-      renderHomeView();
+      _refreshDateViews();
     }
   });
 })();
