@@ -1627,9 +1627,11 @@ function mkDay(cls,num,evs,y,m,day,isDim){const d=document.createElement('div');
   var recHeat=null;
   if(!isDim){
     if(_recordMode && evs.length){
-      // 히트맵 배경: 기록 개수에 따라 진해짐 (github 잔디밭 느낌)
-      var lv=Math.min(evs.length,4);
-      var heatBg=['#f4efe2','#e9dcc0','#ddc99a','#cfb373'][lv-1]||'#f4efe2';
+      // 히트맵 배경: 기록 1개 단위로 음영이 진해짐 (연한 베이지 → 진한 황토)
+      var n=evs.length;
+      // 1개=가장 연함, 개수가 늘수록 진해짐 (8개에서 최대치 도달)
+      var steps=['#f6f1e6','#efe6cf','#e7d9b6','#dfcb9d','#d6bd84','#ccae6b','#c2a052','#b89139'];
+      var heatBg=steps[Math.min(n,steps.length)-1];
       recHeat=heatBg;
       var recShow=evs.slice(0,3);
       pills=recShow.map(function(e){
@@ -2572,13 +2574,44 @@ function _koreanTimeLead(t){
   if(!m)return t;
   return m[1]+' '+parseInt(m[2])+'시'+(m[3]!=='00'?' '+parseInt(m[3])+'분':'');
 }
+function _hashStr(s){var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;}return h;}
+function _pick(arr,seed){return arr[seed%arr.length];}
 function _newsHeadline(e){
   var nm=e.name;
-  if(e.done)return nm+', 무사히 마무리';
+  var seed=_hashStr((e.name||'')+(e.time||'')+(e.tag||''));
+  if(e.done){
+    var doneP=[nm+', 성공적으로 마무리',nm+' 완수… 오늘의 성과',nm+', 계획대로 완료',nm+' 마침표 찍었다',nm+', 무사히 소화',nm+' 일정 소화 완료',nm+', 해냈다',nm+' 마무리… 한 걸음 전진',nm+', 오늘의 한 건 처리',nm+' 클리어'];
+    return _pick(doneP,_hashStr(nm+'done'));
+  }
   if(e.auto)return nm+' — 팬 이목 집중';
   var t=_koreanTimeLead(e.time);
-  var tail={'일':'열린다','운동':'예정돼 있다','약속':'회동 예정','취미':'즐길 계획','가계부':'가계부에 기록'}[e.tag]||'예정돼 있다';
-  return (t?t+' ':'오늘 ')+nm+', '+tail;
+  // 시간대 판단
+  var hour=null;
+  var mm=(e.time||'').match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
+  if(mm){hour=parseInt(mm[2])%12+(mm[1]==='오후'?12:0);}
+  var timeband=hour==null?'':(hour<6?'새벽':hour<11?'아침':hour<14?'점심':hour<18?'오후':hour<21?'저녁':'밤');
+  // 카테고리별 표현 풀
+  var pools={
+    '일':['업무가 기다린다','처리 예정','오늘의 과제','일정 잡혔다','책상 위로 오른다','소화할 안건'],
+    '운동':['땀 흘릴 시간','운동 예정','몸을 움직인다','체력 단련 나선다','트레이닝 예고','건강 챙기는 시간'],
+    '약속':['만남이 잡혔다','회동 예정','반가운 자리','약속의 시간','얼굴 마주한다','만남 예고'],
+    '취미':['즐길 준비 완료','취미 시간','재충전 예고','여유 한 스푼','좋아하는 시간','설레는 일정'],
+    '가계부':['지갑을 연다','가계부에 기록','소비 예정','장부에 오른다','씀씀이 점검'],
+    '공부':['배움의 시간','집중 예고','머리를 쓴다','학습 예정','책을 편다'],
+    '식사':['식탁이 차려진다','한 끼 예정','맛의 시간','미식 예고']
+  };
+  var generic=['일정이 잡혔다','예정돼 있다','오늘의 지면에','계획에 올랐다','대기 중','예고편'];
+  var tailArr=pools[e.tag]||generic;
+  var tail=_pick(tailArr,seed);
+  // 리드 구성: 시간대/시간 + 이름 + 표현
+  var lead;
+  if(t){
+    var bandTxt=(timeband&&nm.indexOf(timeband)!==0)?timeband+' ':'';
+    lead=_pick([t+' '+nm+', '+tail, bandTxt+nm+' '+tail+' ('+t+')', t+', '+nm+' '+tail],seed);
+  }else{
+    lead=_pick(['오늘 '+nm+', '+tail, nm+', '+tail, nm+' — '+tail],seed);
+  }
+  return lead;
 }
 function _newsStatus(e,isToday){
   if(e.done)return '완료 ✓';
@@ -2712,7 +2745,7 @@ function _reportDays(){
   try{if(typeof getBudgetData==='function'){(getBudgetData().list||[]).forEach(function(it){if(it.date)set[it.date]=true;});}}catch(e){}
   var today=new Date();today.setHours(0,0,0,0);
   return Object.keys(set).map(function(k){var p=k.split('-').map(Number);return {k:k,y:p[0],m:p[1]-1,d:p[2]};})
-    .filter(function(o){var dd=new Date(o.y,o.m,o.d);dd.setHours(0,0,0,0);return dd<=today;})
+    .filter(function(o){var dd=new Date(o.y,o.m,o.d);dd.setHours(0,0,0,0);return dd<today;})
     .sort(function(a,b){return b.y-a.y||b.m-a.m||b.d-a.d;});
 }
 var _archiveYear=null,_archiveOpenMonth=null;
@@ -2932,23 +2965,475 @@ var _tipData=[
   {emoji:'🍅',quote:'25분 집중, 5분 휴식',source:'포모도로 테크닉',body:'25분 동안 한 가지에만 몰입하고 5분 쉬는 걸 반복하세요. 짧은 마감이 집중을 만들고, 규칙적인 휴식이 지치지 않게 해줘요.'},
   {emoji:'📝',quote:'머릿속을 비우고 종이에 옮겨라',source:'생각 정리의 기본',body:'해야 할 일을 머리로만 기억하면 뇌가 계속 긴장해요. 전부 적어두면 뇌는 ‘실행’에만 집중할 수 있어요. 매일 아침 할 일을 꺼내 적어보세요.'},
   {emoji:'🌙',quote:'내일의 나를 위해 오늘 밤 준비하라',source:'저녁 루틴의 힘',body:'자기 전 5분, 내일 입을 옷과 할 일 3가지를 정해두면 아침의 결정 피로가 사라져요. 하루의 시작이 훨씬 가벼워집니다.'},
-  {emoji:'🧠',quote:'완벽함보다 완성이 낫다',source:'마인드셋',body:'완벽하게 하려다 시작조차 못 하는 경우가 많아요. 일단 60%로 끝내고 고치는 편이, 100%를 노리다 미루는 것보다 늘 앞서갑니다.'}
+  {emoji:'🧠',quote:'완벽함보다 완성이 낫다',source:'마인드셋',body:'완벽하게 하려다 시작조차 못 하는 경우가 많아요. 일단 60%로 끝내고 고치는 편이, 100%를 노리다 미루는 것보다 늘 앞서갑니다.'},
+  {emoji:'🐸',quote:'가장 어려운 일을 아침에 먼저 하라',source:'브라이언 트레이시 · 개구리를 먹어라',body:'하기 싫은 가장 중요한 일을 아침 첫 시간에 해치우면, 하루 종일 그 부담에서 자유로워져요. 나머지 일은 상대적으로 쉽게 느껴집니다.'},
+  {emoji:'⛓️',quote:'매일 하면 사슬이 끊기지 않는다',source:'사인펠드 전략',body:'달력에 해낸 날마다 X를 치면 사슬이 이어져요. 이 사슬을 끊고 싶지 않은 마음이 강력한 동기가 됩니다. 목표는 오직 “오늘도 잇기”.'},
+  {emoji:'📦',quote:'비슷한 일은 몰아서 처리하라',source:'배칭(batching)',body:'이메일, 전화, 메시지처럼 비슷한 일을 모아 한 번에 처리하면 전환 비용이 줄어요. 수시로 왔다 갔다 하면 집중이 계속 깨집니다.'},
+  {emoji:'🎬',quote:'시작의 저항은 5초면 넘는다',source:'멜 로빈스 · 5초의 법칙',body:'하기 싫은 일 앞에서 5-4-3-2-1을 세고 바로 몸을 움직이세요. 생각할 틈을 주지 않는 게 미루는 습관을 이기는 방법이에요.'},
+  {emoji:'🌊',quote:'몰입은 적당한 난이도에서 온다',source:'칙센트미하이 · 몰입',body:'너무 쉬우면 지루하고 너무 어려우면 불안해요. 실력보다 살짝 높은 도전에서 시간 가는 줄 모르는 몰입이 찾아옵니다.'},
+  {emoji:'🧭',quote:'속도보다 방향이 중요하다',source:'목표 설정의 원칙',body:'열심히 달려도 방향이 틀리면 멀어질 뿐이에요. 가끔 멈춰서 “이게 내가 원하는 쪽인가”를 점검하는 게 더 빨리 가는 길입니다.'},
+  {emoji:'💧',quote:'환경을 바꾸면 행동이 바뀐다',source:'넛지 · 행동설계',body:'의지력에 기대지 마세요. 유혹은 멀리, 좋은 선택은 가까이 두면 저절로 좋은 행동을 하게 돼요. 폰을 다른 방에 두는 것만으로 집중이 올라갑니다.'},
+  {emoji:'🎁',quote:'하기 싫은 일에 좋아하는 걸 묶어라',source:'유혹 묶기(temptation bundling)',body:'좋아하는 팟캐스트는 운동할 때만 듣기처럼, 하기 싫은 일과 좋아하는 걸 짝지으면 둘 다 하게 돼요.'},
+  {emoji:'📉',quote:'할 일보다 안 할 일을 정하라',source:'우선순위의 역설',body:'모든 걸 다 하려다 아무것도 못 해요. 워런 버핏은 “정말 중요한 것 빼고 나머지는 무슨 일이 있어도 피하라”고 했어요.'},
+  {emoji:'⏰',quote:'마감이 없으면 일은 늘어난다',source:'파킨슨의 법칙',body:'일은 주어진 시간만큼 부풀어요. 스스로 짧은 마감을 정하면 같은 일도 훨씬 빨리 끝납니다. 넉넉한 시간이 늘 좋은 게 아니에요.'},
+  {emoji:'🔁',quote:'의지력이 아니라 시스템을 믿어라',source:'제임스 클리어',body:'목표는 방향만 정할 뿐, 결과를 만드는 건 매일 반복하는 시스템이에요. “무엇을 이룰까”보다 “어떤 과정을 반복할까”를 설계하세요.'},
+  {emoji:'🌅',quote:'하루의 첫 1시간이 하루를 정한다',source:'미라클 모닝',body:'일어나자마자 폰을 보는 대신, 물 마시기·스트레칭·오늘 계획 같은 짧은 루틴으로 시작하면 하루의 주도권을 내가 쥐게 돼요.'},
+  {emoji:'🧹',quote:'결정을 줄이면 에너지가 남는다',source:'결정 피로',body:'사소한 선택이 쌓이면 정작 중요한 순간에 판단력이 떨어져요. 옷·식사 같은 반복 결정을 단순화하면 중요한 일에 에너지를 아낄 수 있어요.'},
+  {emoji:'🎢',quote:'동기는 행동을 따라온다',source:'행동 활성화',body:'의욕이 생길 때까지 기다리지 마세요. 작게라도 먼저 움직이면 그 행동이 동기를 만들어요. 순서는 “행동 → 의욕”이지 그 반대가 아니에요.'},
+  {emoji:'🪜',quote:'큰 목표는 잘게 쪼개라',source:'작은 승리의 힘',body:'“책 쓰기”는 막막하지만 “오늘 한 문단”은 할 만해요. 큰 목표를 오늘 할 수 있는 최소 단위로 쪼개면 시작이 쉬워집니다.'},
+  {emoji:'🛑',quote:'집중은 거절에서 나온다',source:'에센셜리즘',body:'“예스”를 남발하면 정작 중요한 일에 쓸 시간이 없어요. 좋은 기회라도 최우선이 아니면 정중히 거절하는 게 진짜 집중이에요.'},
+  {emoji:'📊',quote:'측정하면 관리할 수 있다',source:'피드백 루프',body:'기록하지 않으면 나아지는지 알 수 없어요. 운동·지출·수면처럼 중요한 걸 숫자로 남기면, 그 자체로 행동이 개선되기 시작해요.'},
+  {emoji:'🌗',quote:'쉬는 것도 계획에 넣어라',source:'회복 탄력성',body:'쉼 없이 달리면 결국 방전돼요. 의도적인 휴식을 일정에 미리 넣으면 죄책감 없이 재충전할 수 있고, 오히려 생산성이 올라갑니다.'},
+  {emoji:'🎯',quote:'하나에 집중할 때 가장 빠르다',source:'원씽(The One Thing)',body:'“이걸 하면 나머지가 쉬워지는 단 하나”를 찾으세요. 여러 개를 동시에 쫓는 것보다, 가장 중요한 하나에 집중하는 게 결국 더 많은 걸 이룹니다.'}
 ];
-function _tipTodayIndex(){
+function _dayOfYearNum(){
   var t=new Date();
-  var seed=t.getFullYear()*1000+ (Math.floor((t-new Date(t.getFullYear(),0,0))/86400000));
-  return seed%_tipData.length;
+  return t.getFullYear()*1000+Math.floor((t-new Date(t.getFullYear(),0,0))/86400000);
+}
+function _tipTodayIndex(){
+  // 큰 소수를 곱해 연속된 날에도 팁이 멀리 떨어지게(순차 반복 느낌 제거)
+  var seed=_dayOfYearNum();
+  return (seed*7)%_tipData.length;
 }
 var _tipIdx=null;
+var _tipIdxDay=null;
+// ===== 건강 탭 =====
+var _healthData={workouts:{},meals:{},water:{}};
+var _healthTab='workout'; // 'workout' | 'diet'
+function _healthKey(){var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();}
+function _healthStreak(){
+  // 오늘 기준 과거로 연속 운동한 날 수 (운동 1개라도 완료된 날)
+  var n=0;var d=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
+  for(var i=0;i<400;i++){
+    var k=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+    var ws=_healthData.workouts[k]||[];
+    if(ws.some(function(w){return w.done;}))n++;else break;
+    d.setDate(d.getDate()-1);
+  }
+  return n;
+}
+function renderHealthPage(container){
+  if(!container)return;
+  var k=_healthKey();
+  var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();
+  var WKF=['일','월','화','수','목','금','토'];
+  var workouts=_healthData.workouts[k]||[];
+  var doneCnt=workouts.filter(function(w){return w.done;}).length;
+  var water=_healthData.water[k]||0;
+  var WATER_GOAL=8;
+  var streak=_healthStreak();
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
+
+  // 헤더
+  var head=document.createElement('div');
+  head.style.cssText='padding:14px 16px 6px;flex-shrink:0;';
+  head.innerHTML='<div style="font-size:20px;font-weight:800;color:#111;letter-spacing:-0.02em;">건강</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-top:1px;">'+now.getFullYear()+'년 '+(now.getMonth()+1)+'월 '+now.getDate()+'일 '+WKF[now.getDay()]+'요일</div>';
+  container.appendChild(head);
+
+  // 대시보드
+  var dash=document.createElement('div');
+  dash.style.cssText='display:flex;gap:8px;padding:8px 16px 4px;flex-shrink:0;';
+  dash.innerHTML=
+    '<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#1a7a4a;line-height:1;">'+doneCnt+'<span style="font-size:10px;color:#b5b1a8;">/'+(workouts.length||0)+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💪 오늘 운동</div></div>'
+    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#3aa0d9;line-height:1;">'+water+'<span style="font-size:10px;color:#b5b1a8;">/'+WATER_GOAL+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💧 물(잔)</div></div>'
+    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#e0653e;line-height:1;">🔥'+streak+'</div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">연속일</div></div>';
+  container.appendChild(dash);
+
+  // 하위탭
+  var st=document.createElement('div');
+  st.style.cssText='display:flex;gap:6px;padding:12px 16px 8px;flex-shrink:0;';
+  [['workout','💪 운동'],['diet','🍽 식단']].forEach(function(t){
+    var on=_healthTab===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:12px;font-weight:700;padding:8px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#1a7a4a;color:#fff;':'background:#f0eee8;color:#8a867c;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_healthTab=t[0];renderHealthPage(container);});
+    st.appendChild(b);
+  });
+  container.appendChild(st);
+
+  // 본문
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+
+  if(_healthTab==='workout'){_healthRenderWorkout(body,k);}
+  else{_healthRenderDiet(body,k,water,WATER_GOAL);}
+}
+function _healthRenderWorkout(body,k){
+  var workouts=_healthData.workouts[k]||[];
+  if(!workouts.length){
+    body.innerHTML='<div style="text-align:center;padding:32px 0 18px;color:#9a9a93;font-size:12px;">오늘 운동을 기록해보세요<br><span style="font-size:10px;">벤치프레스, 러닝 30분 등</span></div>';
+  }
+  workouts.forEach(function(w,i){
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px;margin-bottom:7px;';
+    var chk=document.createElement('button');
+    chk.style.cssText='width:22px;height:22px;border-radius:7px;flex-shrink:0;cursor:pointer;'+(w.done?'background:#1a7a4a;border:2px solid #1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;':'background:#fff;border:2px solid #d8d6ce;');
+    chk.innerHTML=w.done?'✓':'';
+    chk.addEventListener('click',function(){w.done=!w.done;if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage'));});
+    var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
+    info.innerHTML='<div class="hw-name" style="font-size:12px;font-weight:700;color:'+(w.done?'#9a9a93':'#111')+';'+(w.done?'text-decoration:line-through;':'')+'">'+w.name+'</div>'+(w.detail?'<div style="font-size:9.5px;color:#9a948a;margin-top:1px;">'+w.detail+'</div>':'');
+    var del=document.createElement('button');del.textContent='✕';del.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;';
+    del.addEventListener('click',function(){workouts.splice(i,1);if(!workouts.length)delete _healthData.workouts[k];if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage'));});
+    row.appendChild(chk);row.appendChild(info);row.appendChild(del);
+    body.appendChild(row);
+  });
+  // 추가 입력
+  var addWrap=document.createElement('div');
+  addWrap.style.cssText='display:flex;gap:6px;margin-top:8px;';
+  var hwInp=document.createElement('input');
+  hwInp.placeholder='운동 추가 (예: 벤치 60kg 4x10)';
+  hwInp.style.cssText='flex:1;min-width:0;border:1px solid #e6e2d8;border-radius:11px;padding:10px 12px;font-size:11px;font-family:inherit;outline:none;background:#fff;';
+  var hwAdd=document.createElement('button');
+  hwAdd.textContent='＋';
+  hwAdd.style.cssText='width:40px;border:none;border-radius:11px;background:#1a7a4a;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;';
+  addWrap.appendChild(hwInp);addWrap.appendChild(hwAdd);
+  body.appendChild(addWrap);
+  function addW(){
+    var v=(hwInp.value||'').trim();if(!v)return;
+    var name=v,detail='';
+    var m=v.match(/^(.+?)\s+(.*(?:kg|세트|회|분|km|x|×|\d).*)$/);
+    if(m){name=m[1].trim();detail=m[2].trim();}
+    if(!_healthData.workouts[k])_healthData.workouts[k]=[];
+    _healthData.workouts[k].push({name:name,detail:detail,done:false});
+    if(window._saveState)window._saveState();
+    renderHealthPage(document.getElementById('healthPage')||body.parentElement);
+  }
+  hwAdd.addEventListener('click',addW);
+  hwInp.addEventListener('keydown',function(e){if(e.key==='Enter')addW();});
+}
+function _healthRenderDiet(body,k,water,WATER_GOAL){
+  // 물 트래커
+  var wat=document.createElement('div');
+  wat.style.cssText='display:flex;align-items:center;gap:9px;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px 13px;margin-bottom:12px;';
+  var dots='';for(var i=0;i<WATER_GOAL;i++){dots+='<span style="font-size:11px;color:'+(i<water?'#3aa0d9':'#dbe7ef')+';">●</span>';}
+  wat.innerHTML='<span style="font-size:11px;font-weight:700;color:#111;flex-shrink:0;">💧 물</span>'
+    +'<span style="display:flex;gap:2px;flex:1;flex-wrap:wrap;">'+dots+'</span>'
+    +'<span style="font-size:10px;color:#9a948a;flex-shrink:0;">'+water+'/'+WATER_GOAL+'</span>'
+    +'<button class="wat-minus" style="width:24px;height:24px;border-radius:50%;border:none;background:#f0eee8;color:#8a867c;font-size:14px;cursor:pointer;flex-shrink:0;">−</button>'
+    +'<button class="wat-plus" style="width:24px;height:24px;border-radius:50%;border:none;background:#e9f3fb;color:#3aa0d9;font-size:14px;font-weight:800;cursor:pointer;flex-shrink:0;">＋</button>';
+  body.appendChild(wat);
+  wat.querySelector('.wat-plus').addEventListener('click',function(){_healthData.water[k]=Math.min((_healthData.water[k]||0)+1,20);if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage')||body.parentElement);});
+  wat.querySelector('.wat-minus').addEventListener('click',function(){_healthData.water[k]=Math.max((_healthData.water[k]||0)-1,0);if(!_healthData.water[k])delete _healthData.water[k];if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage')||body.parentElement);});
+
+  // 오늘 섭취 칼로리 합계
+  var meals0=_healthData.meals[k]||{};
+  var dayCal=0;Object.keys(meals0).forEach(function(mk){if(meals0[mk]&&meals0[mk].cal)dayCal+=meals0[mk].cal;});
+  if(dayCal>0){
+    var lo=Math.round(dayCal*0.85/10)*10,hi=Math.round(dayCal*1.15/10)*10;
+    var calSum=document.createElement('div');
+    calSum.style.cssText='display:flex;align-items:center;gap:9px;background:#fff8f3;border:0.5px solid #f2e2d6;border-radius:12px;padding:11px 13px;margin-bottom:12px;';
+    calSum.innerHTML='<span style="font-size:11px;font-weight:700;color:#111;">🔥 오늘 섭취</span>'
+      +'<span style="font-size:13px;font-weight:800;color:#e0653e;margin-left:auto;">약 '+lo+'~'+hi+'kcal</span>';
+    body.appendChild(calSum);
+  }
+
+  // 끼니 카드
+  var meals=_healthData.meals[k]||{};
+  [['breakfast','🌅','아침'],['lunch','☀️','점심'],['dinner','🌙','저녁'],['snack','🍎','간식']].forEach(function(mm){
+    var key=mm[0],emo=mm[1],label=mm[2];
+    var meal=meals[key];
+    var card=document.createElement('div');
+    if(meal&&meal.text){
+      card.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px;margin-bottom:7px;';
+      var itemRows='';
+      if(meal.items&&meal.items.length){
+        itemRows=meal.items.map(function(it){
+          return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0;border-bottom:0.5px solid #f2f0ea;">'
+            +'<span style="color:#333;">'+it.name+'</span>'
+            +'<span style="color:'+(it.cal!=null?'#1a7a4a':'#c5c1b8')+';font-weight:600;flex-shrink:0;margin-left:8px;">'+(it.cal!=null?it.cal+'kcal':'—')+'</span></div>';
+        }).join('');
+      }else{
+        // 구버전 데이터 (항목 없음)
+        itemRows=meal.text.split(/\n+/).map(function(line){return '<div style="font-size:11px;color:#555;padding:3px 0;">'+line+'</div>';}).join('');
+      }
+      card.innerHTML='<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="font-size:14px;">'+emo+'</span><span style="font-size:11px;font-weight:800;color:#111;">'+label+'</span>'+(meal.time?'<span style="font-size:9px;color:#b5b1a8;margin-left:8px;">'+meal.time+'</span>':'')+'<button class="meal-del" style="border:none;background:none;color:#ddd;font-size:12px;cursor:pointer;margin-left:auto;">✕</button></div>'
+        +'<div style="display:flex;gap:9px;"><div style="width:40px;height:40px;border-radius:9px;background:#f0eee8;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+(meal.photo||'🍽')+'</div>'
+        +'<div style="flex:1;min-width:0;">'+itemRows
+        +(meal.cal?'<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;font-weight:800;color:#111;padding-top:5px;margin-top:2px;"><span>합계</span><span style="color:#e0653e;">약 '+meal.cal+'kcal</span></div>':'')
+        +'</div></div>';
+      card.querySelector('.meal-del').addEventListener('click',function(){delete meals[key];if(!Object.keys(meals).length)delete _healthData.meals[k];else _healthData.meals[k]=meals;if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage'));});
+    }else{
+      card.style.cssText='border:1.5px dashed #e2e0d8;border-radius:12px;padding:12px;margin-bottom:7px;cursor:pointer;display:flex;align-items:center;gap:8px;';
+      card.innerHTML='<span style="font-size:14px;opacity:0.55;">'+emo+'</span><span style="font-size:11px;color:#b5b1a8;font-weight:600;">'+label+' 기록하기</span><span style="margin-left:auto;color:#d8d6ce;font-size:14px;">＋</span>';
+      card.addEventListener('click',function(){_healthMealInput(k,key,label,emo);});
+    }
+    body.appendChild(card);
+  });
+}
+// 간단 음식 칼로리 어림 테이블 (참고용, 1인분 기준 kcal)
+var _calTable=[
+  {kw:['밥','공기밥','쌀밥','흰밥'],cal:300,name:'밥'},
+  {kw:['현미밥','잡곡밥'],cal:280,name:'현미밥'},
+  {kw:['김치찌개'],cal:250,name:'김치찌개'},
+  {kw:['된장찌개'],cal:200,name:'된장찌개'},
+  {kw:['부대찌개'],cal:400,name:'부대찌개'},
+  {kw:['라면'],cal:500,name:'라면'},
+  {kw:['짜장면','자장면'],cal:700,name:'짜장면'},
+  {kw:['짬뽕'],cal:650,name:'짬뽕'},
+  {kw:['김밥'],cal:480,name:'김밥'},
+  {kw:['비빔밥'],cal:600,name:'비빔밥'},
+  {kw:['볶음밥'],cal:600,name:'볶음밥'},
+  {kw:['제육','제육볶음'],cal:550,name:'제육볶음'},
+  {kw:['불고기'],cal:400,name:'불고기'},
+  {kw:['삼겹살'],cal:500,name:'삼겹살'},
+  {kw:['치킨','후라이드','양념치킨'],cal:600,name:'치킨'},
+  {kw:['피자'],cal:280,name:'피자(1조각)'},
+  {kw:['햄버거','버거'],cal:500,name:'햄버거'},
+  {kw:['샐러드'],cal:150,name:'샐러드'},
+  {kw:['닭가슴살'],cal:165,name:'닭가슴살'},
+  {kw:['고구마'],cal:130,name:'고구마'},
+  {kw:['계란','달걀','계란말이','계란후라이'],cal:80,name:'계란'},
+  {kw:['토스트','식빵'],cal:130,name:'토스트'},
+  {kw:['샌드위치'],cal:350,name:'샌드위치'},
+  {kw:['우동'],cal:450,name:'우동'},
+  {kw:['국수','잔치국수'],cal:400,name:'국수'},
+  {kw:['떡볶이'],cal:450,name:'떡볶이'},
+  {kw:['순대'],cal:350,name:'순대'},
+  {kw:['커피','아메리카노'],cal:10,name:'아메리카노'},
+  {kw:['라떼','카페라떼'],cal:180,name:'라떼'},
+  {kw:['우유'],cal:130,name:'우유'},
+  {kw:['바나나'],cal:100,name:'바나나'},
+  {kw:['사과'],cal:95,name:'사과'},
+  {kw:['요거트','요구르트'],cal:120,name:'요거트'},
+  {kw:['빵','크로와상','베이글'],cal:280,name:'빵'},
+  {kw:['떡'],cal:230,name:'떡'},
+  {kw:['국밥','설렁탕','곰탕'],cal:500,name:'국밥'},
+  {kw:['냉면'],cal:550,name:'냉면'},
+  {kw:['돈까스','돈가스'],cal:700,name:'돈까스'},
+  {kw:['초밥','스시'],cal:350,name:'초밥'},
+  {kw:['만두'],cal:300,name:'만두'},
+  {kw:['김치'],cal:30,name:'김치'},
+  {kw:['미역국'],cal:100,name:'미역국'},
+  {kw:['죽'],cal:250,name:'죽'},
+  {kw:['견과','견과류','아몬드','호두','캐슈','땅콩','피스타치오'],cal:180,name:'견과류',unit:'handful'},
+  {kw:['치즈'],cal:110,name:'치즈'},
+  {kw:['샐러드바','과일'],cal:120,name:'과일'},
+  {kw:['오렌지','귤'],cal:60,name:'귤/오렌지'},
+  {kw:['포도'],cal:70,name:'포도'},
+  {kw:['딸기'],cal:50,name:'딸기'},
+  {kw:['토마토','방울토마토'],cal:30,name:'토마토'},
+  {kw:['샐러드드레싱','드레싱'],cal:50,name:'드레싱'},
+  {kw:['감자','감자튀김','프렌치프라이'],cal:300,name:'감자'},
+  {kw:['옥수수'],cal:130,name:'옥수수'},
+  {kw:['두부'],cal:110,name:'두부'},
+  {kw:['달걀후라이','에그'],cal:90,name:'계란'}
+];
+// 텍스트에서 음식 항목 추출 + 칼로리 어림
+function _estimateCalories(text){
+  var items=[];var total=0;
+  var parts=text.split(/[,\n·]|\s+그리고\s+/).map(function(s){return s.trim();}).filter(Boolean);
+  // 한글 수사 → 숫자
+  var KNUM={'반':0.5,'한':1,'하나':1,'두':2,'둘':2,'세':3,'셋':3,'네':4,'넷':4,'다섯':5,'여섯':6,'일곱':7,'여덟':8,'아홉':9,'열':10};
+  function parseQty(p){
+    var num=null;
+    var dm=p.match(/(\d+(?:\.\d+)?)/);
+    if(dm)num=parseFloat(dm[1]);
+    else{for(var w in KNUM){if(p.indexOf(w)>=0){num=KNUM[w];break;}}}
+    return num;
+  }
+  // 한 부분(part)에서 여러 음식이 "와/과/랑/하고"로 이어진 경우 분리
+  function splitConj(part){
+    // 표에 있는 음식명이 여러 개 들어있으면 조사로 분리 시도
+    var segs=part.split(/(?:와|과|랑|이랑|하고)\s+/).map(function(s){return s.trim();}).filter(Boolean);
+    if(segs.length<=1)return [part];
+    // 각 조각이 최소 하나의 음식 키워드를 포함하는지 확인 (아니면 원본 유지)
+    var ok=segs.every(function(s){return _calTable.some(function(f){return f.kw.some(function(kw){return s.indexOf(kw)>=0;});});});
+    return ok?segs:[part];
+  }
+  var expanded=[];
+  parts.forEach(function(p){splitConj(p).forEach(function(s){expanded.push(s);});});
+  parts=expanded;
+  parts.forEach(function(p){
+    var found=null;
+    for(var i=0;i<_calTable.length;i++){
+      if(_calTable[i].kw.some(function(kw){return p.indexOf(kw)>=0;})){found=_calTable[i];break;}
+    }
+    if(!found){if(p.length>=1)items.push({name:p,cal:null});return;}
+    // 단위 판별
+    var factor=1;var qtyLabel='';
+    var qty=parseQty(p);
+    // 소량 단위 (숟가락/큰술/스푼/티스푼/작은술) → 1인분 대비 비율
+    var spoonM=p.match(/(?:큰술|숟가락|숟갈|스푼|테이블스푼)/);
+    var teaM=p.match(/(?:티스푼|작은술|찻숟가락)/);
+    var cupM=p.match(/(?:컵|잔)/);
+    var handM=p.match(/(?:줌|한줌|움큼)/);
+    var almondM=p.match(/(?:알|개)/)&&found.name==='견과류';
+    var isFruit=(['사과','배','수박','참외','복숭아','귤/오렌지','포도','딸기','과일','바나나','토마토'].indexOf(found.name)>=0);
+    var sliceM=p.match(/조각/);
+    var portionM=p.match(/(?:개|공기|그릇|인분|장|봉지|판|줄|접시)/);
+    if(teaM){
+      var n=qty||1; factor=(n*5)/150; qtyLabel=n+(p.indexOf('작은술')>=0?'작은술':(p.indexOf('찻숟가락')>=0?'찻숟가락':'티스푼'));
+    }else if(spoonM){
+      var n2=qty||1; factor=(n2*15)/150; qtyLabel=n2+(p.indexOf('숟가락')>=0?'숟가락':(p.indexOf('숟갈')>=0?'숟갈':(p.indexOf('스푼')>=0?'스푼':'큰술')));
+    }else if(handM){
+      var nh=qty||1; factor=nh; qtyLabel=(nh!==1?nh+'줌':'한 줌'); // 견과류 1줌 = 1인분(약 180kcal)
+    }else if(almondM){
+      var na=qty||1; factor=na/25; qtyLabel=na+'알'; // 견과류 25알 ≈ 1인분
+    }else if(sliceM&&isFruit){
+      var nf=qty||1; factor=nf*0.15; qtyLabel=nf+'조각'; // 과일 1조각 ≈ 1개의 0.15
+    }else if(sliceM){
+      var ns=qty||1; factor=ns; qtyLabel=(ns!==1?ns+'조각':''); // 피자 등 1조각=1인분
+    }else if(cupM){
+      var n3=qty||1; factor=n3; qtyLabel=(n3!==1?n3+'컵':''); // 1컵 = 1인분
+    }else if(portionM){
+      var n4=qty||1; factor=n4; qtyLabel=(n4!==1?n4+(portionM[0]):'');
+    }else if(qty){
+      factor=qty; qtyLabel=(qty!==1?'x'+qty:'');
+    }
+    factor=Math.max(0.1,Math.min(factor,10));
+    var c=Math.round(found.cal*factor);
+    items.push({name:found.name+(qtyLabel?' '+qtyLabel:''),cal:c});
+    total+=c;
+  });
+  return {items:items,total:total};
+}
+function _healthMealInput(k,mealKey,label,emo){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('mealInputPop');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='mealInputPop';wrap.style.cssText='position:absolute;inset:0;z-index:4200;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.4);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:20px 20px 0 0;padding:16px 18px 22px;box-sizing:border-box;animation:goalSheetUp 0.24s ease;';
+  sheet.addEventListener('click',function(e){e.stopPropagation();});
+  var chosen=emo;
+  sheet.innerHTML='<div style="width:36px;height:4px;border-radius:2px;background:#e2e2de;margin:0 auto 14px;"></div>'
+    +'<div style="font-size:13px;font-weight:800;color:#111;text-align:center;">'+emo+' '+label+' 기록</div>'
+    +'<div style="font-size:10px;color:#9a948a;text-align:center;margin:3px 0 14px;">사진을 찍거나 드신 걸 적어보세요</div>'
+    +'<button id="mealPhoto" style="width:100%;border:1.5px dashed #cfd8d2;border-radius:12px;padding:14px;background:#f7faf8;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;">'
+      +'<span style="font-size:18px;">📷</span><span style="font-size:11px;color:#5a8a70;font-weight:700;">사진으로 자동 인식</span>'
+      +'<span style="font-size:8px;color:#b0b8b3;background:#eef2f0;border-radius:6px;padding:2px 6px;">준비 중</span></button>'
+    +'<textarea id="mealTxt" rows="4" placeholder="한 줄에 하나씩 적어보세요\n밥 한 공기\n김치찌개\n계란말이 2개" style="width:100%;box-sizing:border-box;border:1px solid #e6e2d8;border-radius:11px;padding:12px;font-size:12px;font-family:inherit;outline:none;margin-bottom:10px;resize:none;line-height:1.6;"></textarea>'
+    +'<div id="mealCalBox" style="display:none;background:#f7f6f1;border-radius:11px;padding:11px 13px;margin-bottom:12px;"></div>'
+    +'<button id="mealSave" style="width:100%;font-size:13px;font-weight:800;color:#fff;background:#1a7a4a;border:none;border-radius:12px;padding:13px;cursor:pointer;font-family:inherit;">저장</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  // 식단 내용으로 이모지 자동 선택
+  function _autoEmoji(t){
+    var map=[['샐러드','🥗'],['닭','🍗'],['치킨','🍗'],['커피','☕'],['아메리카노','☕'],['라떼','☕'],['빵','🍞'],['토스트','🍞'],['샌드위치','🥪'],['면','🍜'],['라면','🍜'],['국수','🍜'],['우동','🍜'],['짜장','🍜'],['짬뽕','🍜'],['밥','🍚'],['김밥','🍙'],['초밥','🍣'],['스시','🍣'],['피자','🍕'],['버거','🍔'],['햄버거','🍔'],['계란','🍳'],['달걀','🍳'],['과일','🍎'],['사과','🍎'],['바나나','🍌'],['케이크','🍰'],['떡','🍡'],['찌개','🍲'],['국','🍲'],['탕','🍲'],['고기','🍖'],['삼겹','🍖'],['음료','🥤'],['주스','🧃'],['우유','🥛'],['요거트','🥛']];
+    for(var i=0;i<map.length;i++){if(t.indexOf(map[i][0])>=0)return map[i][1];}
+    return emo;
+  }
+  // 사진 버튼 (지금은 준비중 안내)
+  sheet.querySelector('#mealPhoto').addEventListener('click',function(){
+    showToast('사진 자동 인식은 곧 제공될 예정이에요','add','ti-camera');
+  });
+  var txtEl=sheet.querySelector('#mealTxt');
+  var calBox=sheet.querySelector('#mealCalBox');
+  var _lastEst={items:[],total:0};
+  function updateCal(){
+    var t=(txtEl.value||'').trim();
+    if(!t){calBox.style.display='none';_lastEst={items:[],total:0};return;}
+    var est=_estimateCalories(t);_lastEst=est;
+    if(!est.items.length){calBox.style.display='none';return;}
+    var known=est.items.filter(function(x){return x.cal!=null;});
+    var unknownN=est.items.length-known.length;
+    var lo=Math.round(est.total*0.85/10)*10, hi=Math.round(est.total*1.15/10)*10;
+    var rows=est.items.map(function(x){return '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:#555;padding:1px 0;"><span>'+x.name+'</span><span style="color:'+(x.cal!=null?'#1a7a4a':'#b5b1a8')+';">'+(x.cal!=null?'약 '+x.cal+'kcal':'—')+'</span></div>';}).join('');
+    calBox.innerHTML=rows
+      +'<div style="border-top:0.5px solid #e2e0d8;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:#111;"><span>합계(참고)</span><span style="color:#1a7a4a;">약 '+lo+'~'+hi+'kcal</span></div>'
+      +(unknownN?'<div style="font-size:8.5px;color:#b5b1a8;margin-top:4px;">＊'+unknownN+'개 항목은 추정 못 해 제외됐어요. 칼로리는 어림 참고치예요.</div>':'<div style="font-size:8.5px;color:#b5b1a8;margin-top:4px;">＊칼로리는 어림 참고치라 실제와 다를 수 있어요.</div>');
+    calBox.style.display='block';
+  }
+  txtEl.addEventListener('input',updateCal);
+  setTimeout(function(){try{txtEl.focus();}catch(e){}},60);
+  function save(){
+    var t=(txtEl.value||'').trim();if(!t)return;
+    var now=new Date();var hh=now.getHours(),mm=now.getMinutes();var tm=(hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm;
+    if(!_healthData.meals[k])_healthData.meals[k]={};
+    _healthData.meals[k][mealKey]={text:t,photo:_autoEmoji(t),time:tm,cal:_lastEst.total||0,items:(_lastEst.items||[]).map(function(it){return {name:it.name,cal:it.cal};})};
+    if(window._saveState)window._saveState();
+    wrap.remove();
+    renderHealthPage(document.getElementById('healthPage'));
+  }
+  sheet.querySelector('#mealSave').addEventListener('click',save);
+  // textarea: Ctrl/Cmd+Enter로 저장 (Enter는 줄바꿈)
+  txtEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();save();}});
+}
+function _openSavedTips(){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('savedTipsView');if(old)old.remove();
+  var saved=window._tipSaved||[];
+  var dates=window._tipSavedDates||{};
+  var wrap=document.createElement('div');wrap.id='savedTipsView';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;background:#fdfbf6;display:flex;flex-direction:column;animation:dmSlideIn 0.22s ease;';
+  var top=document.createElement('div');
+  top.style.cssText='padding:14px 16px 10px;flex-shrink:0;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #efece4;';
+  top.innerHTML='<span class="st-back" style="font-size:22px;color:#888;cursor:pointer;line-height:1;">‹</span>'
+    +'<div><div style="font-size:14px;font-weight:800;color:#111;">🔖 저장한 인사이트</div>'
+    +'<div style="font-size:9px;color:#9a948a;margin-top:1px;">날짜별로 모아 보기</div></div>';
+  wrap.appendChild(top);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:14px 16px 28px;-webkit-overflow-scrolling:touch;';
+  wrap.appendChild(body);
+  if(!saved.length){
+    body.innerHTML='<div style="text-align:center;padding:48px 0;color:#9a9a93;font-size:12px;">아직 저장한 팁이 없어요<br><span style="font-size:10px;">팁 카드의 🔖 저장을 눌러보세요</span></div>';
+  }else{
+    // 날짜별 그룹핑
+    var groups={};
+    saved.forEach(function(idx){
+      var dk=dates[idx]||'날짜 없음';
+      if(!groups[dk])groups[dk]=[];
+      groups[dk].push(idx);
+    });
+    // 최신 날짜 먼저
+    var keys=Object.keys(groups).sort(function(a,b){
+      if(a==='날짜 없음')return 1;if(b==='날짜 없음')return -1;
+      var pa=a.split('-').map(Number),pb=b.split('-').map(Number);
+      return (pb[0]-pa[0])||(pb[1]-pa[1])||(pb[2]-pa[2]);
+    });
+    var WKN=['일','월','화','수','목','금','토'];
+    var html='';
+    keys.forEach(function(dk){
+      var label=dk;
+      if(dk!=='날짜 없음'){var p=dk.split('-').map(Number);var dt=new Date(p[0],p[1]-1,p[2]);label=p[0]+'년 '+p[1]+'월 '+p[2]+'일 '+WKN[dt.getDay()]+'요일';}
+      html+='<div style="font-size:10px;font-weight:800;color:#b0a894;margin:12px 2px 8px;">'+label+'</div>';
+      groups[dk].forEach(function(idx){
+        var t=_tipData[idx];if(!t)return;
+        html+='<div class="st-row" data-i="'+idx+'" style="display:flex;align-items:flex-start;gap:10px;background:#fff;border:0.5px solid #eee;border-radius:12px;padding:12px;margin-bottom:7px;cursor:pointer;">'
+          +'<span style="font-size:20px;flex-shrink:0;">'+t.emoji+'</span>'
+          +'<div style="flex:1;min-width:0;"><div style="font-size:11.5px;font-weight:700;color:#222;line-height:1.4;">'+t.quote+'</div>'
+          +'<div style="font-size:8.5px;color:#9a948a;margin-top:2px;">'+t.source+'</div></div>'
+          +'<button class="st-del" data-i="'+idx+'" style="border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;">✕</button></div>';
+      });
+    });
+    body.innerHTML=html;
+    body.querySelectorAll('.st-del').forEach(function(b){
+      b.addEventListener('click',function(e){
+        e.stopPropagation();
+        var idx=parseInt(b.getAttribute('data-i'));
+        var pos=(window._tipSaved||[]).indexOf(idx);
+        if(pos>=0)window._tipSaved.splice(pos,1);
+        if(window._tipSavedDates)delete window._tipSavedDates[idx];
+        if(window._saveState)window._saveState();
+        _openSavedTips();
+      });
+    });
+    body.querySelectorAll('.st-row').forEach(function(r){
+      r.addEventListener('click',function(){
+        _tipIdx=parseInt(r.getAttribute('data-i'));_tipIdxDay=_dayOfYearNum();
+        wrap.remove();
+        try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}
+      });
+    });
+  }
+  top.querySelector('.st-back').addEventListener('click',function(){wrap.remove();});
+  host.appendChild(wrap);
+}
 function renderInsightPage(container){
   if(!container)return;
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
   var head=document.createElement('div');
   head.style.cssText='padding:14px 16px 8px;flex-shrink:0;';
-  head.innerHTML='<div style="font-size:12px;font-weight:800;color:#111;">💡 자기관리 인사이트</div>'
-    +'<div style="font-size:9px;color:#9a948a;margin-top:2px;">매일 좋은 습관과 시간관리 팁 한 조각</div>';
+  head.innerHTML='<div id="insightTitleBtn" style="font-size:12px;font-weight:800;color:#111;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">💡 자기관리 인사이트 <span style="font-size:9px;color:#c0bcb2;">🔖</span></div>'
+    +'<div style="font-size:9px;color:#9a948a;margin-top:2px;">매일 좋은 습관과 시간관리 팁 한 조각 · 제목을 누르면 저장한 팁</div>';
   container.appendChild(head);
+  var _itBtn=head.querySelector('#insightTitleBtn');
+  if(_itBtn)_itBtn.addEventListener('click',function(){_openSavedTips();});
   var body=document.createElement('div');
   body.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 24px;scrollbar-width:none;-ms-overflow-style:none;';
   container.appendChild(body);
@@ -2973,7 +3458,8 @@ function renderInsightPage(container){
   }
 }
 function _renderDailyTip(host,isPage){
-  if(_tipIdx===null)_tipIdx=_tipTodayIndex();
+  var _dnow=_dayOfYearNum();
+  if(_tipIdx===null||_tipIdxDay!==_dnow){_tipIdx=_tipTodayIndex();_tipIdxDay=_dnow;}
   if(typeof _tipSaved==='undefined')window._tipSaved=[];
   var card=document.createElement('div');
   card.style.cssText=isPage?'margin-top:4px;':'margin-top:16px;';
@@ -2981,7 +3467,17 @@ function _renderDailyTip(host,isPage){
     var t=_tipData[_tipIdx];
     var saved=(window._tipSaved||[]).indexOf(_tipIdx)>=0;
     var dots='';
-    for(var i=0;i<_tipData.length;i++)dots+='<span style="width:5px;height:5px;border-radius:50%;background:'+(i===_tipIdx?'#111':'#d8d5cd')+';"></span>';
+    var N=_tipData.length, cur=_tipIdx, WIN=7;
+    // 현재 위치 중심으로 최대 WIN개의 점만 표시 (많은 팁도 화면 안에 맞게)
+    var start=Math.max(0,Math.min(cur-Math.floor(WIN/2),N-WIN));
+    if(N<=WIN)start=0;
+    var end=Math.min(N,start+WIN);
+    for(var i=start;i<end;i++){
+      var isCur=(i===cur);
+      var isEdge=(i===start&&start>0)||(i===end-1&&end<N);
+      var sz=isEdge?3:5;
+      dots+='<span style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;flex-shrink:0;background:'+(isCur?'#111':'#d8d5cd')+';"></span>';
+    }
     card.innerHTML=(isPage?'':'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">'
       +'<span style="font-size:12px;font-weight:800;color:#111;">💡 오늘의 자기관리</span>'
       +'<span style="font-size:9px;color:#b0aaa0;">'+(_tipIdx+1)+' / '+_tipData.length+'</span></div>')
@@ -2993,7 +3489,7 @@ function _renderDailyTip(host,isPage){
         +'<div style="font-size:10.5px;color:#6a665e;line-height:1.65;text-align:left;">'+t.body+'</div>'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">'
           +'<span class="tip-prev" style="font-size:20px;color:#c0bcb2;cursor:pointer;padding:0 6px;">‹</span>'
-          +'<div style="display:flex;gap:4px;">'+dots+'</div>'
+          +'<div style="display:flex;gap:4px;align-items:center;justify-content:center;flex:1;overflow:hidden;">'+dots+'</div>'
           +'<span class="tip-next" style="font-size:20px;color:#85857f;cursor:pointer;padding:0 6px;">›</span>'
         +'</div>'
       +'</div>'
@@ -3004,9 +3500,11 @@ function _renderDailyTip(host,isPage){
     card.querySelector('.tip-next').addEventListener('click',function(){_tipIdx=(_tipIdx+1)%_tipData.length;draw();});
     card.querySelector('.tip-save').addEventListener('click',function(){
       window._tipSaved=window._tipSaved||[];
+      window._tipSavedDates=window._tipSavedDates||{};
       var pos=window._tipSaved.indexOf(_tipIdx);
-      if(pos>=0){window._tipSaved.splice(pos,1);showToast('저장 취소됨','del','ti-bookmark');}
-      else{window._tipSaved.push(_tipIdx);showToast('팁을 저장했어요','add','ti-bookmark');}
+      if(pos>=0){window._tipSaved.splice(pos,1);delete window._tipSavedDates[_tipIdx];showToast('저장 취소됨','del','ti-bookmark');}
+      else{window._tipSaved.push(_tipIdx);var _n=new Date();window._tipSavedDates[_tipIdx]=_n.getFullYear()+'-'+(_n.getMonth()+1)+'-'+_n.getDate();showToast('팁을 저장했어요','add','ti-bookmark');}
+      if(window._saveState)window._saveState();
       draw();
     });
   }
@@ -5761,6 +6259,7 @@ function setHomePage(p){
   if(p===6){try{rerenderMemoPage();}catch(e){}}
   if(p===7){try{renderGoalPage(document.getElementById('goalPage'));}catch(e){}}
   if(p===8){try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}}
+  if(p===9){try{renderHealthPage(document.getElementById('healthPage'));}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -5781,6 +6280,7 @@ function buildHomeSlider(){
     {id:'tab-memo',     name:'메모'},
     {id:'tab-goal',     name:'목표'},
     {id:'tab-insight',  name:'인사이트'},
+    {id:'tab-health',   name:'건강'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -5853,6 +6353,12 @@ function buildHomeSlider(){
   insightPage.id='insightPage';
   renderInsightPage(insightPage);
   slider.appendChild(insightPage);
+
+  var healthPage=document.createElement('div');
+  healthPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  healthPage.id='healthPage';
+  renderHealthPage(healthPage);
+  slider.appendChild(healthPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -6997,40 +7503,78 @@ let _themeColorSel='#1a7a4a';
 let _mypageSub=null; // null | 'profile' | 'stats' | 'notif' | 'theme' | 'plan'
 let _userPlan='free';
 const PLANS=[
-  {id:'free',name:'Free',price:0,friends:4,interests:1,perks:['기본 일정·체크리스트·가계부','친구 공유 4명','관심사 1개','주 1회 브리핑']},
-  {id:'basic',name:'Basic',price:2900,friends:10,interests:3,perks:['친구 공유 10명','관심사 3개','나만의 조간 브리핑 발행','매일 AI 브리핑 · 루틴 트래커']},
-  {id:'pro',name:'Pro',price:5900,friends:30,interests:10,perks:['친구 공유 30명','관심사 10개','채팅 약속 자동 감지','소비 코치 · 티켓팅 알림']},
-  {id:'premium',name:'Premium',price:9900,friends:Infinity,interests:Infinity,perks:['친구 공유 무제한','관심사 무제한','AI 비서 (약속 조율)','그룹 공유 캘린더']}
+  {id:'free',name:'무료',price:0,yearly:0,friends:4,interests:1,
+    tagline:'가볍게 시작하기',
+    perks:['일정·기록·체크리스트·메모','기본 가계부','건강: 운동 체크 + 물 트래커','친구 공유 4명 · 관심사 1개']},
+  {id:'basic',name:'베이직',price:3900,yearly:33000,friends:10,interests:3,
+    tagline:'매일 제대로 관리',
+    perks:['무료 기능 전체','반복 일정 무제한 · 목표 관리','Daily Me 리포트 · 매일 브리핑','크루 챌린지·랭킹 · 쇼핑 추천','건강: 식단 칼로리 계산(표)·주간 통계','친구 10명 · 관심사 3개']},
+  {id:'premium',name:'프리미엄',price:8900,yearly:79000,friends:Infinity,interests:Infinity,
+    tagline:'AI까지 전부',
+    perks:['베이직 기능 전체','📷 사진 식단 자동 인식·칼로리 (월 100회)','AI 브리핑·인사이트 심화','무제한 크루·목표·친구·관심사','우선 지원 · 광고 없음']}
 ];
 function _planOf(id){return PLANS.find(function(pp){return pp.id===id;})||PLANS[0];}
 function _friendLimitOk(){
   var total=DEFAULT_FRIENDS.length+_customFriends.length;
   return total<_planOf(_userPlan).friends;
 }
+function _planFeatureMatrix(){
+  // [기능명, 무료, 베이직, 프리미엄]  값: true=O, false=✕, 문자열=한도표시
+  return [
+    ['일정·기록·메모', true, true, true],
+    ['기본 가계부', true, true, true],
+    ['운동 체크·물 트래커', true, true, true],
+    ['반복 일정 무제한', false, true, true],
+    ['목표 관리', false, true, true],
+    ['Daily Me 리포트', false, true, true],
+    ['매일 브리핑', false, true, true],
+    ['크루 챌린지·랭킹', false, true, true],
+    ['쇼핑 추천', false, true, true],
+    ['식단 칼로리 계산', false, true, true],
+    ['주간 건강 통계', false, true, true],
+    ['📷 사진 AI 분석', false, false, '월100'],
+    ['AI 인사이트 심화', false, false, true],
+    ['친구 공유', '4명', '10명', '무제한'],
+    ['관심사', '1개', '3개', '무제한'],
+    ['광고 없음', false, false, true],
+    ['우선 지원', false, false, true]
+  ];
+}
 function openPlanSheet(reason){
   document.getElementById('planSheetReason').textContent=reason||'';
   var body=document.getElementById('planSheetBody');
   body.innerHTML=PLANS.map(function(pl){
     var cur=pl.id===_userPlan;
-    var accent=pl.id==='premium'?'#8A6D1F':pl.id==='pro'?'#1a7a4a':pl.id==='basic'?'#3a5bd9':'#888';
+    var accent=pl.id==='premium'?'#8A6D1F':pl.id==='basic'?'#1a7a4a':'#888';
     var bg=pl.id==='premium'?'#FBF6E9':cur?'#f4faf6':'#fff';
-    return '<div class="ps-plan" data-plan="'+pl.id+'" style="border:1.5px solid '+(cur?'#1a7a4a':'#f0f0ee')+';border-radius:14px;padding:11px 13px;margin-bottom:8px;cursor:pointer;background:'+bg+';">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;">'
-      +'<span style="font-size:12px;font-weight:700;color:'+accent+';">'+pl.name+(cur?' <span style="font-size:8px;background:#1a7a4a;color:#fff;border-radius:7px;padding:2px 7px;vertical-align:1px;">이용 중</span>':'')+'</span>'
-      +'<span style="font-size:11px;font-weight:700;color:#111;">'+(pl.price===0?'무료':'월 '+pl.price.toLocaleString()+'원')+'</span></div>'
-      +'<div style="font-size:9px;color:#888;line-height:1.7;margin-top:4px;">'+pl.perks.join(' · ')+'</div>'
+    var priceHtml=pl.price===0?'<span style="font-size:14px;font-weight:800;color:#111;">무료</span>'
+      :'<span style="font-size:15px;font-weight:800;color:#111;">₩'+pl.price.toLocaleString()+'</span><span style="font-size:9px;color:#9a948a;">/월</span>';
+    var yearlyHtml=pl.yearly?'<div style="font-size:8.5px;color:#9a948a;margin-top:1px;">연 ₩'+pl.yearly.toLocaleString()+' (월 ₩'+Math.round(pl.yearly/12).toLocaleString()+')</div>':'';
+    var perksHtml=pl.perks.map(function(pk){
+      return '<div style="display:flex;gap:6px;align-items:flex-start;font-size:10px;color:#444;line-height:1.5;margin-top:4px;"><span style="color:'+accent+';flex-shrink:0;font-weight:800;">✓</span><span>'+pk+'</span></div>';
+    }).join('');
+    var badge=pl.id==='premium'?'<span style="font-size:7.5px;background:#8A6D1F;color:#fff;border-radius:6px;padding:2px 6px;margin-left:5px;vertical-align:1px;">추천</span>':'';
+    return '<div class="ps-plan" data-plan="'+pl.id+'" style="border:1.5px solid '+(cur?'#1a7a4a':pl.id==='premium'?'#e6d8a8':'#f0f0ee')+';border-radius:16px;padding:13px 14px;margin-bottom:10px;cursor:pointer;background:'+bg+';">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+      +'<div><div style="font-size:13px;font-weight:800;color:'+accent+';">'+pl.name+badge+(cur?' <span style="font-size:8px;background:#1a7a4a;color:#fff;border-radius:7px;padding:2px 7px;vertical-align:1px;">이용 중</span>':'')+'</div>'
+      +'<div style="font-size:9px;color:#9a948a;margin-top:1px;">'+pl.tagline+'</div></div>'
+      +'<div style="text-align:right;">'+priceHtml+yearlyHtml+'</div></div>'
+      +'<div style="border-top:0.5px solid '+(pl.id==='premium'?'#eadfbf':'#f0efe9')+';margin-top:9px;padding-top:7px;">'+perksHtml+'</div>'
+      +(cur?'':'<button style="width:100%;margin-top:10px;border:none;border-radius:11px;padding:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:'+(pl.id==='premium'?'#8A6D1F':pl.id==='basic'?'#1a7a4a':'#efeee9')+';color:'+(pl.id==='free'?'#666':'#fff')+';">'+(pl.price===0?'무료로 사용':pl.name+' 시작하기')+'</button>')
       +'</div>';
-  }).join('');
+  }).join('')
+  +'<div style="font-size:8.5px;color:#b5b1a8;text-align:center;line-height:1.6;margin:4px 0 2px;">언제든 해지·변경 가능 · 연 결제 시 약 30% 할인<br>사진 AI 분석은 프리미엄 월 100회까지 제공돼요</div>';
   body.querySelectorAll('.ps-plan').forEach(function(el){
     el.addEventListener('click',function(){
       var pid=el.getAttribute('data-plan');
       if(pid===_userPlan)return;
       _userPlan=pid;
       closePlanSheet();
-      if(pid!=='free')_newsMode=true; // 구독하면 브리핑 즉시 발행
+      if(pid!=='free')_newsMode=true;
       try{rerenderRoutinePage();}catch(e){}
       try{var np2=document.getElementById('newsPage');if(np2)renderNewsPage(np2);}catch(e){}
       try{if(_mypageSub==='plan'||_mypageSub==='interest')renderMypage();}catch(e){}
+      if(window._saveState)window._saveState();
       showToast(_planOf(pid).name+' 플랜으로 변경됐어요','add','ti-crown');
     });
   });
@@ -7304,25 +7848,32 @@ function renderMypage(){
     var totalFriends=DEFAULT_FRIENDS.length+_customFriends.length;
     var cards=PLANS.map(function(pl){
       var cur=pl.id===_userPlan;
-      var accent=pl.id==='premium'?'#8A6D1F':pl.id==='pro'?'#1a7a4a':pl.id==='basic'?'#3a5bd9':'#888';
+      var accent=pl.id==='premium'?'#8A6D1F':pl.id==='basic'?'#1a7a4a':'#888';
       var bg=pl.id==='premium'?'#FBF6E9':cur?'#f4faf6':'#fff';
-      return '<div class="mp-plan" data-plan="'+pl.id+'" style="border:1.5px solid '+(cur?'#1a7a4a':'#f0f0ee')+';border-radius:14px;padding:12px 14px;margin-bottom:8px;cursor:pointer;background:'+bg+';">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center;">'
-        +'<span style="font-size:12px;font-weight:700;color:'+accent+';">'+pl.name+(cur?' <span style="font-size:8px;background:#1a7a4a;color:#fff;border-radius:7px;padding:2px 7px;vertical-align:1px;">이용 중</span>':'')+'</span>'
-        +'<span style="font-size:11px;font-weight:700;color:#111;">'+(pl.price===0?'무료':'월 '+pl.price.toLocaleString()+'원')+'</span></div>'
-        +'<div style="font-size:9px;color:#888;line-height:1.7;margin-top:5px;">'+pl.perks.join('<br>')+'</div>'
+      var priceHtml=pl.price===0?'<span style="font-size:14px;font-weight:800;color:#111;">무료</span>'
+        :'<span style="font-size:15px;font-weight:800;color:#111;">₩'+pl.price.toLocaleString()+'</span><span style="font-size:9px;color:#9a948a;">/월</span>';
+      var yearlyHtml=pl.yearly?'<div style="font-size:8.5px;color:#9a948a;margin-top:1px;">연 ₩'+pl.yearly.toLocaleString()+' (월 ₩'+Math.round(pl.yearly/12).toLocaleString()+')</div>':'';
+      var perksHtml=pl.perks.map(function(pk){return '<div style="display:flex;gap:6px;align-items:flex-start;font-size:10px;color:#444;line-height:1.5;margin-top:4px;"><span style="color:'+accent+';flex-shrink:0;font-weight:800;">✓</span><span>'+pk+'</span></div>';}).join('');
+      var badge=pl.id==='premium'?'<span style="font-size:7.5px;background:#8A6D1F;color:#fff;border-radius:6px;padding:2px 6px;margin-left:5px;vertical-align:1px;">추천</span>':'';
+      return '<div class="mp-plan" data-plan="'+pl.id+'" style="border:1.5px solid '+(cur?'#1a7a4a':pl.id==='premium'?'#e6d8a8':'#f0f0ee')+';border-radius:16px;padding:13px 14px;margin-bottom:10px;cursor:pointer;background:'+bg+';">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+        +'<div><div style="font-size:13px;font-weight:800;color:'+accent+';">'+pl.name+badge+(cur?' <span style="font-size:8px;background:#1a7a4a;color:#fff;border-radius:7px;padding:2px 7px;vertical-align:1px;">이용 중</span>':'')+'</div>'
+        +'<div style="font-size:9px;color:#9a948a;margin-top:1px;">'+pl.tagline+'</div></div>'
+        +'<div style="text-align:right;">'+priceHtml+yearlyHtml+'</div></div>'
+        +'<div style="border-top:0.5px solid '+(pl.id==='premium'?'#eadfbf':'#f0efe9')+';margin-top:9px;padding-top:7px;">'+perksHtml+'</div>'
         +'</div>';
     }).join('');
     body.innerHTML=_mpBack('요금제')
       +'<div style="font-size:10px;color:#7d7d77;margin:-6px 0 12px;">현재 친구 '+totalFriends+'명 / '+( _planOf(_userPlan).friends===Infinity?'무제한':_planOf(_userPlan).friends+'명')+'</div>'
       +cards
-      +'<div style="font-size:8px;color:#9a9a93;text-align:center;margin-top:4px;">데모: 탭하면 즉시 플랜이 변경됩니다</div>';
+      +'<div style="font-size:8.5px;color:#b5b1a8;text-align:center;line-height:1.6;margin-top:4px;">연 결제 시 약 30% 할인 · 사진 AI 분석은 프리미엄 월 100회<br>데모: 탭하면 즉시 플랜이 변경됩니다</div>';
     body.querySelectorAll('.mp-plan').forEach(function(el){
       el.addEventListener('click',function(){
         var pid=el.getAttribute('data-plan');
         if(pid===_userPlan)return;
         _userPlan=pid;
         if(pid!=='free')_newsMode=true; // 구독하면 브리핑 즉시 발행
+        if(window._saveState)window._saveState();
         renderMypage();
         rerenderRoutinePage();
         try{var np3=document.getElementById('newsPage');if(np3)renderNewsPage(np3);}catch(e){}
@@ -7562,6 +8113,7 @@ function _refreshDateViews(){
   try{renderHomeView();}catch(e){}
   try{var lp=document.getElementById('logPage');if(lp)renderLogPage(lp);}catch(e){}
   try{var bc=document.getElementById('budgetCard');if(bc)renderBudgetPage(bc);}catch(e){}
+  try{var hp=document.getElementById('healthPage');if(hp)renderHealthPage(hp);}catch(e){}
 }
 // 홈 헤더 스와이프로 날짜 이동
 (function(){
@@ -8032,7 +8584,10 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       customCats:_customCats,
       hiddenCats:_hiddenBaseCats,
       catRenames:_baseCatRenames,
-      shop:_shopItems
+      shop:_shopItems,
+      health:_healthData,
+      tipSaved:window._tipSaved||[],
+      tipSavedDates:window._tipSavedDates||{}
     });
   }
   window._saveState=function(){try{localStorage.setItem(KEY,snap());}catch(e){}};
@@ -8063,6 +8618,9 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.hiddenCats){_hiddenBaseCats.length=0;d.hiddenCats.forEach(function(c){_hiddenBaseCats.push(c);});}
       if(d.catRenames){Object.keys(_baseCatRenames).forEach(function(k){delete _baseCatRenames[k];});Object.assign(_baseCatRenames,d.catRenames);}
       if(d.shop&&Array.isArray(d.shop)){_shopItems.length=0;d.shop.forEach(function(s){_shopItems.push(s);});}
+      if(d.health&&typeof d.health==='object'){_healthData.workouts=d.health.workouts||{};_healthData.meals=d.health.meals||{};_healthData.water=d.health.water||{};}
+      if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
+      if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
       try{buildPages();renderEvs();renderCalCatFilter();}catch(e){}
       try{renderHomeView();}catch(e){}
@@ -8076,7 +8634,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
