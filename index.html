@@ -3740,6 +3740,13 @@ function renderHomeView(){
         ${getAllCats().map(c=>`<div class="home-cat-item${e.tag===c?' active':''}" data-cat="${c}"><span class="home-cat-dot" style="background:${getCatColor(c)};"></span>${c}</div>`).join('')}<div class="home-cat-item" data-add-cat="1" style="color:#a8a8a2;"><span class="home-cat-dot" style="background:transparent;border:1.2px dashed #b5b5b0;box-sizing:border-box;"></span>추가…</div>
       </div>`;
     const card=wrap.querySelector('.home-card');
+    // 놓친 일정 (완료·삭제 안 하고 시간 지남): 흐리게 + 점선
+    if(!e.done && typeof _isMissed==='function' && _isMissed(e,y,m,d)){
+      card.style.opacity='0.55';
+      card.style.filter='grayscale(0.35)';
+      var nmEl=card.querySelector('.home-card-name');
+      if(nmEl){var mtag=document.createElement('span');mtag.textContent=' ⌛';mtag.style.cssText='font-size:11px;opacity:0.7;';nmEl.appendChild(mtag);}
+    }
     const acts=wrap.querySelector('.home-card-actions');
     let startX=0,tx=108,dragging=false,swiped=false;
     const setTx=v=>{acts.style.transform='translateX('+v+'%)';};
@@ -4655,11 +4662,18 @@ function renderRoutinePage(container){
               var lst=pg?pg.querySelector('div[style*="overflow-y:auto"]'):null;
               var opened=lst&&lst.querySelector('[data-ropen="1"]');
               if(opened&&lst){
-                // 열린 카드의 상단(히트맵 포함)이 리스트 위쪽에 오도록 스크롤
                 var lr=lst.getBoundingClientRect();
                 var cr=opened.getBoundingClientRect();
-                var target=lst.scrollTop+(cr.top-lr.top)-8;
-                lst.scrollTo({top:Math.max(0,target),behavior:'smooth'});
+                // 펼친 카드가 아래로 잘려서 안 보일 때만, 딱 보이는 만큼만 살짝 스크롤
+                if(cr.bottom>lr.bottom){
+                  var delta=Math.min(cr.bottom-lr.bottom+8, cr.top-lr.top-8);
+                  if(delta>0)lst.scrollTo({top:lst.scrollTop+delta,behavior:'smooth'});
+                }
+                // 위쪽으로 잘렸을 때만 살짝 내림
+                else if(cr.top<lr.top){
+                  lst.scrollTo({top:lst.scrollTop+(cr.top-lr.top)-8,behavior:'smooth'});
+                }
+                // 이미 다 보이면 스크롤 안 함
               }
             }catch(e){}
           },50);
