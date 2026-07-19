@@ -1624,6 +1624,22 @@ viewport.addEventListener('touchmove',e=>{if(!calDrag||animating)return;const dx
 viewport.addEventListener('touchend',e=>{if(!calDrag)return;calDrag=false;const dx=e.changedTouches[0].clientX-calSX;if(calAxis==='x'){if(dx<-50)goMonth(1);else if(dx>50)goMonth(-1);else setTX(-PAGE_W,true);}calAxis=null;});
 let pressTimer=null,pressEl=null;
 function _isPastDay(y,m,d){var t=new Date(_ty,_tm,_td);var c=new Date(y,m,d);return c<t;}
+// 완료도 삭제도 안 한 채 시간이 지난 '놓친 일정'
+function _isMissed(e,y,m,d){
+  if(e.done)return false;
+  var now=new Date();
+  var evDate=new Date(y,m,d);
+  var todayD=new Date(_ty,_tm,_td);
+  if(evDate<todayD)return true; // 지난 날짜의 미완료
+  if(evDate>todayD)return false; // 미래
+  // 오늘: 시간이 지났는지
+  var mm=(e.time||'').match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
+  if(!mm)return false; // 종일/시간없음은 오늘 안 지남 처리
+  var hh=parseInt(mm[2])%12+(mm[1]==='오후'?12:0);
+  var evMin=hh*60+parseInt(mm[3]);
+  var nowMin=now.getHours()*60+now.getMinutes();
+  return nowMin>evMin;
+}
 function _dayItems(y,m,d){
   // 기록 모드면 기록만, 아니면 일정만 (완료/지난 일정은 테두리로 구분)
   var k=key(y,m,d);
@@ -2094,6 +2110,20 @@ function renderEvs(){
     const chkBtn=div.querySelector('.ev-check');
     if(chkBtn)chkBtn.addEventListener('click',ev2=>{ev2.stopPropagation();e.done=!e.done;try{if(window._saveState)window._saveState();}catch(_e){}buildPages();renderEvs();try{renderHomeView();}catch(_e){}});
     if(e.done)div.style.opacity='0.72';
+    // 놓친 일정 (D 점선 스타일)
+    if(_isMissed(e,selectedYear,selectedMonth,selectedDay)){
+      div.style.background='#fcfbf8';
+      div.style.border='1px dashed #d8d3c8';
+      var nmEl=div.querySelector('.evname');if(nmEl)nmEl.style.color='#9a958a';
+      var tmEl=div.querySelector('.evtime');if(tmEl){tmEl.style.color='#b5b1a8';}
+      var barEl=div.querySelector('.evbar');if(barEl)barEl.style.opacity='0.4';
+      var missTag=document.createElement('div');
+      missTag.className='evtag';
+      missTag.style.cssText='background:#f2efe8;color:#a5a099;margin-left:3px;display:inline-flex;align-items:center;gap:2px;';
+      missTag.innerHTML='⌛ 미처리';
+      var nameBox=div.querySelector('.evname');
+      if(nameBox&&nameBox.parentElement){nameBox.parentElement.appendChild(missTag);}
+    }
     const shareBadge=div.querySelector('.evshare');
     if(shareBadge)shareBadge.addEventListener('click',ev2=>{ev2.stopPropagation();openPplSheet(e);});
     // 좌 스와이프 → 버튼이 위로 슬라이드 (내역은 그대로)
@@ -4497,7 +4527,7 @@ function renderRoutinePage(container){
   header.innerHTML='<div style="font-size:11px;color:#7d7d77;font-weight:600;">오늘의 루틴</div>'+(best>0?'<div style="font-size:10px;font-weight:700;color:#e58a3a;">🔥 최고 '+best+'일 연속</div>':'');
   container.appendChild(header);
   var list=document.createElement('div');
-  list.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 40px;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;';
+  list.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 40px;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;';
   if(!_routines.length){
     list.innerHTML='<div style="text-align:center;padding:40px 0;color:#9a9a93;font-size:12px;">루틴을 만들어보세요<br><span style="font-size:10px;">좋은 습관은 체크로, 나쁜 습관은 참기로</span></div>';
   }else{
@@ -4623,12 +4653,16 @@ function renderRoutinePage(container){
             try{
               var pg=document.getElementById('routinePage');
               var lst=pg?pg.querySelector('div[style*="overflow-y:auto"]'):null;
-              var cards=lst?lst.children:null;
-              // 열린 카드를 찾아 부드럽게 보이도록 스크롤
               var opened=lst&&lst.querySelector('[data-ropen="1"]');
-              if(opened&&opened.scrollIntoView)opened.scrollIntoView({behavior:'smooth',block:'nearest'});
+              if(opened&&lst){
+                // 열린 카드의 상단(히트맵 포함)이 리스트 위쪽에 오도록 스크롤
+                var lr=lst.getBoundingClientRect();
+                var cr=opened.getBoundingClientRect();
+                var target=lst.scrollTop+(cr.top-lr.top)-8;
+                lst.scrollTo({top:Math.max(0,target),behavior:'smooth'});
+              }
             }catch(e){}
-          },40);
+          },50);
         }
       });
       if(open)card.setAttribute('data-ropen','1');
