@@ -627,6 +627,27 @@
   @keyframes logoMenuIn{from{opacity:0;transform:translateY(-6px) scale(0.97);}to{opacity:1;transform:none;}}
   @keyframes chipSheetDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:none;}}
   @keyframes goalSheetUp{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:none;}}
+  /* 달릴 때: 몸을 앞뒤로 기울이며 통통 튀어 두 다리가 교차하는 느낌 */
+  @keyframes runBounce{
+    0%{transform:translateY(-50%) scaleX(-1) translateY(0) rotate(-10deg) scaleY(1);}
+    20%{transform:translateY(-50%) scaleX(-1) translateY(-4px) rotate(-2deg) scaleY(1.06);}
+    40%{transform:translateY(-50%) scaleX(-1) translateY(0) rotate(6deg) scaleY(0.96);}
+    60%{transform:translateY(-50%) scaleX(-1) translateY(-4px) rotate(2deg) scaleY(1.06);}
+    80%{transform:translateY(-50%) scaleX(-1) translateY(0) rotate(-6deg) scaleY(0.96);}
+    100%{transform:translateY(-50%) scaleX(-1) translateY(0) rotate(-10deg) scaleY(1);}
+  }
+  .wk-runner.running{animation:runBounce 0.28s linear;}
+  /* 완주 세레모니: 폴짝 뛰며 커졌다 작아짐 */
+  @keyframes winJump{
+    0%{transform:translateY(-50%) scale(1);}
+    30%{transform:translateY(-50%) translateY(-8px) scale(1.35) rotate(-8deg);}
+    55%{transform:translateY(-50%) scale(1.1) rotate(6deg);}
+    75%{transform:translateY(-50%) translateY(-4px) scale(1.25) rotate(-4deg);}
+    100%{transform:translateY(-50%) scale(1.15);}
+  }
+  .wk-runner.win{animation:winJump 0.7s ease-out forwards;}
+  .wk-finish{position:absolute;top:0;bottom:0;width:6px;z-index:1;background-image:repeating-conic-gradient(#5a5346 0% 25%,#fff 0% 50%);background-size:6px 6px;border-radius:1px;opacity:0.8;}
+  @keyframes confettiPop{0%{opacity:0;transform:translateY(-50%) scale(0.3);}50%{opacity:1;}100%{opacity:1;transform:translateY(-50%) scale(1);}}
   @keyframes dmSlideIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}
   .home-logo-badge{position:absolute;top:-3px;right:-3px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:#e5484d;border:1.5px solid #fafaf8;color:#fff;font-size:8px;font-weight:800;display:none;align-items:center;justify-content:center;line-height:1;box-sizing:border-box;}
   .home-body-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
@@ -3201,27 +3222,104 @@ function _healthRenderWorkout(body,k){
       // 목표치 트래커 (A 진행바 + D 빠른 버튼)
       var cnt=w.count||0;
       var pct=Math.min(100,Math.round(cnt/w.target*100));
+      var rawPct=Math.round(cnt/w.target*100);
       var doneAll=cnt>=w.target;
+      var over=cnt-w.target; // 초과분
+      var isOver=over>0;
       var top=document.createElement('div');
       top.style.cssText='display:flex;align-items:center;justify-content:space-between;';
-      top.innerHTML='<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:'+(doneAll?'#1a7a4a':'#111')+';">'+(doneAll?'✅ ':'')+w.name+'</div>'
-        +'<div style="margin-top:3px;"><span class="wk-cnt" style="font-size:20px;font-weight:800;color:#1a7a4a;line-height:1;">'+cnt+'</span> <span style="font-size:11px;color:#b5b1a8;font-weight:600;">/ '+w.target+(w.unit||'회')+'</span></div></div>';
-      var delW=document.createElement('button');delW.textContent='✕';delW.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;align-self:flex-start;';
+      top.innerHTML='<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:'+(doneAll?'#1a7a4a':'#111')+';">'+(doneAll?'🥇 ':'')+w.name+'</div>'
+        +'<div style="margin-top:3px;"><span class="wk-cnt" style="font-size:20px;font-weight:800;color:'+(isOver?'#e0653e':'#1a7a4a')+';line-height:1;">'+cnt+'</span> <span style="font-size:11px;color:#b5b1a8;font-weight:600;">/ '+w.target+(w.unit||'회')+'</span>'
+        +(isOver?' <span style="background:#e0653e;color:#fff;border-radius:5px;padding:1px 6px;font-weight:700;font-size:9px;vertical-align:2px;">+'+over+'</span>':'')+'</div></div>';
+      var btnGrp=document.createElement('div');
+      btnGrp.style.cssText='display:flex;gap:6px;align-items:center;flex-shrink:0;align-self:flex-start;';
+      var checkW=document.createElement('button');
+      checkW.innerHTML='✓';
+      checkW.style.cssText='border:none;background:none;color:#bcd8c6;font-size:14px;font-weight:800;cursor:pointer;';
+      checkW.title='완료로 접기';
+      checkW.addEventListener('click',function(){
+        // 목표를 채우고 완료 처리 후 접기
+        if((w.count||0)<w.target)w.count=w.target;
+        w.done=true;w.collapsed=true;
+        if(window._saveState)window._saveState();
+        refresh();
+      });
+      var delW=document.createElement('button');delW.textContent='✕';delW.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;';
       delW.addEventListener('click',function(){workouts.splice(i,1);if(!workouts.length)delete _healthData.workouts[k];refresh();});
-      top.appendChild(delW);
+      btnGrp.appendChild(checkW);btnGrp.appendChild(delW);
+      top.appendChild(btnGrp);
       row.appendChild(top);
-      // 러너 트랙
+      // 완료 시 아코디언처럼 접기 (완료=🥇, 초과=🔥)
+      var collapsed=doneAll && (w.collapsed!==false);
+      if(doneAll && w.collapsed===undefined)w.collapsed=true;
+      if(collapsed){
+        if(isOver){
+          row.style.cssText='background:linear-gradient(135deg,#fff6ec,#fdeede);border:0.5px solid #f0d9b8;border-radius:12px;padding:11px 12px;margin-bottom:7px;cursor:pointer;';
+          row.innerHTML='<div style="display:flex;align-items:center;gap:9px;">'
+            +'<span style="font-size:17px;">🔥</span>'
+            +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:800;color:#c2410c;">'+w.name+'</div>'
+            +'<div style="font-size:9.5px;color:#b06a30;margin-top:1px;">'+cnt+' / '+w.target+(w.unit||'회')+' <span style="background:#e0653e;color:#fff;border-radius:5px;padding:1px 5px;font-weight:700;font-size:8px;">+'+over+'</span> · '+rawPct+'% 달성!</div></div>'
+            +'<span style="font-size:11px;color:#e0a875;">▾</span></div>';
+        }else{
+          row.style.cssText='background:#f4faf6;border:0.5px solid #cde8d8;border-radius:12px;padding:11px 12px;margin-bottom:7px;cursor:pointer;';
+          row.innerHTML='<div style="display:flex;align-items:center;gap:9px;">'
+            +'<span style="font-size:17px;">🥇</span>'
+            +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:800;color:#1a7a4a;">'+w.name+'</div>'
+            +'<div style="font-size:9.5px;color:#6a9a80;margin-top:1px;">목표 달성! '+w.target+(w.unit||'회')+' 완주 🎉</div></div>'
+            +'<span style="font-size:11px;color:#a8c8b5;">▾</span></div>';
+        }
+        row.addEventListener('click',function(){w.collapsed=false;refresh();});
+        body.appendChild(row);
+        return; // 다음 운동으로
+      }
+      // 러너 트랙 (결승선 = 진짜 체크무늬 선, 오른쪽)
       var track=document.createElement('div');
       track.style.cssText='height:32px;background:#f2f5f2;border-radius:16px;position:relative;margin:10px 0;overflow:hidden;';
-      var runnerLeft=Math.min(88,Math.max(2,pct*0.86));
-      track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:'+pct+'%;background:linear-gradient(90deg,#e3f3ea,#d0ecdd);transition:width 0.3s;"></div>'
-        +'<span class="wk-runner" style="position:absolute;top:50%;font-size:17px;transition:left 0.3s;left:'+runnerLeft+'%;z-index:1;transform:translateY(-50%)'+(doneAll?'':' scaleX(-1)')+';display:inline-block;">'+(doneAll?'🎉':'🏃')+'</span>'
-        +'<span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:14px;opacity:'+(doneAll?'1':'0.5')+';z-index:1;">🏁</span>';
-      row.appendChild(track);
+      // 결승선은 오른쪽 고정 위치, 러너는 그 앞까지 달림
+      function runnerPos(p){return Math.min(74,Math.max(2,p*0.72));}
+      var runnerLeft=runnerPos(pct);
+      if(doneAll){
+        // 완주/초과: 러너가 결승선을 통과해 오른쪽 끝에
+        var fillGrad=isOver?'linear-gradient(90deg,#d0ecdd,#f5d9b8)':'linear-gradient(90deg,#d0ecdd,#c8e8d5)';
+        track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:100%;background:'+fillGrad+';"></div>'
+          +'<span class="wk-finish" style="right:22px;"></span>'
+          +'<span class="wk-runner win" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:17px;z-index:2;display:inline-block;">'+(isOver?'🔥':'🥇')+'</span>'
+          +(isOver?'<span style="position:absolute;right:26px;top:3px;font-size:9px;z-index:3;">✨</span>':'');
+        row.appendChild(track);
+        if(isOver){
+          var bonus=document.createElement('div');
+          bonus.style.cssText='text-align:center;font-size:9px;color:#c2410c;font-weight:700;margin:-2px 0 4px;';
+          bonus.textContent='🔥 목표 초과! 보너스 '+over+(w.unit||'회')+' 추가 달성';
+          row.appendChild(bonus);
+        }
+      }else{
+        track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:'+pct+'%;background:linear-gradient(90deg,#e3f3ea,#d0ecdd);transition:width 0.3s;"></div>'
+          +'<span class="wk-finish" style="right:14px;"></span>'
+          +'<span class="wk-runner" style="position:absolute;top:50%;font-size:17px;transition:left 0.3s;left:'+runnerLeft+'%;z-index:2;transform:translateY(-50%) scaleX(-1);display:inline-block;">🏃</span>';
+        row.appendChild(track);
+      }
       // 프리셋 칩 + 직접 입력
       var ctrl=document.createElement('div');
       ctrl.style.cssText='display:flex;gap:5px;flex-wrap:wrap;align-items:center;';
-      function addCount(delta){w.count=Math.max(0,(w.count||0)+delta);if(w.count>=w.target)w.done=true;else w.done=false;refresh();}
+      function addCount(delta){
+        var was=(w.count||0);
+        w.count=Math.max(0,was+delta);
+        if(w.count>=w.target)w.done=true;else w.done=false;
+        var justCompleted=(was<w.target && w.count>=w.target);
+        if(justCompleted){
+          // 완주 세레모니 먼저 보여주고 접기
+          var runEl=row.querySelector('.wk-runner');
+          var fillEl=row.querySelector('.wk-fill');
+          var cntEl=row.querySelector('.wk-cnt');
+          if(cntEl)cntEl.textContent=w.count;
+          if(fillEl)fillEl.style.width='100%';
+          if(runEl){runEl.style.left='';runEl.style.right='6px';runEl.textContent='🥇';runEl.classList.remove('running');void runEl.offsetWidth;runEl.classList.add('win');}
+          if(window._saveState)window._saveState();
+          setTimeout(function(){refresh();},1100);
+        }else{
+          refresh();
+        }
+      }
       // 목표 크기에 맞춘 프리셋 (10단위 목표면 +5/+10/+20, 작으면 +1/+5/+10)
       var presets=w.target>=50?[5,10,20]:w.target>=20?[1,5,10]:[1,2,5];
       presets.forEach(function(n){
@@ -3243,7 +3341,20 @@ function _healthRenderWorkout(body,k){
         var cntEl=row.querySelector('.wk-cnt');if(cntEl)cntEl.textContent=w.count;
         var np=Math.min(100,Math.round(w.count/w.target*100));
         var fillEl=row.querySelector('.wk-fill');if(fillEl)fillEl.style.width=np+'%';
-        var runEl=row.querySelector('.wk-runner');if(runEl)runEl.style.left=Math.min(88,Math.max(2,np*0.86))+'%';
+        var runEl=row.querySelector('.wk-runner');
+        var justDone=w.count>=w.target;
+        if(runEl){
+          if(justDone){
+            // 완주: 결승선 통과해 오른쪽 끝으로
+            runEl.style.left='';runEl.style.right='6px';
+            runEl.textContent='🥇';
+            runEl.classList.remove('running');void runEl.offsetWidth;runEl.classList.add('win');
+          }else{
+            runEl.style.right='';runEl.style.left=Math.min(74,Math.max(2,np*0.72))+'%';
+            runEl.textContent='🏃';runEl.classList.remove('win');
+            runEl.classList.remove('running');void runEl.offsetWidth;runEl.classList.add('running');
+          }
+        }
         return true;
       }
       // 길게 누르면 가속하는 버튼 만들기
@@ -3262,7 +3373,9 @@ function _healthRenderWorkout(body,k){
         function end(){
           if(hTimer)clearTimeout(hTimer);hTimer=null;
           if(hInt)clearTimeout(hInt);hInt=null;
-          if(didH){if(window._saveState)window._saveState();refresh();}
+          if(didH){if(window._saveState)window._saveState();
+            if(w.count>=w.target){setTimeout(function(){refresh();},1000);}else{refresh();}
+          }
         }
         btn.addEventListener('click',function(){if(!didH)addCount(dir);});
         btn.addEventListener('mousedown',start);
