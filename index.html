@@ -3234,40 +3234,47 @@ function _healthRenderWorkout(body,k){
       var customC=document.createElement('button');customC.textContent='직접';
       customC.style.cssText='font-size:11px;font-weight:700;color:#9a948a;background:#fff;border:1.5px solid #d8e5dd;border-radius:20px;padding:6px 13px;cursor:pointer;font-family:inherit;';
       // 되돌리기
-      var undoC=document.createElement('button');undoC.textContent='−';
-      undoC.style.cssText='font-size:15px;font-weight:800;color:#8a867c;background:#f0eee8;border:none;border-radius:20px;padding:5px 13px;cursor:pointer;font-family:inherit;margin-left:auto;-webkit-user-select:none;user-select:none;touch-action:manipulation;';
-      // 길게 누르면 빠르게 감소 (누르는 동안 가속)
-      var holdTimer=null,holdInterval=null,holdSpeed=260,didHold=false;
-      function liveDec(){
-        if((w.count||0)<=0)return;
-        w.count=Math.max(0,(w.count||0)-1);
+      // 실시간 갱신 (재렌더 없이 숫자·트랙만) - 증감 공용
+      function liveStep(dir){
+        var nv=(w.count||0)+dir;
+        if(nv<0)return false;
+        w.count=nv;
         if(w.count>=w.target)w.done=true;else w.done=false;
-        // 화면 즉시 갱신 (재렌더 없이 숫자·트랙만)
         var cntEl=row.querySelector('.wk-cnt');if(cntEl)cntEl.textContent=w.count;
         var np=Math.min(100,Math.round(w.count/w.target*100));
         var fillEl=row.querySelector('.wk-fill');if(fillEl)fillEl.style.width=np+'%';
         var runEl=row.querySelector('.wk-runner');if(runEl)runEl.style.left=Math.min(88,Math.max(2,np*0.86))+'%';
+        return true;
       }
-      function startHold(){
-        didHold=false;
-        holdTimer=setTimeout(function(){
-          didHold=true;var speed=holdSpeed;
-          function step(){liveDec();speed=Math.max(45,speed*0.82);holdInterval=setTimeout(step,speed);}
-          step();
-        },350);
+      // 길게 누르면 가속하는 버튼 만들기
+      function mkHoldBtn(label,dir,css){
+        var btn=document.createElement('button');btn.textContent=label;
+        btn.style.cssText=css+';-webkit-user-select:none;user-select:none;touch-action:manipulation;';
+        var hTimer=null,hInt=null,didH=false;
+        function start(){
+          didH=false;
+          hTimer=setTimeout(function(){
+            didH=true;var speed=260;
+            function step(){if(liveStep(dir)){speed=Math.max(45,speed*0.82);hInt=setTimeout(step,speed);}}
+            step();
+          },350);
+        }
+        function end(){
+          if(hTimer)clearTimeout(hTimer);hTimer=null;
+          if(hInt)clearTimeout(hInt);hInt=null;
+          if(didH){if(window._saveState)window._saveState();refresh();}
+        }
+        btn.addEventListener('click',function(){if(!didH)addCount(dir);});
+        btn.addEventListener('mousedown',start);
+        btn.addEventListener('mouseup',end);
+        btn.addEventListener('mouseleave',end);
+        btn.addEventListener('touchstart',function(){start();},{passive:true});
+        btn.addEventListener('touchend',function(e){if(didH)e.preventDefault();end();});
+        btn.addEventListener('touchcancel',end);
+        return btn;
       }
-      function endHold(){
-        if(holdTimer)clearTimeout(holdTimer);holdTimer=null;
-        if(holdInterval)clearTimeout(holdInterval);holdInterval=null;
-        if(didHold){if(window._saveState)window._saveState();refresh();}
-      }
-      undoC.addEventListener('click',function(){if(!didHold)addCount(-1);});
-      undoC.addEventListener('mousedown',startHold);
-      undoC.addEventListener('mouseup',endHold);
-      undoC.addEventListener('mouseleave',endHold);
-      undoC.addEventListener('touchstart',function(e){startHold();},{passive:true});
-      undoC.addEventListener('touchend',function(e){if(didHold)e.preventDefault();endHold();});
-      undoC.addEventListener('touchcancel',endHold);
+      var undoC=mkHoldBtn('−',-1,'font-size:15px;font-weight:800;color:#8a867c;background:#f0eee8;border:none;border-radius:20px;padding:5px 13px;cursor:pointer;font-family:inherit;margin-left:auto');
+      var plusC=mkHoldBtn('＋',1,'font-size:15px;font-weight:800;color:#fff;background:#1a7a4a;border:none;border-radius:20px;padding:5px 13px;cursor:pointer;font-family:inherit');
       customC.addEventListener('click',function(){
         // 칩 자리를 입력 폼으로 전환
         ctrl.innerHTML='';
@@ -3281,7 +3288,7 @@ function _healthRenderWorkout(body,k){
         ctrl.appendChild(lbl);ctrl.appendChild(inp);ctrl.appendChild(unit);ctrl.appendChild(ok);
         setTimeout(function(){try{inp.focus();}catch(e){}},40);
       });
-      ctrl.appendChild(customC);ctrl.appendChild(undoC);
+      ctrl.appendChild(customC);ctrl.appendChild(undoC);ctrl.appendChild(plusC);
       row.appendChild(ctrl);
     }else{
       // 기존: 체크박스형 (목표 없는 운동)
