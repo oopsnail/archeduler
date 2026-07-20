@@ -647,6 +647,7 @@
   }
   .wk-runner.win{animation:winJump 0.7s ease-out forwards;}
   .wk-finish{position:absolute;top:0;bottom:0;width:6px;z-index:1;background-image:repeating-conic-gradient(#5a5346 0% 25%,#fff 0% 50%);background-size:6px 6px;border-radius:1px;opacity:0.8;}
+  .wk-finish-end{position:absolute;top:0;bottom:0;right:0;width:16px;z-index:1;background-image:repeating-conic-gradient(#2f7a52 0% 25%,#eafff3 0% 50%);background-size:8px 8px;border-radius:0 16px 16px 0;opacity:0.92;box-shadow:inset 2px 0 4px rgba(0,0,0,0.06);}
   @keyframes confettiPop{0%{opacity:0;transform:translateY(-50%) scale(0.3);}50%{opacity:1;}100%{opacity:1;transform:translateY(-50%) scale(1);}}
   @keyframes dmSlideIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}
   .home-logo-badge{position:absolute;top:-3px;right:-3px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:#e5484d;border:1.5px solid #fafaf8;color:#fff;font-size:8px;font-weight:800;display:none;align-items:center;justify-content:center;line-height:1;box-sizing:border-box;}
@@ -3279,18 +3280,23 @@ function _healthRenderWorkout(body,k){
       function runnerPos(p){return Math.min(74,Math.max(2,p*0.72));}
       var runnerLeft=runnerPos(pct);
       if(doneAll){
-        // 완주/초과: 러너가 결승선을 통과해 오른쪽 끝에
-        var fillGrad=isOver?'linear-gradient(90deg,#d0ecdd,#f5d9b8)':'linear-gradient(90deg,#d0ecdd,#c8e8d5)';
-        track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:100%;background:'+fillGrad+';"></div>'
-          +'<span class="wk-finish" style="right:22px;"></span>'
-          +'<span class="wk-runner win" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:17px;z-index:2;display:inline-block;">'+(isOver?'🔥':'🥇')+'</span>'
-          +(isOver?'<span style="position:absolute;right:26px;top:3px;font-size:9px;z-index:3;">✨</span>':'');
-        row.appendChild(track);
         if(isOver){
+          // 초과: 러너가 결승선을 통과 (선은 원래 위치, 러너 오른쪽 끝)
+          track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,#d0ecdd,#f5d9b8);"></div>'
+            +'<span class="wk-finish" style="right:22px;"></span>'
+            +'<span class="wk-runner win" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:17px;z-index:2;display:inline-block;">🔥</span>'
+            +'<span style="position:absolute;right:26px;top:3px;font-size:9px;z-index:3;">✨</span>';
+          row.appendChild(track);
           var bonus=document.createElement('div');
           bonus.style.cssText='text-align:center;font-size:9px;color:#c2410c;font-weight:700;margin:-2px 0 4px;';
           bonus.textContent='🔥 목표 초과! 보너스 '+over+(w.unit||'회')+' 추가 달성';
           row.appendChild(bonus);
+        }else{
+          // 딱 완주: 결승선이 트랙 맨 끝에 굴곡지게 (둥근 모서리 따라), 러너가 도착
+          track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,#c8e8d5,#9fdcbb);"></div>'
+            +'<span class="wk-finish-end"></span>'
+            +'<span class="wk-runner win" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:17px;z-index:2;display:inline-block;">🥇</span>';
+          row.appendChild(track);
         }
       }else{
         track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:'+pct+'%;background:linear-gradient(90deg,#e3f3ea,#d0ecdd);transition:width 0.3s;"></div>'
@@ -3313,7 +3319,7 @@ function _healthRenderWorkout(body,k){
           var cntEl=row.querySelector('.wk-cnt');
           if(cntEl)cntEl.textContent=w.count;
           if(fillEl)fillEl.style.width='100%';
-          if(runEl){runEl.style.left='';runEl.style.right='6px';runEl.textContent='🥇';runEl.classList.remove('running');void runEl.offsetWidth;runEl.classList.add('win');}
+          if(runEl){runEl.style.left='';runEl.style.right='14px';runEl.textContent='🥇';runEl.classList.remove('running');void runEl.offsetWidth;runEl.classList.add('win');}
           if(window._saveState)window._saveState();
           setTimeout(function(){refresh();},1100);
         }else{
@@ -3346,7 +3352,7 @@ function _healthRenderWorkout(body,k){
         if(runEl){
           if(justDone){
             // 완주: 결승선 통과해 오른쪽 끝으로
-            runEl.style.left='';runEl.style.right='6px';
+            runEl.style.left='';runEl.style.right='14px';
             runEl.textContent='🥇';
             runEl.classList.remove('running');void runEl.offsetWidth;runEl.classList.add('win');
           }else{
