@@ -2637,7 +2637,7 @@ function renderHomeCal(){
     const isToday=(y===_ty&&m===_tm&&d===_td);
     const isSel=(y===_homeDate.getFullYear()&&m===_homeDate.getMonth()&&d===_homeDate.getDate());
     const hasEv=(events[key(y,m,d)]||[]).some(e=>e.type!=='budget');
-    html+='<div class="hcal-day'+(isSel?' sel':(isToday?' today':''))+(hasEv?' hasev':'')+'" data-d="'+d+'">'+d+'</div>';
+    html+='<div class="hcal-day'+(isToday?' today':'')+(isSel&&!isToday?' sel':'')+(hasEv?' hasev':'')+'" data-d="'+d+'">'+d+'</div>';
   }
   html+='</div>';
   pop.innerHTML=html;
@@ -3191,40 +3191,85 @@ function renderHealthPage(container){
 function _healthRenderWorkout(body,k){
   var workouts=_healthData.workouts[k]||[];
   if(!workouts.length){
-    body.innerHTML='<div style="text-align:center;padding:32px 0 18px;color:#9a9a93;font-size:12px;">오늘 운동을 기록해보세요<br><span style="font-size:10px;">벤치프레스, 러닝 30분 등</span></div>';
+    body.innerHTML='<div style="text-align:center;padding:32px 0 18px;color:#9a9a93;font-size:12px;">오늘 운동을 기록해보세요<br><span style="font-size:10px;">스쿼트 100회, 벤치 60kg 4x10 등</span></div>';
   }
+  function refresh(){if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage')||body.parentElement);}
   workouts.forEach(function(w,i){
     var row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px;margin-bottom:7px;';
-    var chk=document.createElement('button');
-    chk.style.cssText='width:22px;height:22px;border-radius:7px;flex-shrink:0;cursor:pointer;'+(w.done?'background:#1a7a4a;border:2px solid #1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;':'background:#fff;border:2px solid #d8d6ce;');
-    chk.innerHTML=w.done?'✓':'';
-    chk.addEventListener('click',function(){w.done=!w.done;if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage'));});
-    var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
-    info.innerHTML='<div class="hw-name" style="font-size:12px;font-weight:700;color:'+(w.done?'#9a9a93':'#111')+';'+(w.done?'text-decoration:line-through;':'')+'">'+w.name+'</div>'+(w.detail?'<div style="font-size:9.5px;color:#9a948a;margin-top:1px;">'+w.detail+'</div>':'');
-    var del=document.createElement('button');del.textContent='✕';del.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;';
-    del.addEventListener('click',function(){workouts.splice(i,1);if(!workouts.length)delete _healthData.workouts[k];if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage'));});
-    row.appendChild(chk);row.appendChild(info);row.appendChild(del);
+    row.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px 12px;margin-bottom:7px;';
+    if(w.target&&w.target>0){
+      // 목표치 트래커 (A 진행바 + D 빠른 버튼)
+      var cnt=w.count||0;
+      var pct=Math.min(100,Math.round(cnt/w.target*100));
+      var doneAll=cnt>=w.target;
+      var top=document.createElement('div');
+      top.style.cssText='display:flex;align-items:center;justify-content:space-between;';
+      top.innerHTML='<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:'+(doneAll?'#1a7a4a':'#111')+';">'+(doneAll?'✅ ':'')+w.name+'</div>'
+        +'<div style="margin-top:3px;"><span style="font-size:20px;font-weight:800;color:#1a7a4a;line-height:1;">'+cnt+'</span> <span style="font-size:11px;color:#b5b1a8;font-weight:600;">/ '+w.target+(w.unit||'회')+'</span></div></div>';
+      var delW=document.createElement('button');delW.textContent='✕';delW.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;align-self:flex-start;';
+      delW.addEventListener('click',function(){workouts.splice(i,1);if(!workouts.length)delete _healthData.workouts[k];refresh();});
+      top.appendChild(delW);
+      row.appendChild(top);
+      // 진행바
+      var bar=document.createElement('div');
+      bar.style.cssText='height:7px;background:#eef0ec;border-radius:4px;overflow:hidden;margin:9px 0;';
+      bar.innerHTML='<div style="height:100%;width:'+pct+'%;background:'+(doneAll?'#1a7a4a':'#2a9d5f')+';border-radius:4px;transition:width 0.25s;"></div>';
+      row.appendChild(bar);
+      // 빠른 추가 버튼 + 감소
+      var btns=document.createElement('div');
+      btns.style.cssText='display:flex;gap:5px;align-items:center;';
+      function mkBtn(label,delta,style){var b=document.createElement('button');b.textContent=label;b.style.cssText=style;b.addEventListener('click',function(){w.count=Math.max(0,(w.count||0)+delta);if(w.count>=w.target)w.done=true;else w.done=false;refresh();});return b;}
+      var minus=mkBtn('−',-1,'width:34px;height:32px;border-radius:9px;border:none;background:#f0eee8;color:#8a867c;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;flex-shrink:0;');
+      var p1=mkBtn('＋1',1,'flex:1;font-size:11px;font-weight:700;color:#1a7a4a;background:#e9f5ee;border:none;border-radius:9px;padding:8px 0;cursor:pointer;font-family:inherit;');
+      var p10=mkBtn('＋10',10,'flex:1;font-size:11px;font-weight:700;color:#1a7a4a;background:#e9f5ee;border:none;border-radius:9px;padding:8px 0;cursor:pointer;font-family:inherit;');
+      var pMax=mkBtn('완료',Math.max(0,w.target-(w.count||0)),'flex:1;font-size:11px;font-weight:700;color:#fff;background:#1a7a4a;border:none;border-radius:9px;padding:8px 0;cursor:pointer;font-family:inherit;');
+      btns.appendChild(minus);btns.appendChild(p1);btns.appendChild(p10);btns.appendChild(pMax);
+      row.appendChild(btns);
+    }else{
+      // 기존: 체크박스형 (목표 없는 운동)
+      row.style.cssText='display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px;margin-bottom:7px;';
+      var chk=document.createElement('button');
+      chk.style.cssText='width:22px;height:22px;border-radius:7px;flex-shrink:0;cursor:pointer;'+(w.done?'background:#1a7a4a;border:2px solid #1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;':'background:#fff;border:2px solid #d8d6ce;');
+      chk.innerHTML=w.done?'✓':'';
+      chk.addEventListener('click',function(){w.done=!w.done;refresh();});
+      var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
+      info.innerHTML='<div class="hw-name" style="font-size:12px;font-weight:700;color:'+(w.done?'#9a9a93':'#111')+';'+(w.done?'text-decoration:line-through;':'')+'">'+w.name+'</div>'+(w.detail?'<div style="font-size:9.5px;color:#9a948a;margin-top:1px;">'+w.detail+'</div>':'');
+      var del=document.createElement('button');del.textContent='✕';del.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;';
+      del.addEventListener('click',function(){workouts.splice(i,1);if(!workouts.length)delete _healthData.workouts[k];refresh();});
+      row.appendChild(chk);row.appendChild(info);row.appendChild(del);
+    }
     body.appendChild(row);
   });
   // 추가 입력
   var addWrap=document.createElement('div');
   addWrap.style.cssText='display:flex;gap:6px;margin-top:8px;';
   var hwInp=document.createElement('input');
-  hwInp.placeholder='운동 추가 (예: 벤치 60kg 4x10)';
+  hwInp.placeholder='운동 추가 (예: 스쿼트 100회)';
   hwInp.style.cssText='flex:1;min-width:0;border:1px solid #e6e2d8;border-radius:11px;padding:10px 12px;font-size:11px;font-family:inherit;outline:none;background:#fff;';
   var hwAdd=document.createElement('button');
   hwAdd.textContent='＋';
   hwAdd.style.cssText='width:40px;border:none;border-radius:11px;background:#1a7a4a;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;';
   addWrap.appendChild(hwInp);addWrap.appendChild(hwAdd);
   body.appendChild(addWrap);
+  var hint=document.createElement('div');
+  hint.style.cssText='font-size:8.5px;color:#b5b1a8;text-align:center;margin-top:6px;';
+  hint.textContent='"스쿼트 100회"처럼 목표를 정하면 하루 동안 채워가요';
+  body.appendChild(hint);
   function addW(){
     var v=(hwInp.value||'').trim();if(!v)return;
-    var name=v,detail='';
-    var m=v.match(/^(.+?)\s+(.*(?:kg|세트|회|분|km|x|×|\d).*)$/);
-    if(m){name=m[1].trim();detail=m[2].trim();}
-    if(!_healthData.workouts[k])_healthData.workouts[k]=[];
-    _healthData.workouts[k].push({name:name,detail:detail,done:false});
+    // 목표치 파싱: "스쿼트 100회", "팔굽혀펴기 50개", "플랭크 3분"
+    var tm=v.match(/^(.+?)\s*(\d+)\s*(회|개|번|분|초|세트|km|kcal)?\s*$/);
+    if(tm && tm[2]){
+      var nm=tm[1].trim();var tgt=parseInt(tm[2]);var unit=tm[3]||'회';
+      if(!_healthData.workouts[k])_healthData.workouts[k]=[];
+      _healthData.workouts[k].push({name:nm,target:tgt,count:0,unit:unit,done:false});
+    }else{
+      var name=v,detail='';
+      var m=v.match(/^(.+?)\s+(.*(?:kg|세트|x|×).*)$/);
+      if(m){name=m[1].trim();detail=m[2].trim();}
+      if(!_healthData.workouts[k])_healthData.workouts[k]=[];
+      _healthData.workouts[k].push({name:name,detail:detail,done:false});
+    }
     if(window._saveState)window._saveState();
     renderHealthPage(document.getElementById('healthPage')||body.parentElement);
   }
