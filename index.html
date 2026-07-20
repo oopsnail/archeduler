@@ -3205,26 +3205,84 @@ function _healthRenderWorkout(body,k){
       var top=document.createElement('div');
       top.style.cssText='display:flex;align-items:center;justify-content:space-between;';
       top.innerHTML='<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:'+(doneAll?'#1a7a4a':'#111')+';">'+(doneAll?'✅ ':'')+w.name+'</div>'
-        +'<div style="margin-top:3px;"><span style="font-size:20px;font-weight:800;color:#1a7a4a;line-height:1;">'+cnt+'</span> <span style="font-size:11px;color:#b5b1a8;font-weight:600;">/ '+w.target+(w.unit||'회')+'</span></div></div>';
+        +'<div style="margin-top:3px;"><span class="wk-cnt" style="font-size:20px;font-weight:800;color:#1a7a4a;line-height:1;">'+cnt+'</span> <span style="font-size:11px;color:#b5b1a8;font-weight:600;">/ '+w.target+(w.unit||'회')+'</span></div></div>';
       var delW=document.createElement('button');delW.textContent='✕';delW.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;align-self:flex-start;';
       delW.addEventListener('click',function(){workouts.splice(i,1);if(!workouts.length)delete _healthData.workouts[k];refresh();});
       top.appendChild(delW);
       row.appendChild(top);
-      // 진행바
-      var bar=document.createElement('div');
-      bar.style.cssText='height:7px;background:#eef0ec;border-radius:4px;overflow:hidden;margin:9px 0;';
-      bar.innerHTML='<div style="height:100%;width:'+pct+'%;background:'+(doneAll?'#1a7a4a':'#2a9d5f')+';border-radius:4px;transition:width 0.25s;"></div>';
-      row.appendChild(bar);
-      // 빠른 추가 버튼 + 감소
-      var btns=document.createElement('div');
-      btns.style.cssText='display:flex;gap:5px;align-items:center;';
-      function mkBtn(label,delta,style){var b=document.createElement('button');b.textContent=label;b.style.cssText=style;b.addEventListener('click',function(){w.count=Math.max(0,(w.count||0)+delta);if(w.count>=w.target)w.done=true;else w.done=false;refresh();});return b;}
-      var minus=mkBtn('−',-1,'width:34px;height:32px;border-radius:9px;border:none;background:#f0eee8;color:#8a867c;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;flex-shrink:0;');
-      var p1=mkBtn('＋1',1,'flex:1;font-size:11px;font-weight:700;color:#1a7a4a;background:#e9f5ee;border:none;border-radius:9px;padding:8px 0;cursor:pointer;font-family:inherit;');
-      var p10=mkBtn('＋10',10,'flex:1;font-size:11px;font-weight:700;color:#1a7a4a;background:#e9f5ee;border:none;border-radius:9px;padding:8px 0;cursor:pointer;font-family:inherit;');
-      var pMax=mkBtn('완료',Math.max(0,w.target-(w.count||0)),'flex:1;font-size:11px;font-weight:700;color:#fff;background:#1a7a4a;border:none;border-radius:9px;padding:8px 0;cursor:pointer;font-family:inherit;');
-      btns.appendChild(minus);btns.appendChild(p1);btns.appendChild(p10);btns.appendChild(pMax);
-      row.appendChild(btns);
+      // 러너 트랙
+      var track=document.createElement('div');
+      track.style.cssText='height:32px;background:#f2f5f2;border-radius:16px;position:relative;margin:10px 0;overflow:hidden;';
+      var runnerLeft=Math.min(88,Math.max(2,pct*0.86));
+      track.innerHTML='<div class="wk-fill" style="position:absolute;left:0;top:0;bottom:0;width:'+pct+'%;background:linear-gradient(90deg,#e3f3ea,#d0ecdd);transition:width 0.3s;"></div>'
+        +'<span class="wk-runner" style="position:absolute;top:50%;font-size:17px;transition:left 0.3s;left:'+runnerLeft+'%;z-index:1;transform:translateY(-50%)'+(doneAll?'':' scaleX(-1)')+';display:inline-block;">'+(doneAll?'🎉':'🏃')+'</span>'
+        +'<span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:14px;opacity:'+(doneAll?'1':'0.5')+';z-index:1;">🏁</span>';
+      row.appendChild(track);
+      // 프리셋 칩 + 직접 입력
+      var ctrl=document.createElement('div');
+      ctrl.style.cssText='display:flex;gap:5px;flex-wrap:wrap;align-items:center;';
+      function addCount(delta){w.count=Math.max(0,(w.count||0)+delta);if(w.count>=w.target)w.done=true;else w.done=false;refresh();}
+      // 목표 크기에 맞춘 프리셋 (10단위 목표면 +5/+10/+20, 작으면 +1/+5/+10)
+      var presets=w.target>=50?[5,10,20]:w.target>=20?[1,5,10]:[1,2,5];
+      presets.forEach(function(n){
+        var c=document.createElement('button');c.textContent='+'+n;
+        c.style.cssText='font-size:11px;font-weight:700;color:#1a7a4a;background:#e9f5ee;border:none;border-radius:20px;padding:7px 13px;cursor:pointer;font-family:inherit;';
+        c.addEventListener('click',function(){addCount(n);});
+        ctrl.appendChild(c);
+      });
+      // 직접 입력 칩
+      var customC=document.createElement('button');customC.textContent='직접';
+      customC.style.cssText='font-size:11px;font-weight:700;color:#9a948a;background:#fff;border:1.5px solid #d8e5dd;border-radius:20px;padding:6px 13px;cursor:pointer;font-family:inherit;';
+      // 되돌리기
+      var undoC=document.createElement('button');undoC.textContent='−';
+      undoC.style.cssText='font-size:15px;font-weight:800;color:#8a867c;background:#f0eee8;border:none;border-radius:20px;padding:5px 13px;cursor:pointer;font-family:inherit;margin-left:auto;-webkit-user-select:none;user-select:none;touch-action:manipulation;';
+      // 길게 누르면 빠르게 감소 (누르는 동안 가속)
+      var holdTimer=null,holdInterval=null,holdSpeed=260,didHold=false;
+      function liveDec(){
+        if((w.count||0)<=0)return;
+        w.count=Math.max(0,(w.count||0)-1);
+        if(w.count>=w.target)w.done=true;else w.done=false;
+        // 화면 즉시 갱신 (재렌더 없이 숫자·트랙만)
+        var cntEl=row.querySelector('.wk-cnt');if(cntEl)cntEl.textContent=w.count;
+        var np=Math.min(100,Math.round(w.count/w.target*100));
+        var fillEl=row.querySelector('.wk-fill');if(fillEl)fillEl.style.width=np+'%';
+        var runEl=row.querySelector('.wk-runner');if(runEl)runEl.style.left=Math.min(88,Math.max(2,np*0.86))+'%';
+      }
+      function startHold(){
+        didHold=false;
+        holdTimer=setTimeout(function(){
+          didHold=true;var speed=holdSpeed;
+          function step(){liveDec();speed=Math.max(45,speed*0.82);holdInterval=setTimeout(step,speed);}
+          step();
+        },350);
+      }
+      function endHold(){
+        if(holdTimer)clearTimeout(holdTimer);holdTimer=null;
+        if(holdInterval)clearTimeout(holdInterval);holdInterval=null;
+        if(didHold){if(window._saveState)window._saveState();refresh();}
+      }
+      undoC.addEventListener('click',function(){if(!didHold)addCount(-1);});
+      undoC.addEventListener('mousedown',startHold);
+      undoC.addEventListener('mouseup',endHold);
+      undoC.addEventListener('mouseleave',endHold);
+      undoC.addEventListener('touchstart',function(e){startHold();},{passive:true});
+      undoC.addEventListener('touchend',function(e){if(didHold)e.preventDefault();endHold();});
+      undoC.addEventListener('touchcancel',endHold);
+      customC.addEventListener('click',function(){
+        // 칩 자리를 입력 폼으로 전환
+        ctrl.innerHTML='';
+        var lbl=document.createElement('span');lbl.textContent='방금';lbl.style.cssText='font-size:10px;color:#9a948a;';
+        var inp=document.createElement('input');inp.type='number';inp.placeholder='0';inp.style.cssText='width:56px;text-align:center;border:1.5px solid #d8e5dd;border-radius:9px;padding:7px 4px;font-size:15px;font-weight:800;color:#1a7a4a;font-family:inherit;outline:none;';
+        var unit=document.createElement('span');unit.textContent=(w.unit||'회');unit.style.cssText='font-size:10px;color:#9a948a;';
+        var ok=document.createElement('button');ok.textContent='추가';ok.style.cssText='border:none;background:#1a7a4a;color:#fff;border-radius:9px;padding:8px 16px;font-size:12px;font-weight:700;font-family:inherit;margin-left:auto;cursor:pointer;';
+        function commit(){var v=parseInt(inp.value);if(!isNaN(v)&&v!==0){addCount(v);}else{refresh();}}
+        ok.addEventListener('click',commit);
+        inp.addEventListener('keydown',function(e){if(e.key==='Enter')commit();});
+        ctrl.appendChild(lbl);ctrl.appendChild(inp);ctrl.appendChild(unit);ctrl.appendChild(ok);
+        setTimeout(function(){try{inp.focus();}catch(e){}},40);
+      });
+      ctrl.appendChild(customC);ctrl.appendChild(undoC);
+      row.appendChild(ctrl);
     }else{
       // 기존: 체크박스형 (목표 없는 운동)
       row.style.cssText='display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:11px;margin-bottom:7px;';
