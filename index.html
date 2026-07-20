@@ -3502,46 +3502,69 @@ function _openSavedTips(){
       if(!groups[dk])groups[dk]=[];
       groups[dk].push(idx);
     });
-    // 최신 날짜 먼저
     var keys=Object.keys(groups).sort(function(a,b){
       if(a==='날짜 없음')return 1;if(b==='날짜 없음')return -1;
       var pa=a.split('-').map(Number),pb=b.split('-').map(Number);
       return (pb[0]-pa[0])||(pb[1]-pa[1])||(pb[2]-pa[2]);
     });
     var WKN=['일','월','화','수','목','금','토'];
-    var html='';
-    keys.forEach(function(dk){
-      var label=dk;
-      if(dk!=='날짜 없음'){var p=dk.split('-').map(Number);var dt=new Date(p[0],p[1]-1,p[2]);label=p[0]+'년 '+p[1]+'월 '+p[2]+'일 '+WKN[dt.getDay()]+'요일';}
-      html+='<div style="font-size:10px;font-weight:800;color:#b0a894;margin:12px 2px 8px;">'+label+'</div>';
-      groups[dk].forEach(function(idx){
-        var t=_tipData[idx];if(!t)return;
-        html+='<div class="st-row" data-i="'+idx+'" style="display:flex;align-items:flex-start;gap:10px;background:#fff;border:0.5px solid #eee;border-radius:12px;padding:12px;margin-bottom:7px;cursor:pointer;">'
-          +'<span style="font-size:20px;flex-shrink:0;">'+t.emoji+'</span>'
-          +'<div style="flex:1;min-width:0;"><div style="font-size:11.5px;font-weight:700;color:#222;line-height:1.4;">'+t.quote+'</div>'
-          +'<div style="font-size:8.5px;color:#9a948a;margin-top:2px;">'+t.source+'</div></div>'
-          +'<button class="st-del" data-i="'+idx+'" style="border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;">✕</button></div>';
+    window._savedTipsOpen=window._savedTipsOpen||{};
+    // 첫 방문 시 최신 날짜만 펼침
+    if(!window._savedTipsOpenInit){window._savedTipsOpen={};if(keys.length)window._savedTipsOpen[keys[0]]=true;window._savedTipsOpenInit=true;}
+    function render(){
+      var html='';
+      keys.forEach(function(dk){
+        var label=dk;
+        if(dk!=='날짜 없음'){var p=dk.split('-').map(Number);var dt=new Date(p[0],p[1]-1,p[2]);label=p[0]+'년 '+p[1]+'월 '+p[2]+'일 '+WKN[dt.getDay()]+'요일';}
+        var open=window._savedTipsOpen[dk]===true;
+        html+='<div style="margin-bottom:8px;border:0.5px solid #ece7da;border-radius:12px;overflow:hidden;background:#fff;">';
+        html+='<div class="sta-head" data-dk="'+dk+'" style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer;background:#faf8f2;">'
+          +'<span style="font-size:11px;font-weight:800;color:#5a5346;">'+label+'</span>'
+          +'<span style="display:inline-flex;align-items:center;gap:7px;"><span style="font-size:9px;color:#b0a894;font-weight:700;">'+groups[dk].length+'개</span>'
+          +'<span class="sta-arrow" style="font-size:11px;color:#c0bcb2;transition:transform 0.2s;transform:rotate('+(open?'180deg':'0deg')+');display:inline-block;">▾</span></span></div>';
+        if(open){
+          html+='<div style="padding:8px 10px 10px;">';
+          groups[dk].forEach(function(idx){
+            var t=_tipData[idx];if(!t)return;
+            html+='<div class="st-row" data-i="'+idx+'" style="display:flex;align-items:flex-start;gap:10px;background:#fdfcf9;border:0.5px solid #f0ece2;border-radius:11px;padding:11px;margin-bottom:6px;cursor:pointer;">'
+              +'<span style="font-size:19px;flex-shrink:0;">'+t.emoji+'</span>'
+              +'<div style="flex:1;min-width:0;"><div style="font-size:11.5px;font-weight:700;color:#222;line-height:1.4;">'+t.quote+'</div>'
+              +'<div style="font-size:8.5px;color:#9a948a;margin-top:2px;">'+t.source+'</div></div>'
+              +'<button class="st-del" data-i="'+idx+'" style="border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;flex-shrink:0;">✕</button></div>';
+          });
+          html+='</div>';
+        }
+        html+='</div>';
       });
-    });
-    body.innerHTML=html;
-    body.querySelectorAll('.st-del').forEach(function(b){
-      b.addEventListener('click',function(e){
-        e.stopPropagation();
-        var idx=parseInt(b.getAttribute('data-i'));
-        var pos=(window._tipSaved||[]).indexOf(idx);
-        if(pos>=0)window._tipSaved.splice(pos,1);
-        if(window._tipSavedDates)delete window._tipSavedDates[idx];
-        if(window._saveState)window._saveState();
-        _openSavedTips();
+      body.innerHTML=html;
+      // 아코디언 헤더 토글
+      body.querySelectorAll('.sta-head').forEach(function(h){
+        h.addEventListener('click',function(){
+          var dk=h.getAttribute('data-dk');
+          window._savedTipsOpen[dk]=!window._savedTipsOpen[dk];
+          render();
+        });
       });
-    });
-    body.querySelectorAll('.st-row').forEach(function(r){
-      r.addEventListener('click',function(){
-        _tipIdx=parseInt(r.getAttribute('data-i'));_tipIdxDay=_dayOfYearNum();
-        wrap.remove();
-        try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}
+      body.querySelectorAll('.st-del').forEach(function(b){
+        b.addEventListener('click',function(e){
+          e.stopPropagation();
+          var idx=parseInt(b.getAttribute('data-i'));
+          var pos=(window._tipSaved||[]).indexOf(idx);
+          if(pos>=0)window._tipSaved.splice(pos,1);
+          if(window._tipSavedDates)delete window._tipSavedDates[idx];
+          if(window._saveState)window._saveState();
+          _openSavedTips();
+        });
       });
-    });
+      body.querySelectorAll('.st-row').forEach(function(r){
+        r.addEventListener('click',function(){
+          _tipIdx=parseInt(r.getAttribute('data-i'));_tipIdxDay=_dayOfYearNum();
+          wrap.remove();
+          try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}
+        });
+      });
+    }
+    render();
   }
   top.querySelector('.st-back').addEventListener('click',function(){wrap.remove();});
   host.appendChild(wrap);
@@ -3556,29 +3579,11 @@ function renderInsightPage(container){
     +'<div style="font-size:9px;color:#9a948a;margin-top:2px;">매일 좋은 습관과 시간관리 팁 한 조각 · 제목을 누르면 저장한 팁</div>';
   container.appendChild(head);
   var _itBtn=head.querySelector('#insightTitleBtn');
-  if(_itBtn)_itBtn.addEventListener('click',function(){_openSavedTips();});
+  if(_itBtn)_itBtn.addEventListener('click',function(){window._savedTipsOpenInit=false;_openSavedTips();});
   var body=document.createElement('div');
   body.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 24px;scrollbar-width:none;-ms-overflow-style:none;';
   container.appendChild(body);
   _renderDailyTip(body,true);
-  // 저장한 팁 모아보기
-  if((window._tipSaved||[]).length){
-    var savedWrap=document.createElement('div');
-    savedWrap.style.cssText='margin-top:20px;';
-    var sh='<div style="font-size:10px;font-weight:800;color:#b0a894;margin-bottom:8px;">🔖 저장한 팁</div>';
-    window._tipSaved.forEach(function(idx){
-      var t=_tipData[idx];if(!t)return;
-      sh+='<div class="tip-saved-row" data-i="'+idx+'" style="display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #eee;border-radius:11px;padding:10px;margin-bottom:7px;cursor:pointer;">'
-        +'<span style="font-size:18px;flex-shrink:0;">'+t.emoji+'</span>'
-        +'<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:600;color:#222;line-height:1.35;">'+t.quote+'</div>'
-        +'<div style="font-size:8.5px;color:#9a948a;margin-top:2px;">'+t.source+'</div></div></div>';
-    });
-    savedWrap.innerHTML=sh;
-    savedWrap.querySelectorAll('.tip-saved-row').forEach(function(r){
-      r.addEventListener('click',function(){_tipIdx=parseInt(r.getAttribute('data-i'));renderInsightPage(container);});
-    });
-    body.appendChild(savedWrap);
-  }
 }
 function _renderDailyTip(host,isPage){
   var _dnow=_dayOfYearNum();
@@ -4755,12 +4760,18 @@ function renderNotif(){
   var seasonal=SEASONAL[mo]||[];
   var html='';
   if(!_seasonalAdded&&seasonal.length){
+    // 기본: 전체 선택
+    if(!window._seasonalSel){window._seasonalSel={};seasonal.forEach(function(s){window._seasonalSel[s]=true;});}
+    var selArr=seasonal.filter(function(s){return window._seasonalSel[s];});
     html+='<div style="background:#fff6ec;border:1.5px solid #f5dfc2;border-radius:13px;padding:11px 13px;margin-bottom:8px;">'
       +'<div style="font-size:11px;font-weight:700;color:#9a5b12;">🍑 '+mo+'월 제철 음식</div>'
-      +'<div style="font-size:10px;color:#7a5a30;margin-top:3px;">'+seasonal.join(' · ')+'이(가) 제철이에요</div>'
-      +'<div style="display:flex;gap:6px;margin-top:9px;">'
-      +'<button id="ntSeasonAdd" style="flex:1;border:none;font-size:10px;font-weight:700;padding:6px 0;border-radius:9px;background:#e58a3a;color:#fff;cursor:pointer;font-family:inherit;">장보기에 추가</button>'
-      +'<button id="ntSeasonShop" style="border:1px solid #f5dfc2;background:none;font-size:10px;font-weight:600;padding:6px 11px;border-radius:9px;color:#9a5b12;cursor:pointer;font-family:inherit;">🛒 최저가</button>'
+      +'<div style="font-size:9px;color:#7a5a30;margin-top:2px;margin-bottom:9px;">담을 품목을 골라보세요</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px 4px;">'
+      +seasonal.map(function(s){var on=window._seasonalSel[s];return '<span class="nt-season-chip" data-s="'+s+'" style="display:inline-block;font-size:10px;padding:5px 11px;border-radius:13px;cursor:pointer;font-family:inherit;'+(on?'background:#e58a3a;color:#fff;border:1px solid #e58a3a;':'background:#fff;color:#9a5b12;border:1px solid #eecfa8;')+'">'+s+'</span>';}).join('')
+      +'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:11px;">'
+      +'<button id="ntSeasonAdd" '+(selArr.length?'':'disabled ')+'style="flex:1;border:none;font-size:10px;font-weight:700;padding:7px 0;border-radius:9px;background:'+(selArr.length?'#e58a3a':'#f0dabf')+';color:#fff;cursor:'+(selArr.length?'pointer':'default')+';font-family:inherit;">'+(selArr.length?selArr.length+'개 장보기에 추가':'품목을 선택하세요')+'</button>'
+      +'<button id="ntSeasonShop" style="border:1px solid #f5dfc2;background:none;font-size:10px;font-weight:600;padding:7px 11px;border-radius:9px;color:#9a5b12;cursor:pointer;font-family:inherit;">🛒 최저가</button>'
       +'</div></div>';
   }
   var due=_dueBookmarks();
@@ -4777,10 +4788,21 @@ function renderNotif(){
   html+='<div style="background:#f7f7f5;border-radius:13px;padding:11px 13px;margin-bottom:8px;font-size:10px;color:#555;">👥 김민준님이 공유 일정 "저녁 약속"을 확인했어요 <span style="color:#85857f;">· 2시간 전</span></div>';
   if(!html)html='<div style="text-align:center;padding:30px 0;color:#9a9a93;font-size:11px;">새 알림이 없어요</div>';
   body.innerHTML=html;
+  body.querySelectorAll('.nt-season-chip').forEach(function(c){
+    c.addEventListener('click',function(){
+      var s=c.getAttribute('data-s');
+      window._seasonalSel[s]=!window._seasonalSel[s];
+      renderNotif();
+    });
+  });
   var sa=document.getElementById('ntSeasonAdd');
-  if(sa)sa.addEventListener('click',function(){_addItemsToGrocery(seasonal);_seasonalAdded=true;renderNotif();updateNotifDot();});
+  if(sa)sa.addEventListener('click',function(){
+    var sel=seasonal.filter(function(s){return window._seasonalSel&&window._seasonalSel[s];});
+    if(!sel.length)return;
+    _addItemsToGrocery(sel);_seasonalAdded=true;window._seasonalSel=null;renderNotif();updateNotifDot();
+  });
   var ss=document.getElementById('ntSeasonShop');
-  if(ss)ss.addEventListener('click',function(){_shopOpen(seasonal[0]);});
+  if(ss)ss.addEventListener('click',function(){var sel=seasonal.filter(function(s){return window._seasonalSel&&window._seasonalSel[s];});_shopOpen(sel[0]||seasonal[0]);});
   var da=document.getElementById('ntDueAdd');
   if(da)da.addEventListener('click',function(){Object.keys(_dueSelected).forEach(function(k){delete _dueSelected[k];});_addDueToCards();renderNotif();updateNotifDot();});
   var ds=document.getElementById('ntDueShop');
