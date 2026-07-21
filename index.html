@@ -4093,7 +4093,7 @@ function _vocabWordCard(word,lang,onChange,i,arr){
     card.style.cssText='display:flex;align-items:center;gap:10px;background:#f4faf6;border:0.5px solid #cde8d8;border-radius:12px;padding:11px 12px;margin-bottom:7px;cursor:pointer;';
     card.innerHTML='<span style="width:22px;height:22px;border-radius:7px;background:#1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">✓</span>'
       +'<span style="flex:1;min-width:0;font-size:14px;font-weight:800;color:#1a7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+word.w+'</span>'
-      +'<span style="font-size:11px;color:#a8c8b5;flex-shrink:0;">외움 ▾</span>';
+      +'<span style="font-size:13px;color:#a8c8b5;flex-shrink:0;">▾</span>';
     card.addEventListener('click',function(){word.vCollapsed=false;if(window._saveState)window._saveState();onChange();});
     return card;
   }
@@ -4109,22 +4109,34 @@ function _vocabWordCard(word,lang,onChange,i,arr){
     +'</div>'
     +(word.mean?'<div style="font-size:11.5px;color:#444;margin-top:4px;font-weight:500;line-height:1.55;white-space:pre-wrap;">'+word.mean+'</div>':'')
     +(word.ex?'<div style="font-size:10px;color:#9a948a;margin-top:5px;line-height:1.5;border-left:2px solid #eee;padding-left:8px;white-space:pre-wrap;">'+word.ex+(word.exTrans?'<br><span style="color:#b5b1a8;">'+word.exTrans+'</span>':'')+'</div>':'');
-  var side=document.createElement('div');side.style.cssText='display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:center;';
-  var spk=document.createElement('button');
-  spk.innerHTML='🔊';spk.title='발음 듣기';
-  spk.style.cssText='border:none;background:#eef4f8;border-radius:8px;width:30px;height:30px;font-size:14px;cursor:pointer;';
-  spk.addEventListener('click',function(){_speak(word.w,lang.voice);});
-  side.appendChild(spk);
-  // 수정(연필) + 삭제
+  // 상단 우측 액션 (수정/삭제/접기) 작게 일렬
+  var actions=document.createElement('div');
+  actions.style.cssText='display:flex;gap:8px;align-items:center;flex-shrink:0;';
   var editB=document.createElement('button');
   editB.innerHTML='✏️';editB.title='수정';
-  editB.style.cssText='border:none;background:none;font-size:13px;cursor:pointer;padding:0;';
+  editB.style.cssText='border:none;background:none;font-size:12px;cursor:pointer;padding:0;line-height:1;';
   editB.addEventListener('click',function(){_openAddWord(lang,null,{word:word,onDone:onChange});});
-  side.appendChild(editB);
+  actions.appendChild(editB);
   var del=document.createElement('button');
-  del.textContent='✕';del.style.cssText='border:none;background:none;color:#ddd;font-size:13px;cursor:pointer;';
+  del.textContent='✕';del.style.cssText='border:none;background:none;color:#ccc;font-size:13px;cursor:pointer;padding:0;line-height:1;';
   del.addEventListener('click',function(){arr.splice(i,1);if(window._saveState)window._saveState();onChange();});
-  side.appendChild(del);
+  actions.appendChild(del);
+  if(word.done){
+    var collapseB=document.createElement('button');
+    collapseB.innerHTML='▴';collapseB.title='접기';
+    collapseB.style.cssText='border:none;background:none;font-size:14px;color:#1a7a4a;cursor:pointer;padding:0;line-height:1;';
+    collapseB.addEventListener('click',function(){word.vCollapsed=true;if(window._saveState)window._saveState();onChange();});
+    actions.appendChild(collapseB);
+  }
+  // 발음 버튼 (그 아래)
+  var spk=document.createElement('button');
+  spk.innerHTML='🔊';spk.title='발음 듣기';
+  spk.style.cssText='border:none;background:#eef4f8;border-radius:8px;width:32px;height:30px;font-size:14px;cursor:pointer;flex-shrink:0;';
+  spk.addEventListener('click',function(){_speak(word.w,lang.voice);});
+  // 우측 컬럼: 위=액션, 아래=발음
+  var side=document.createElement('div');
+  side.style.cssText='display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;flex-shrink:0;gap:10px;';
+  side.appendChild(actions);side.appendChild(spk);
   card.appendChild(chk);card.appendChild(info);card.appendChild(side);
   return card;
 }
