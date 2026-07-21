@@ -3149,8 +3149,9 @@ var _tipIdxDay=null;
 // ===== 건강 탭 =====
 var _healthData={workouts:{},meals:{},water:{}};
 var _healthTab='workout'; // 'workout' | 'diet' | 'stats'
-var _healthStatsTab='workout'; // 기록 탭 안: 'workout' | 'diet'
-var _statsMonthOff=0; // 0=이번 달, -1=지난 달 …
+var _healthStatsTab='workout'; // (deprecated)
+var _healthMode='today'; // 'today' | 'stats' (각 탭 내부 토글)
+var _statsMonthOff=0; // (통계는 주간 기반으로 재설계, 미사용)
 // 단어장: langs=언어 목록, words={lang:{dateKey:[{w,pron,mean,ex,exTrans,done}]}}
 var _vocabData={langs:[{id:'en',name:'영어',flag:'🇺🇸',voice:'en-US'},{id:'ja',name:'일본어',flag:'🇯🇵',voice:'ja-JP'},{id:'zh',name:'중국어',flag:'🇨🇳',voice:'zh-CN'}],words:{}};
 var _vocabLang='en';
@@ -3185,7 +3186,7 @@ function renderHealthPage(container){
   // 하위탭 (상단 고정)
   var st=document.createElement('div');
   st.style.cssText='display:flex;gap:6px;padding:14px 16px 8px;flex-shrink:0;';
-  [['workout','💪 운동'],['diet','🍽 식단'],['stats','📊 기록']].forEach(function(t){
+  [['workout','💪 운동'],['diet','🍽 식단']].forEach(function(t){
     var on=_healthTab===t[0];
     var b=document.createElement('button');
     b.style.cssText='flex:1;text-align:center;font-size:12px;font-weight:700;padding:8px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#1a7a4a;color:#fff;':'background:#f0eee8;color:#8a867c;');
@@ -3201,26 +3202,43 @@ function renderHealthPage(container){
   body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
   container.appendChild(body);
 
-  // 대시보드 (스크롤 영역 안으로 이동, 기록 탭에선 숨김)
-  if(_healthTab!=='stats'){
-  var dash=document.createElement('div');
-  dash.style.cssText='display:flex;gap:8px;padding:4px 0 10px;';
-  dash.innerHTML=
-    '<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#1a7a4a;line-height:1;">'+doneCnt+'<span style="font-size:10px;color:#b5b1a8;">/'+(workouts.length||0)+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💪 오늘 운동</div></div>'
-    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#3aa0d9;line-height:1;">'+water+'<span style="font-size:10px;color:#b5b1a8;">/'+WATER_GOAL+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💧 물(잔)</div></div>'
-    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#e0653e;line-height:1;">🔥'+streak+'</div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">연속일</div></div>';
-  body.appendChild(dash);
-  }
+  // 오늘/통계 토글 (각 탭 내부)
+  var modeSeg=document.createElement('div');
+  modeSeg.style.cssText='display:flex;gap:5px;background:#f0eee8;border-radius:11px;padding:3px;margin:6px 0 12px;';
+  [['today','오늘'],['stats','📊 통계']].forEach(function(t){
+    var on=_healthMode===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:11px;font-weight:700;padding:7px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fff;color:#111;box-shadow:0 1px 2px rgba(0,0,0,0.08);':'background:none;color:#8a867c;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_healthMode=t[0];renderHealthPage(container);});
+    modeSeg.appendChild(b);
+  });
+  body.appendChild(modeSeg);
 
-  if(_healthTab==='workout'){_healthRenderWorkout(body,k);}
-  else if(_healthTab==='stats'){_healthRenderStats(body);}
-  else{_healthRenderDiet(body,k,water,WATER_GOAL);}
+  if(_healthMode==='stats'){
+    if(_healthTab==='workout')_statsWorkoutWeekly(body);
+    else _statsDietDaily(body);
+  }else{
+    // 오늘 모드: 대시보드 + 입력
+    var dash=document.createElement('div');
+    dash.style.cssText='display:flex;gap:8px;padding:0 0 10px;';
+    dash.innerHTML=
+      '<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#1a7a4a;line-height:1;">'+doneCnt+'<span style="font-size:10px;color:#b5b1a8;">/'+(workouts.length||0)+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💪 오늘 운동</div></div>'
+      +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#3aa0d9;line-height:1;">'+water+'<span style="font-size:10px;color:#b5b1a8;">/'+WATER_GOAL+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💧 물(잔)</div></div>'
+      +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#e0653e;line-height:1;">🔥'+streak+'</div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">연속일</div></div>';
+    body.appendChild(dash);
+    if(_healthTab==='workout'){_healthRenderWorkout(body,k);}
+    else{_healthRenderDiet(body,k,water,WATER_GOAL);}
+  }
   if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
 }
 function _healthRenderWorkout(body,k){
   var workouts=_healthData.workouts[k]||[];
   if(!workouts.length){
-    body.innerHTML='<div style="text-align:center;padding:32px 0 18px;color:#9a9a93;font-size:12px;">오늘 운동을 기록해보세요<br><span style="font-size:10px;">스쿼트 100회, 벤치 60kg 4x10 등</span></div>';
+    var emptyW=document.createElement('div');
+    emptyW.style.cssText='text-align:center;padding:32px 0 18px;color:#9a9a93;font-size:12px;';
+    emptyW.innerHTML='오늘 운동을 기록해보세요<br><span style="font-size:10px;">스쿼트 100회, 벤치 60kg 4x10 등</span>';
+    body.appendChild(emptyW);
   }
   function refresh(){if(window._saveState)window._saveState();renderHealthPage(document.getElementById('healthPage')||body.parentElement);}
   workouts.forEach(function(w,i){
@@ -3585,179 +3603,135 @@ var _calTable=[
   {kw:['달걀후라이','에그'],cal:90,name:'계란'}
 ];
 // 텍스트에서 음식 항목 추출 + 칼로리 어림
-function _healthRenderStats(body){
-  // 기록 탭 안 토글: 운동 / 식단
-  var seg=document.createElement('div');
-  seg.style.cssText='display:flex;gap:5px;background:#f0eee8;border-radius:11px;padding:3px;margin:8px 0 12px;';
-  [['workout','💪 운동'],['diet','🍽 식단']].forEach(function(t){
-    var on=_healthStatsTab===t[0];
-    var b=document.createElement('button');
-    b.style.cssText='flex:1;text-align:center;font-size:11px;font-weight:700;padding:7px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fff;color:#111;box-shadow:0 1px 2px rgba(0,0,0,0.08);':'background:none;color:#8a867c;');
-    b.textContent=t[1];
-    b.addEventListener('click',function(){_healthStatsTab=t[0];renderHealthPage(document.getElementById('healthPage'));});
-    seg.appendChild(b);
-  });
-  body.appendChild(seg);
-  // 월 이동
-  var base=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
-  var mDate=new Date(base.getFullYear(),base.getMonth()+_statsMonthOff,1);
-  var mnav=document.createElement('div');
-  mnav.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
-  var isCurMonth=(_statsMonthOff>=0);
-  mnav.innerHTML='<button id="stPrevM" style="width:28px;height:28px;border-radius:50%;border:none;background:#f0eee8;color:#8a867c;font-size:14px;cursor:pointer;">‹</button>'
-    +'<span style="font-size:13px;font-weight:800;color:#111;font-family:var(--font-display);">'+mDate.getFullYear()+'년 '+(mDate.getMonth()+1)+'월</span>'
-    +'<button id="stNextM" '+(isCurMonth?'disabled':'')+' style="width:28px;height:28px;border-radius:50%;border:none;background:'+(isCurMonth?'#f7f6f2':'#f0eee8')+';color:'+(isCurMonth?'#d8d5cd':'#8a867c')+';font-size:14px;cursor:'+(isCurMonth?'default':'pointer')+';">›</button>';
-  body.appendChild(mnav);
-  mnav.querySelector('#stPrevM').addEventListener('click',function(){_statsMonthOff--;renderHealthPage(document.getElementById('healthPage'));});
-  var nx=mnav.querySelector('#stNextM');if(nx&&!isCurMonth)nx.addEventListener('click',function(){_statsMonthOff++;renderHealthPage(document.getElementById('healthPage'));});
-  if(_healthStatsTab==='workout')_statsWorkout(body,mDate);
-  else _statsDiet(body,mDate);
-}
-function _statsWorkout(body,mDate){
+function _vDayKey(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
+// ===== 운동 통계 (주간 중심) =====
+function _statsWorkoutWeekly(body){
   var today=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
-  function dk(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
-  var y=mDate.getFullYear(),mo=mDate.getMonth();
-  var daysInMonth=new Date(y,mo+1,0).getDate();
-  var workoutDays=0, totalGoals=0, doneGoals=0;
-  for(var dd=1;dd<=daysInMonth;dd++){
-    var k=y+'-'+(mo+1)+'-'+dd;
+  var WD=['일','월','화','수','목','금','토'];
+  // 이번 주(월~일)
+  var wd=today.getDay();
+  var monday=new Date(today);monday.setDate(today.getDate()-((wd+6)%7));
+  var weekDoneDays=0, weekTotal=0, maxC=1, days=[];
+  for(var i=0;i<7;i++){
+    var dt=new Date(monday);dt.setDate(monday.getDate()+i);
+    var k=_vDayKey(dt);
     var ws=_healthData.workouts[k]||[];
-    if(ws.some(function(w){return w.done;}))workoutDays++;
-    ws.forEach(function(w){if(w.target){totalGoals++;if(w.done)doneGoals++;}});
+    var doneN=ws.filter(function(w){return w.done;}).length;
+    if(doneN>0)weekDoneDays++;
+    weekTotal+=doneN;
+    if(doneN>maxC)maxC=doneN;
+    days.push({dt:dt,doneN:doneN,isToday:_vDayKey(dt)===_vDayKey(today),isFuture:dt>today});
   }
-  var rate=totalGoals?Math.round(doneGoals/totalGoals*100):0;
-  // 이 달의 최고 연속 (달 안에서)
-  var best=0,cur=0;
-  for(var dd3=1;dd3<=daysInMonth;dd3++){
-    var kk=y+'-'+(mo+1)+'-'+dd3;
-    var dws=_healthData.workouts[kk]||[];
-    if(dws.some(function(w){return w.done;})){cur++;if(cur>best)best=cur;}else{cur=0;}
-  }
+  var streak=_healthStreak();
   // 요약
-  var stat=document.createElement('div');
-  stat.style.cssText='margin:2px 0 6px;';
-  stat.innerHTML='<div style="display:flex;gap:8px;">'
-    +'<div style="flex:1;background:#f7faf8;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#1a7a4a;line-height:1;">'+workoutDays+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">운동한 날</div></div>'
-    +'<div style="flex:1;background:#fff6ec;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#e0653e;line-height:1;">🔥'+best+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">최고 연속</div></div>'
-    +'<div style="flex:1;background:#f0f6fb;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#3aa0d9;line-height:1;">'+rate+'%</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">목표 달성률</div></div>'
-    +'</div>';
-  body.appendChild(stat);
-  // 월 히트맵 (달력 배치: 요일 헤더 + 1일~말일)
-  var heat=document.createElement('div');
-  heat.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:10px 0 6px;';
-  var WKH=['일','월','화','수','목','금','토'];
-  var firstDow=new Date(y,mo,1).getDay();
-  var cellsHtml='';
-  WKH.forEach(function(wname){cellsHtml+='<div style="font-size:7px;color:#b0aaa0;text-align:center;">'+wname+'</div>';});
-  for(var e=0;e<firstDow;e++){cellsHtml+='<div></div>';}
-  for(var day=1;day<=daysInMonth;day++){
-    var ck=y+'-'+(mo+1)+'-'+day;
-    var cws=_healthData.workouts[ck]||[];
-    var doneC=cws.filter(function(w){return w.done;}).length;
-    var col=doneC===0?'#eef0ec':doneC===1?'#c5e8d2':doneC===2?'#88ce9f':doneC===3?'#4caf6e':'#1a7a4a';
-    var isToday=(ck===dk(today));
-    cellsHtml+='<div title="'+(mo+1)+'/'+day+' · '+doneC+'개" style="aspect-ratio:1;border-radius:3px;background:'+col+';'+(isToday?'box-shadow:inset 0 0 0 1.5px #111;':'')+'"></div>';
-  }
-  heat.innerHTML='<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:11px;font-weight:700;color:#111;">'+(mo+1)+'월 히트맵</span><span style="font-size:9px;color:#9a948a;">최고 🔥'+best+'일</span></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">'+cellsHtml+'</div>'
-    +'<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;margin-top:8px;"><span style="font-size:7px;color:#b0aaa0;">적음</span>'
-    +'<span style="width:9px;height:9px;border-radius:2px;background:#c5e8d2;"></span><span style="width:9px;height:9px;border-radius:2px;background:#88ce9f;"></span><span style="width:9px;height:9px;border-radius:2px;background:#4caf6e;"></span><span style="width:9px;height:9px;border-radius:2px;background:#1a7a4a;"></span>'
-    +'<span style="font-size:7px;color:#b0aaa0;">많음</span></div>';
-  body.appendChild(heat);
-  // 주차별 막대 (이 달을 주 단위로)
+  var sum=document.createElement('div');
+  sum.style.cssText='display:flex;gap:8px;margin:2px 0 12px;';
+  sum.innerHTML=
+    '<div style="flex:1;background:#f7faf8;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#1a7a4a;line-height:1;">'+weekDoneDays+'<span style="font-size:10px;color:#b5b1a8;">/7</span></div><div style="font-size:8px;color:#9a948a;margin-top:4px;">이번 주 운동</div></div>'
+    +'<div style="flex:1;background:#fff6ec;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#e0653e;line-height:1;">🔥'+streak+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">연속일</div></div>'
+    +'<div style="flex:1;background:#f0f6fb;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#3aa0d9;line-height:1;">'+weekTotal+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">완료 운동</div></div>';
+  body.appendChild(sum);
+  // 이번 주 막대
   var bar=document.createElement('div');
   bar.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
-  var weeks=[],maxW=1;
-  var wsum=0,wstart=1;
-  for(var day2=1;day2<=daysInMonth;day2++){
-    var wk2=y+'-'+(mo+1)+'-'+day2;
-    var w2=_healthData.workouts[wk2]||[];
-    wsum+=w2.filter(function(w){return w.done;}).length;
-    var dow=new Date(y,mo,day2).getDay();
-    if(dow===6||day2===daysInMonth){weeks.push({sum:wsum,label:wstart+'~'+day2});if(wsum>maxW)maxW=wsum;wsum=0;wstart=day2+1;}
-  }
-  var barsHtml=weeks.map(function(o,idx){
-    var h=Math.round(o.sum/maxW*100);
+  var barsHtml=days.map(function(o){
+    var h=Math.round(o.doneN/maxC*100);
     return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
-      +'<div style="font-size:8px;color:#9a948a;font-weight:700;height:11px;">'+(o.sum||'')+'</div>'
-      +'<div style="width:100%;height:56px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.sum?8:0)+'%;background:linear-gradient(180deg,#2a9d5f,#1a7a4a);border-radius:4px 4px 0 0;min-height:'+(o.sum?'4px':'0')+';"></div></div>'
-      +'<div style="font-size:7px;color:#9a948a;">'+(idx+1)+'주</div></div>';
+      +'<div style="font-size:8px;color:#9a948a;font-weight:700;height:11px;">'+(o.doneN||'')+'</div>'
+      +'<div style="width:100%;height:60px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.doneN?8:0)+'%;background:'+(o.isToday?'linear-gradient(180deg,#e0653e,#c2410c)':o.isFuture?'#eef0ec':'linear-gradient(180deg,#2a9d5f,#1a7a4a)')+';border-radius:4px 4px 0 0;min-height:'+(o.doneN?'4px':'0')+';"></div></div>'
+      +'<div style="font-size:8px;color:'+(o.isToday?'#e0653e':'#9a948a')+';font-weight:'+(o.isToday?'800':'400')+';">'+WD[o.dt.getDay()]+'</div></div>';
   }).join('');
-  bar.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:6px;">주차별 운동량</div>'
+  bar.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:8px;">이번 주 운동량</div>'
     +'<div style="display:flex;gap:6px;align-items:flex-end;">'+barsHtml+'</div>';
   body.appendChild(bar);
-  if(workoutDays===0){
-    var empW=document.createElement('div');
-    empW.style.cssText='text-align:center;font-size:10px;color:#b0aaa0;margin-top:10px;';
-    empW.textContent='이 달엔 운동 기록이 없어요';
-    body.appendChild(empW);
+  // 최근 8주 히트 (주별 운동한 날 수)
+  var trend=document.createElement('div');
+  trend.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
+  var wk8='',anyW=false;
+  for(var w2=7;w2>=0;w2--){
+    var wStart=new Date(monday);wStart.setDate(monday.getDate()-w2*7);
+    var cnt=0;
+    for(var dI=0;dI<7;dI++){var dd=new Date(wStart);dd.setDate(wStart.getDate()+dI);var kk=_vDayKey(dd);if((_healthData.workouts[kk]||[]).some(function(w){return w.done;}))cnt++;}
+    if(cnt>0)anyW=true;
+    var col=cnt===0?'#eef0ec':cnt<=1?'#c5e8d2':cnt<=3?'#88ce9f':cnt<=5?'#4caf6e':'#1a7a4a';
+    var isThis=(w2===0);
+    wk8+='<div style="flex:1;text-align:center;"><div title="'+cnt+'일" style="height:26px;border-radius:5px;background:'+col+';'+(isThis?'box-shadow:inset 0 0 0 1.5px #111;':'')+'"></div><div style="font-size:7px;color:#b0aaa0;margin-top:3px;">'+(w2===0?'이번':w2+'주전')+'</div></div>';
+  }
+  trend.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:8px;">최근 8주 흐름</div>'
+    +'<div style="display:flex;gap:4px;">'+wk8+'</div>';
+  body.appendChild(trend);
+  if(!anyW && weekTotal===0){
+    var emp=document.createElement('div');emp.style.cssText='text-align:center;font-size:10px;color:#b0aaa0;margin-top:10px;';
+    emp.textContent='운동을 완료하면 여기에 기록이 쌓여요';body.appendChild(emp);
   }
 }
-function _statsDiet(body,mDate){
+// ===== 식단 통계 (일별) =====
+var _dietStatDay=null; // Date, null이면 오늘
+function _statsDietDaily(body){
   var today=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
-  function dk(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
-  var y=mDate.getFullYear(),mo=mDate.getMonth();
-  var daysInMonth=new Date(y,mo+1,0).getDate();
-  // ===== 식단 기록 =====
-  var mealDays=0, calSum=0, calDays=0, waterSum=0, waterDays=0;
-  for(var dd2=1;dd2<=daysInMonth;dd2++){
-    var mk2=y+'-'+(mo+1)+'-'+dd2;
-    var meals=_healthData.meals[mk2]||{};
-    var mkeys=Object.keys(meals).filter(function(x){return meals[x]&&(meals[x].text||meals[x].cal);});
-    if(mkeys.length){mealDays++;}
-    var dcal=0;mkeys.forEach(function(x){if(meals[x].cal)dcal+=meals[x].cal;});
-    if(dcal>0){calSum+=dcal;calDays++;}
-    var wv=_healthData.water[mk2]||0;
-    if(wv>0){waterSum+=wv;waterDays++;}
+  var cur=_dietStatDay?new Date(_dietStatDay):new Date(today);
+  var isToday=_vDayKey(cur)===_vDayKey(today);
+  var WKF=['일','월','화','수','목','금','토'];
+  // 날짜 네비
+  var nav=document.createElement('div');
+  nav.style.cssText='display:flex;align-items:center;justify-content:space-between;background:#f7f6f2;border-radius:10px;padding:8px 12px;margin:2px 0 12px;';
+  nav.innerHTML='<button id="dtPrev" style="width:26px;height:26px;border-radius:50%;border:none;background:#fff;color:#8a867c;font-size:13px;cursor:pointer;">‹</button>'
+    +'<span style="font-size:12px;font-weight:800;color:#111;">'+(cur.getMonth()+1)+'월 '+cur.getDate()+'일 ('+WKF[cur.getDay()]+')'+(isToday?' · 오늘':'')+'</span>'
+    +'<button id="dtNext" '+(isToday?'disabled':'')+' style="width:26px;height:26px;border-radius:50%;border:none;background:'+(isToday?'#f0eee8':'#fff')+';color:'+(isToday?'#d8d5cd':'#8a867c')+';font-size:13px;cursor:'+(isToday?'default':'pointer')+';">›</button>';
+  body.appendChild(nav);
+  nav.querySelector('#dtPrev').addEventListener('click',function(){var d=new Date(cur);d.setDate(d.getDate()-1);_dietStatDay=d;renderHealthPage(document.getElementById('healthPage'));});
+  var nb=nav.querySelector('#dtNext');if(nb&&!isToday)nb.addEventListener('click',function(){var d=new Date(cur);d.setDate(d.getDate()+1);_dietStatDay=d;renderHealthPage(document.getElementById('healthPage'));});
+  // 그날 끼니별
+  var k=_vDayKey(cur);
+  var meals=_healthData.meals[k]||{};
+  var water=_healthData.water[k]||0;
+  var MEALS=[['breakfast','🌅 아침'],['lunch','☀️ 점심'],['dinner','🌙 저녁'],['snack','🍪 간식']];
+  var dayCal=0;MEALS.forEach(function(m){if(meals[m[0]]&&meals[m[0]].cal)dayCal+=meals[m[0]].cal;});
+  // 총합 카드
+  var tot=document.createElement('div');
+  tot.style.cssText='display:flex;gap:8px;margin-bottom:10px;';
+  tot.innerHTML='<div style="flex:1;background:#fff8f3;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:18px;font-weight:800;color:#e0653e;line-height:1;">'+(dayCal?dayCal.toLocaleString():'—')+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">섭취 kcal</div></div>'
+    +'<div style="flex:1;background:#f0f6fb;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:18px;font-weight:800;color:#3aa0d9;line-height:1;">'+water+'<span style="font-size:9px;color:#b5b1a8;">/8</span></div><div style="font-size:8px;color:#9a948a;margin-top:4px;">💧 물(잔)</div></div>';
+  body.appendChild(tot);
+  // 끼니별 상세
+  var anyMeal=false;
+  MEALS.forEach(function(m){
+    var meal=meals[m[0]];
+    if(!meal||(!meal.text&&!meal.cal))return;
+    anyMeal=true;
+    var row=document.createElement('div');
+    row.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:11px;padding:10px 12px;margin-bottom:6px;';
+    row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;font-weight:700;color:#111;">'+m[1]+'</span>'+(meal.cal?'<span style="font-size:11px;font-weight:800;color:#e0653e;">'+meal.cal+' kcal</span>':'')+'</div>'
+      +(meal.text?'<div style="font-size:10px;color:#9a948a;margin-top:3px;">'+meal.text+'</div>':'');
+    body.appendChild(row);
+  });
+  if(!anyMeal){
+    var emp=document.createElement('div');emp.style.cssText='text-align:center;font-size:11px;color:#b0aaa0;padding:20px 0;';
+    emp.innerHTML=(isToday?'오늘':'이 날')+' 식단 기록이 없어요<br><span style="font-size:9px;">오늘 탭에서 끼니를 기록해보세요</span>';
+    body.appendChild(emp);
   }
-  var avgCal=calDays?Math.round(calSum/calDays/10)*10:0;
-  var avgWater=waterDays?(waterSum/waterDays).toFixed(1):0;
-
-  var dietHd=document.createElement('div');
-  dietHd.style.cssText='font-size:11px;font-weight:700;color:#111;margin:2px 0 9px;';
-  dietHd.textContent=(mo+1)+'월 식단 요약';
-  body.appendChild(dietHd);
-
-  var dietStat=document.createElement('div');
-  dietStat.style.cssText='display:flex;gap:8px;margin-bottom:8px;';
-  dietStat.innerHTML=
-    '<div style="flex:1;background:#f7faf8;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#1a7a4a;line-height:1;">'+mealDays+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">기록한 날</div></div>'
-    +'<div style="flex:1;background:#fff8f3;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#e0653e;line-height:1;">'+(avgCal||'—')+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">평균 kcal</div></div>'
-    +'<div style="flex:1;background:#f0f6fb;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#3aa0d9;line-height:1;">'+avgWater+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">평균 물(잔)</div></div>';
-  body.appendChild(dietStat);
-
-  // 주차별 평균 섭취 칼로리 (선택한 달)
-  var calBar=document.createElement('div');
-  calBar.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
-  var calWeeks=[],maxCal=1,anyCal=false;
-  var wSum=0,wDays=0,wStart=1;
-  for(var day2=1;day2<=daysInMonth;day2++){
-    var cbk=y+'-'+(mo+1)+'-'+day2;
-    var cmeals=_healthData.meals[cbk]||{};
-    var cc=0;Object.keys(cmeals).forEach(function(x){if(cmeals[x]&&cmeals[x].cal)cc+=cmeals[x].cal;});
-    if(cc>0){wSum+=cc;wDays++;anyCal=true;}
-    var dow=new Date(y,mo,day2).getDay();
-    if(dow===6||day2===daysInMonth){calWeeks.push({avg:wDays?Math.round(wSum/wDays):0});var av=wDays?Math.round(wSum/wDays):0;if(av>maxCal)maxCal=av;wSum=0;wDays=0;wStart=day2+1;}
+  // 최근 7일 칼로리 미니 추이
+  var mini=document.createElement('div');
+  mini.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:10px 0 6px;';
+  var maxCal=1,arr=[],any=false;
+  for(var i=6;i>=0;i--){
+    var dd=new Date(cur);dd.setDate(cur.getDate()-i);
+    var mk=_vDayKey(dd);var mm=_healthData.meals[mk]||{};
+    var cc=0;['breakfast','lunch','dinner','snack'].forEach(function(x){if(mm[x]&&mm[x].cal)cc+=mm[x].cal;});
+    if(cc>0)any=true;if(cc>maxCal)maxCal=cc;
+    arr.push({cal:cc,dt:dd,isCur:_vDayKey(dd)===k});
   }
-  var calBarsHtml=calWeeks.map(function(o,idx){
-    var h=Math.round(o.avg/maxCal*100);
-    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
-      +'<div style="font-size:7px;color:#b5a58a;font-weight:700;height:10px;">'+(o.avg||'')+'</div>'
-      +'<div style="width:100%;height:50px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.avg?8:0)+'%;background:linear-gradient(180deg,#f5c99a,#e8a45f);border-radius:4px 4px 0 0;min-height:'+(o.avg?'4px':'0')+';"></div></div>'
-      +'<div style="font-size:7px;color:#9a948a;">'+(idx+1)+'주</div></div>';
+  var mh=arr.map(function(o){
+    var h=Math.round(o.cal/maxCal*100);
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">'
+      +'<div style="font-size:6.5px;color:#b5a58a;font-weight:700;height:9px;">'+(o.cal||'')+'</div>'
+      +'<div style="width:100%;height:40px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.cal?8:0)+'%;background:'+(o.isCur?'linear-gradient(180deg,#f0a05a,#e0653e)':'linear-gradient(180deg,#f5c99a,#e8a45f)')+';border-radius:3px 3px 0 0;min-height:'+(o.cal?'3px':'0')+';"></div></div>'
+      +'<div style="font-size:7px;color:'+(o.isCur?'#e0653e':'#b0aaa0')+';">'+(o.dt.getMonth()+1)+'/'+o.dt.getDate()+'</div></div>';
   }).join('');
-  calBar.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:6px;">주차별 평균 섭취 kcal</div>'
-    +(anyCal?'<div style="display:flex;gap:5px;align-items:flex-end;">'+calBarsHtml+'</div>':'<div style="text-align:center;font-size:10px;color:#b0aaa0;padding:14px 0;">식단을 기록하면 칼로리 추이가 보여요</div>');
-  body.appendChild(calBar);
-
-  if(mealDays===0){
-    var empty=document.createElement('div');
-    empty.style.cssText='text-align:center;font-size:10px;color:#b0aaa0;margin-top:10px;';
-    empty.textContent='식단을 기록하면 여기에 쌓여요';
-    body.appendChild(empty);
-  }
+  mini.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:6px;">최근 7일 섭취 kcal</div>'
+    +(any?'<div style="display:flex;gap:4px;align-items:flex-end;">'+mh+'</div>':'<div style="text-align:center;font-size:10px;color:#b0aaa0;padding:12px 0;">식단을 기록하면 추이가 보여요</div>');
+  body.appendChild(mini);
 }
-
 function _estimateCalories(text){
   var items=[];var total=0;
   var parts=text.split(/[,\n·]|\s+그리고\s+/).map(function(s){return s.trim();}).filter(Boolean);
