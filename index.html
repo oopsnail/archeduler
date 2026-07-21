@@ -4105,13 +4105,16 @@ function _vocabWordCard(word,lang,onChange,i,arr){
   var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
   info.innerHTML='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
     +'<span style="font-size:15px;font-weight:800;color:#111;">'+word.w+'</span>'
+    +'<button class="vw-spk" title="발음 듣기" style="border:none;background:#eef4f8;border-radius:7px;width:26px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;">🔊</button>'
     +(word.pron?'<span style="font-size:10px;color:#3aa0d9;font-weight:500;">'+word.pron+'</span>':'')
     +'</div>'
     +(word.mean?'<div style="font-size:11.5px;color:#444;margin-top:4px;font-weight:500;line-height:1.55;white-space:pre-wrap;">'+word.mean+'</div>':'')
     +(word.ex?'<div style="font-size:10px;color:#9a948a;margin-top:5px;line-height:1.5;border-left:2px solid #eee;padding-left:8px;white-space:pre-wrap;">'+word.ex+(word.exTrans?'<br><span style="color:#b5b1a8;">'+word.exTrans+'</span>':'')+'</div>':'');
+  var spkInline=info.querySelector('.vw-spk');
+  if(spkInline)spkInline.addEventListener('click',function(){_speak(word.w,lang.voice);});
   // 상단 우측 액션 (수정/삭제/접기) 작게 일렬
   var actions=document.createElement('div');
-  actions.style.cssText='display:flex;gap:8px;align-items:center;flex-shrink:0;';
+  actions.style.cssText='display:flex;gap:8px;align-items:center;flex-shrink:0;align-self:flex-start;margin-top:2px;';
   var editB=document.createElement('button');
   editB.innerHTML='✏️';editB.title='수정';
   editB.style.cssText='border:none;background:none;font-size:12px;cursor:pointer;padding:0;line-height:1;';
@@ -4128,16 +4131,7 @@ function _vocabWordCard(word,lang,onChange,i,arr){
     collapseB.addEventListener('click',function(){word.vCollapsed=true;if(window._saveState)window._saveState();onChange();});
     actions.appendChild(collapseB);
   }
-  // 발음 버튼 (그 아래)
-  var spk=document.createElement('button');
-  spk.innerHTML='🔊';spk.title='발음 듣기';
-  spk.style.cssText='border:none;background:#eef4f8;border-radius:8px;width:32px;height:30px;font-size:14px;cursor:pointer;flex-shrink:0;';
-  spk.addEventListener('click',function(){_speak(word.w,lang.voice);});
-  // 우측 컬럼: 위=액션, 아래=발음
-  var side=document.createElement('div');
-  side.style.cssText='display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;flex-shrink:0;gap:10px;';
-  side.appendChild(actions);side.appendChild(spk);
-  card.appendChild(chk);card.appendChild(info);card.appendChild(side);
+  card.appendChild(chk);card.appendChild(info);card.appendChild(actions);
   return card;
 }
 function _vocabRenderToday(body,lang){
