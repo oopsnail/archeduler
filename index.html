@@ -3224,6 +3224,11 @@ var _statsMonthOff=0; // (통계는 주간 기반으로 재설계, 미사용)
 var _vocabData={langs:[{id:'en',name:'영어',flag:'🇺🇸',voice:'en-US'},{id:'ja',name:'일본어',flag:'🇯🇵',voice:'ja-JP'},{id:'zh',name:'중국어',flag:'🇨🇳',voice:'zh-CN'}],words:{}};
 var _vocabLang='en';
 var _vocabView='today'; // 'today' | 'review'
+// 여행: trips=[{id,name,emoji,dest,start,end,budget,currency,days:[{plan:[{time,place,note,tag,lat,lng}]}],expenses:[{name,amount,cur,krw,cat,date}],photos:[],notes}]
+var _travelData={trips:[]};
+var _travelSel=null; // 선택된 여행 id (null=목록)
+var _travelStage='plan'; // 'plan'|'during'|'memory'
+var _travelDay=0; // 선택된 Day 인덱스
 function _healthKey(){var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();}
 function _healthStreak(){
   // 오늘 기준 과거로 연속 운동한 날 수 (운동 1개라도 완료된 날)
@@ -4023,6 +4028,359 @@ function _openSavedTips(){
   top.querySelector('.st-back').addEventListener('click',function(){wrap.remove();});
   host.appendChild(wrap);
 }
+// ===== 여행 (Travel) =====
+function rerenderTravelPage(){var el=document.getElementById('travelPage');if(el)renderTravelPage(el);}
+function _travelCurTrip(){return _travelData.trips.find(function(t){return t.id===_travelSel;});}
+var _CUR_SYMBOL={'원':'₩','엔':'¥','달러':'$','유로':'€','위안':'¥','파운드':'£','바트':'฿','동':'₫'};
+var _CUR_RATE={'원':1,'엔':9,'달러':1350,'유로':1450,'위안':185,'파운드':1700,'바트':38,'동':0.055}; // 대략 원화 환산
+function renderTravelPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
+  if(!_travelSel||!_travelCurTrip()){_travelRenderList(container);}
+  else{_travelRenderTrip(container);}
+}
+// 여행 목록
+function _travelRenderList(container){
+  var head=document.createElement('div');
+  head.style.cssText='padding:14px 16px 8px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;';
+  head.innerHTML='<div style="font-size:18px;font-weight:800;color:#111;">✈️ 여행</div>';
+  container.appendChild(head);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px 24px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var trips=_travelData.trips.slice();
+  if(!trips.length){
+    var emp=document.createElement('div');
+    emp.style.cssText='text-align:center;padding:36px 0 20px;color:#9a9a93;font-size:12px;';
+    emp.innerHTML='아직 여행이 없어요<br><span style="font-size:10px;">새 여행을 추가해 동선을 짜보세요</span>';
+    body.appendChild(emp);
+  }
+  // 예정/지난 구분
+  var now=new Date();now.setHours(0,0,0,0);
+  trips.sort(function(a,b){return new Date(a.start)-new Date(b.start);});
+  trips.forEach(function(t){
+    var card=document.createElement('div');
+    var start=new Date(t.start),end=new Date(t.end);
+    var days=Math.max(1,Math.round((end-start)/(1000*60*60*24))+1);
+    var dday=Math.ceil((start-now)/(1000*60*60*24));
+    var ddayLabel=dday>0?('D-'+dday):dday===0?'D-DAY':('여행 완료');
+    var past=end<now;
+    card.style.cssText='border-radius:14px;padding:15px;margin-bottom:9px;color:#fff;position:relative;overflow:hidden;cursor:pointer;'+(past?'background:linear-gradient(135deg,#8a94a5,#6b7688);':'background:linear-gradient(135deg,#3a7bd5,#2a5298);');
+    card.innerHTML='<span style="position:absolute;right:-8px;top:-8px;font-size:56px;opacity:0.18;">'+(t.emoji||'🧳')+'</span>'
+      +'<div style="font-size:16px;font-weight:800;">'+t.name+'</div>'
+      +'<div style="font-size:10px;opacity:0.9;margin-top:3px;">'+_fmtTripDate(start)+' – '+_fmtTripDate(end)+' · '+(days-1)+'박 '+days+'일</div>'
+      +'<span style="font-size:9px;background:rgba(255,255,255,0.22);border-radius:6px;padding:2px 9px;display:inline-block;margin-top:9px;font-weight:700;">'+ddayLabel+'</span>';
+    card.addEventListener('click',function(){_travelSel=t.id;_travelStage=past?'memory':(dday<=0?'during':'plan');_travelDay=0;rerenderTravelPage();});
+    body.appendChild(card);
+  });
+  var addBtn=document.createElement('button');
+  addBtn.innerHTML='＋ 새 여행';
+  addBtn.style.cssText='width:100%;border:1.5px dashed #cdd5e0;background:none;color:#3a7bd5;font-size:13px;font-weight:700;padding:13px;border-radius:13px;cursor:pointer;font-family:inherit;margin-top:4px;';
+  addBtn.addEventListener('click',function(){_openAddTrip();});
+  body.appendChild(addBtn);
+}
+function _fmtTripDate(d){return (d.getMonth()+1)+'.'+d.getDate();}
+// 여행 상세 (3단계)
+function _travelRenderTrip(container){
+  var trip=_travelCurTrip();
+  // 상단바 (뒤로 + 제목)
+  var top=document.createElement('div');
+  top.style.cssText='padding:12px 14px 6px;flex-shrink:0;display:flex;align-items:center;gap:10px;';
+  var back=document.createElement('button');
+  back.innerHTML='‹';back.style.cssText='border:none;background:#f0eee8;color:#5a5346;width:30px;height:30px;border-radius:50%;font-size:17px;cursor:pointer;flex-shrink:0;';
+  back.addEventListener('click',function(){_travelSel=null;rerenderTravelPage();});
+  top.appendChild(back);
+  var tt=document.createElement('div');tt.style.cssText='flex:1;min-width:0;';
+  tt.innerHTML='<div style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(trip.emoji||'🧳')+' '+trip.name+'</div>'
+    +'<div style="font-size:9px;color:#9a948a;">'+_fmtTripDate(new Date(trip.start))+' – '+_fmtTripDate(new Date(trip.end))+'</div>';
+  top.appendChild(tt);
+  var editT=document.createElement('button');
+  editT.innerHTML='⚙️';editT.style.cssText='border:none;background:none;font-size:14px;cursor:pointer;flex-shrink:0;';
+  editT.addEventListener('click',function(){_openAddTrip(trip);});
+  top.appendChild(editT);
+  container.appendChild(top);
+  // 3단계 세그먼트
+  var seg=document.createElement('div');
+  seg.style.cssText='display:flex;gap:5px;background:#f0eee8;border-radius:11px;padding:3px;margin:4px 14px 10px;flex-shrink:0;';
+  [['plan','📝 계획'],['during','✈️ 여행 중'],['memory','📸 추억']].forEach(function(s){
+    var on=_travelStage===s[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:11px;font-weight:700;padding:7px 2px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fff;color:#111;box-shadow:0 1px 2px rgba(0,0,0,0.08);':'background:none;color:#8a867c;');
+    b.textContent=s[1];
+    b.addEventListener('click',function(){_travelStage=s[0];rerenderTravelPage();});
+    seg.appendChild(b);
+  });
+  container.appendChild(seg);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  if(_travelStage==='plan')_travelRenderPlan(body,trip);
+  else if(_travelStage==='during')_travelRenderDuring(body,trip);
+  else _travelRenderMemory(body,trip);
+}
+// 계획: Day별 동선 타임라인
+function _travelRenderPlan(body,trip){
+  var start=new Date(trip.start),end=new Date(trip.end);
+  var nDays=Math.max(1,Math.round((end-start)/(1000*60*60*24))+1);
+  if(!trip.days)trip.days=[];
+  while(trip.days.length<nDays)trip.days.push({plan:[]});
+  if(_travelDay>=nDays)_travelDay=0;
+  // Day 탭
+  var dayTabs=document.createElement('div');
+  dayTabs.style.cssText='display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:2px 0 10px;';
+  for(var i=0;i<nDays;i++){(function(i){
+    var dt=new Date(start);dt.setDate(start.getDate()+i);
+    var on=_travelDay===i;
+    var b=document.createElement('button');
+    b.style.cssText='flex-shrink:0;font-size:10px;font-weight:700;padding:6px 12px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#3a7bd5;color:#fff;':'background:#f0eee8;color:#8a867c;');
+    b.innerHTML='Day '+(i+1)+'<span style="font-size:8px;opacity:0.8;"> '+(dt.getMonth()+1)+'/'+dt.getDate()+'</span>';
+    b.addEventListener('click',function(){_travelDay=i;rerenderTravelPage();});
+    dayTabs.appendChild(b);
+  })(i);}
+  body.appendChild(dayTabs);
+  var day=trip.days[_travelDay];if(!day.plan)day.plan=[];
+  // 지도 미리보기 (핀이 있으면)
+  var pinned=day.plan.filter(function(p){return p.lat&&p.lng;});
+  if(pinned.length){
+    var mapBtn=document.createElement('button');
+    mapBtn.style.cssText='width:100%;height:56px;border:none;border-radius:12px;background:linear-gradient(135deg,#e8f0f8,#d8e6f0);color:#3a7bd5;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:10px;font-family:inherit;';
+    mapBtn.innerHTML='🗺 지도에서 동선 보기 ('+pinned.length+'곳)';
+    mapBtn.addEventListener('click',function(){_openTravelMap(trip,_travelDay);});
+    body.appendChild(mapBtn);
+  }
+  // 타임라인
+  if(!day.plan.length){
+    var emp=document.createElement('div');emp.style.cssText='text-align:center;padding:24px 0 14px;color:#b0aaa0;font-size:11px;';
+    emp.innerHTML='Day '+(_travelDay+1)+' 동선을 추가해보세요<br><span style="font-size:9px;">장소·시간·메모</span>';
+    body.appendChild(emp);
+  }else{
+    day.plan.sort(function(a,b){return (a.time||'').localeCompare(b.time||'');});
+    day.plan.forEach(function(pl,idx){
+      var item=document.createElement('div');
+      item.style.cssText='display:flex;gap:9px;';
+      var last=idx===day.plan.length-1;
+      item.innerHTML='<div style="font-size:9px;color:#3a7bd5;font-weight:800;width:36px;flex-shrink:0;text-align:right;padding-top:3px;">'+(pl.time||'—')+'</div>'
+        +'<div style="width:2px;background:#dde5f0;position:relative;flex-shrink:0;margin:0 2px;">'+(last?'':'')+'<div style="position:absolute;left:-3px;top:4px;width:8px;height:8px;border-radius:50%;background:#3a7bd5;border:2px solid #fff;box-shadow:0 0 0 1px #3a7bd5;"></div></div>'
+        +'<div style="flex:1;padding-bottom:12px;min-width:0;"><div style="display:flex;align-items:center;gap:5px;"><span style="font-size:12px;font-weight:700;color:#111;">'+pl.place+'</span>'+(pl.tag?'<span style="font-size:8px;background:#eef4fc;color:#3a7bd5;border-radius:5px;padding:1px 6px;font-weight:700;">'+pl.tag+'</span>':'')+(pl.lat?'<span style="font-size:9px;">📍</span>':'')+'</div>'+(pl.note?'<div style="font-size:9px;color:#9a948a;margin-top:1px;">'+pl.note+'</div>':'')+'</div>';
+      // 삭제(길게 누르거나 탭 시 편집)
+      item.addEventListener('click',function(){_openAddPlace(trip,_travelDay,pl,idx);});
+      body.appendChild(item);
+    });
+  }
+  var addP=document.createElement('button');
+  addP.innerHTML='＋ 장소 추가';
+  addP.style.cssText='width:100%;border:1.5px dashed #cdd5e0;background:none;color:#3a7bd5;font-size:12px;font-weight:700;padding:11px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:2px;';
+  addP.addEventListener('click',function(){_openAddPlace(trip,_travelDay);});
+  body.appendChild(addP);
+}
+// 여행 중: 오늘 일정 + 지출
+function _travelRenderDuring(body,trip){
+  var today=new Date();today.setHours(0,0,0,0);
+  var start=new Date(trip.start);start.setHours(0,0,0,0);
+  var dayIdx=Math.round((today-start)/(1000*60*60*24));
+  var nDays=(trip.days||[]).length;
+  // 오늘 일정
+  var todayHd=document.createElement('div');
+  todayHd.style.cssText='font-size:12px;font-weight:800;color:#111;margin:6px 0 8px;';
+  if(dayIdx>=0&&dayIdx<nDays){
+    todayHd.textContent='📍 오늘 (Day '+(dayIdx+1)+') 동선';
+    body.appendChild(todayHd);
+    var day=trip.days[dayIdx];var plan=(day&&day.plan)?day.plan.slice():[];
+    if(!plan.length){var e=document.createElement('div');e.style.cssText='font-size:10px;color:#b0aaa0;margin-bottom:12px;';e.textContent='오늘 계획된 동선이 없어요';body.appendChild(e);}
+    plan.sort(function(a,b){return (a.time||'').localeCompare(b.time||'');});
+    plan.forEach(function(pl){
+      var r=document.createElement('div');r.style.cssText='display:flex;gap:8px;align-items:center;background:#f7f9fc;border-radius:9px;padding:8px 11px;margin-bottom:5px;';
+      r.innerHTML='<span style="font-size:9px;color:#3a7bd5;font-weight:800;width:34px;flex-shrink:0;">'+(pl.time||'—')+'</span><span style="flex:1;font-size:11px;color:#111;font-weight:600;">'+pl.place+'</span>'+(pl.tag?'<span style="font-size:8px;color:#8a94a5;">'+pl.tag+'</span>':'');
+      body.appendChild(r);
+    });
+  }else{
+    todayHd.textContent='📍 여행 기간이 아니에요';
+    body.appendChild(todayHd);
+  }
+  // 지출
+  var expHd=document.createElement('div');
+  expHd.style.cssText='font-size:12px;font-weight:800;color:#111;margin:16px 0 8px;display:flex;justify-content:space-between;align-items:center;';
+  if(!trip.expenses)trip.expenses=[];
+  var totalKrw=trip.expenses.reduce(function(s,e){return s+(e.krw||0);},0);
+  expHd.innerHTML='<span>💳 여행 지출</span><span style="font-size:11px;color:#e0653e;">₩'+totalKrw.toLocaleString()+'</span>';
+  body.appendChild(expHd);
+  // 예산 대비
+  if(trip.budget){
+    var pct=Math.min(100,Math.round(totalKrw/trip.budget*100));
+    var bg=document.createElement('div');bg.style.cssText='background:#f2f5f2;border-radius:8px;height:8px;overflow:hidden;margin-bottom:4px;';
+    bg.innerHTML='<div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#c2410c':'#3a7bd5')+';border-radius:8px;"></div>';
+    body.appendChild(bg);
+    var bl=document.createElement('div');bl.style.cssText='font-size:9px;color:#9a948a;margin-bottom:10px;text-align:right;';
+    bl.textContent='예산 ₩'+trip.budget.toLocaleString()+' 중 '+pct+'%';
+    body.appendChild(bl);
+  }
+  trip.expenses.forEach(function(ex,idx){
+    var r=document.createElement('div');r.style.cssText='display:flex;align-items:center;gap:9px;background:#fff;border:0.5px solid #ececE4;border-radius:10px;padding:10px 12px;margin-bottom:6px;';
+    var sym=_CUR_SYMBOL[ex.cur]||'';
+    r.innerHTML='<span style="font-size:15px;">'+_catEmoji(ex.cat)+'</span>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:700;color:#111;">'+ex.name+'</div><div style="font-size:8.5px;color:#9a948a;">'+(ex.cat||'기타')+'</div></div>'
+      +'<div style="text-align:right;"><div style="font-size:12px;font-weight:800;color:#111;">'+sym+ex.amount.toLocaleString()+'</div>'+(ex.cur!=='원'?'<div style="font-size:8px;color:#b5b1a8;">≈₩'+(ex.krw||0).toLocaleString()+'</div>':'')+'</div>';
+    var del=document.createElement('button');del.textContent='✕';del.style.cssText='border:none;background:none;color:#ddd;font-size:12px;cursor:pointer;margin-left:2px;';
+    del.addEventListener('click',function(e){e.stopPropagation();trip.expenses.splice(idx,1);if(window._saveState)window._saveState();rerenderTravelPage();});
+    r.appendChild(del);
+    body.appendChild(r);
+  });
+  var addE=document.createElement('button');
+  addE.innerHTML='＋ 지출 추가';
+  addE.style.cssText='width:100%;border:1.5px dashed #e2c9a8;background:none;color:#c2410c;font-size:12px;font-weight:700;padding:11px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:2px;';
+  addE.addEventListener('click',function(){_openAddExpense(trip);});
+  body.appendChild(addE);
+}
+function _catEmoji(c){return {'항공':'✈️','숙소':'🏨','식비':'🍽','교통':'🚕','쇼핑':'🛍','관광':'🎫','기타':'💳'}[c]||'💳';}
+// 추억: 사진/메모
+function _travelRenderMemory(body,trip){
+  var hd=document.createElement('div');hd.style.cssText='font-size:12px;font-weight:800;color:#111;margin:6px 0 8px;';
+  hd.textContent='📸 여행 후기';
+  body.appendChild(hd);
+  var ta=document.createElement('textarea');
+  ta.placeholder='이번 여행은 어땠나요? 기억하고 싶은 순간을 적어보세요.';
+  ta.value=trip.memo||'';
+  ta.style.cssText='width:100%;min-height:120px;border:1px solid #e6e2d8;border-radius:12px;padding:12px;font-size:12px;line-height:1.6;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;';
+  ta.addEventListener('input',function(){trip.memo=ta.value;});
+  ta.addEventListener('blur',function(){if(window._saveState)window._saveState();});
+  body.appendChild(ta);
+  // 지출 요약
+  if(trip.expenses&&trip.expenses.length){
+    var totalKrw=trip.expenses.reduce(function(s,e){return s+(e.krw||0);},0);
+    var byCat={};trip.expenses.forEach(function(e){byCat[e.cat||'기타']=(byCat[e.cat||'기타']||0)+(e.krw||0);});
+    var sumC=document.createElement('div');sumC.style.cssText='background:#f7f9fc;border-radius:12px;padding:13px;margin-top:12px;';
+    var rows=Object.keys(byCat).sort(function(a,b){return byCat[b]-byCat[a];}).map(function(c){
+      var pct=Math.round(byCat[c]/totalKrw*100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:12px;">'+_catEmoji(c)+'</span><span style="font-size:10px;color:#555;width:40px;">'+c+'</span><div style="flex:1;height:6px;background:#e8edf3;border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:#3a7bd5;"></div></div><span style="font-size:9px;color:#9a948a;width:36px;text-align:right;">'+pct+'%</span></div>';
+    }).join('');
+    sumC.innerHTML='<div style="font-size:11px;font-weight:800;color:#111;margin-bottom:9px;">💳 총 지출 ₩'+totalKrw.toLocaleString()+'</div>'+rows;
+    body.appendChild(sumC);
+  }
+}
+
+// 여행 추가/수정 시트
+function _openAddTrip(trip){
+  var editing=!!trip;
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('tripAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='tripAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;max-height:88%;overflow-y:auto;';
+  var EMO=['🧳','🗼','🏝','🏔','🗽','🏛','⛩','🌴','🎡','🏰','🕌','🌉'];
+  function fd(label,ph,id,val,type){return '<div style="margin-bottom:11px;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">'+label+'</div><input id="'+id+'" '+(type?'type="'+type+'"':'')+' placeholder="'+ph+'" value="'+(val||'')+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;"></div>';}
+  var curEmo=editing?(trip.emoji||'🧳'):'🧳';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:14px;">'+(editing?'여행 수정':'새 여행')+'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:6px;">아이콘</div>'
+    +'<div id="tripEmoRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'+EMO.map(function(e){return '<button class="temo" data-e="'+e+'" style="font-size:18px;width:38px;height:38px;border-radius:10px;border:1.5px solid '+(e===curEmo?'#3a7bd5':'#eee')+';background:'+(e===curEmo?'#eef4fc':'#fff')+';cursor:pointer;">'+e+'</button>';}).join('')+'</div>'
+    +fd('여행 이름','예: 도쿄 여행','tripName',editing?trip.name:'')
+    +'<div style="display:flex;gap:8px;"><div style="flex:1;">'+fd('시작일','','tripStart',editing?trip.start:'','date')+'</div><div style="flex:1;">'+fd('종료일','','tripEnd',editing?trip.end:'','date')+'</div></div>'
+    +'<div style="display:flex;gap:8px;"><div style="flex:2;">'+fd('예산 (원, 선택)','예: 1500000','tripBudget',editing&&trip.budget?trip.budget:'','number')+'</div><div style="flex:1;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">주 통화</div><select id="tripCur" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 8px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;background:#fff;">'+['원','엔','달러','유로','위안','바트','동','파운드'].map(function(c){return '<option '+(editing&&trip.currency===c?'selected':'')+'>'+c+'</option>';}).join('')+'</select></div></div>'
+    +'<button id="tripSave" style="width:100%;border:none;background:#3a7bd5;color:#fff;font-size:13px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:6px;">'+(editing?'저장':'추가')+'</button>'
+    +(editing?'<button id="tripDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;margin-top:4px;">여행 삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var selEmo=curEmo;
+  sheet.querySelectorAll('.temo').forEach(function(b){b.addEventListener('click',function(){selEmo=b.getAttribute('data-e');sheet.querySelectorAll('.temo').forEach(function(x){x.style.border='1.5px solid #eee';x.style.background='#fff';});b.style.border='1.5px solid #3a7bd5';b.style.background='#eef4fc';});});
+  sheet.querySelector('#tripSave').addEventListener('click',function(){
+    var name=sheet.querySelector('#tripName').value.trim();
+    var s=sheet.querySelector('#tripStart').value,e=sheet.querySelector('#tripEnd').value;
+    if(!name){sheet.querySelector('#tripName').focus();return;}
+    if(!s||!e){showToast('여행 날짜를 선택해주세요','del','ti-x');return;}
+    var budget=parseInt(sheet.querySelector('#tripBudget').value)||0;
+    var cur=sheet.querySelector('#tripCur').value;
+    if(editing){trip.name=name;trip.emoji=selEmo;trip.start=s;trip.end=e;trip.budget=budget;trip.currency=cur;}
+    else{var nt={id:'t'+Date.now(),name:name,emoji:selEmo,start:s,end:e,budget:budget,currency:cur,days:[],expenses:[],memo:''};_travelData.trips.push(nt);_travelSel=nt.id;_travelStage='plan';_travelDay=0;}
+    if(window._saveState)window._saveState();wrap.remove();rerenderTravelPage();
+  });
+  if(editing){sheet.querySelector('#tripDel').addEventListener('click',function(){
+    if(!confirm('이 여행을 삭제할까요?'))return;
+    _travelData.trips=_travelData.trips.filter(function(t){return t.id!==trip.id;});_travelSel=null;
+    if(window._saveState)window._saveState();wrap.remove();rerenderTravelPage();
+  });}
+}
+// 장소(동선) 추가/수정
+function _openAddPlace(trip,dayIdx,place,pIdx){
+  var editing=!!place;
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('placeAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='placeAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var TAGS=['관광','맛집','카페','쇼핑','숙소','이동','기타'];
+  var curTag=editing?(place.tag||''):'';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:14px;">Day '+(dayIdx+1)+' · '+(editing?'장소 수정':'장소 추가')+'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:11px;"><div style="width:88px;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">시간</div><input id="plTime" type="time" value="'+(editing&&place.time?_toTimeInput(place.time):'')+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 8px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;"></div>'
+    +'<div style="flex:1;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">장소</div><input id="plPlace" placeholder="예: 센소지 절" value="'+(editing?place.place:'')+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;"></div></div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:6px;">태그</div><div id="plTagRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px;">'+TAGS.map(function(t){return '<button class="pltag" data-t="'+t+'" style="font-size:11px;font-weight:600;padding:7px 12px;border-radius:12px;border:1px solid '+(t===curTag?'#3a7bd5':'#e6e2d8')+';background:'+(t===curTag?'#eef4fc':'#fff')+';color:'+(t===curTag?'#3a7bd5':'#666')+';cursor:pointer;font-family:inherit;">'+t+'</button>';}).join('')+'</div>'
+    +'<div style="margin-bottom:11px;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">메모 (선택)</div><input id="plNote" placeholder="예: 입장료 있음, 예약 필요" value="'+(editing&&place.note?place.note:'')+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;"></div>'
+    +'<button id="plSave" style="width:100%;border:none;background:#3a7bd5;color:#fff;font-size:13px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:2px;">'+(editing?'저장':'추가')+'</button>'
+    +(editing?'<button id="plDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:9px;cursor:pointer;font-family:inherit;">삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var selTag=curTag;
+  sheet.querySelectorAll('.pltag').forEach(function(b){b.addEventListener('click',function(){selTag=(selTag===b.getAttribute('data-t'))?'':b.getAttribute('data-t');sheet.querySelectorAll('.pltag').forEach(function(x){var on=x.getAttribute('data-t')===selTag;x.style.border='1px solid '+(on?'#3a7bd5':'#e6e2d8');x.style.background=on?'#eef4fc':'#fff';x.style.color=on?'#3a7bd5':'#666';});});});
+  sheet.querySelector('#plSave').addEventListener('click',function(){
+    var pl=sheet.querySelector('#plPlace').value.trim();if(!pl){sheet.querySelector('#plPlace').focus();return;}
+    var tv=sheet.querySelector('#plTime').value;var timeLabel=tv?_fromTimeInput(tv):'';
+    var note=sheet.querySelector('#plNote').value.trim();
+    if(!trip.days[dayIdx].plan)trip.days[dayIdx].plan=[];
+    if(editing){place.place=pl;place.time=timeLabel;place.tag=selTag;place.note=note;}
+    else{trip.days[dayIdx].plan.push({place:pl,time:timeLabel,tag:selTag,note:note});}
+    if(window._saveState)window._saveState();wrap.remove();rerenderTravelPage();
+  });
+  if(editing){sheet.querySelector('#plDel').addEventListener('click',function(){trip.days[dayIdx].plan.splice(pIdx,1);if(window._saveState)window._saveState();wrap.remove();rerenderTravelPage();});}
+}
+function _toTimeInput(label){var m=label.match(/(\d+):(\d+)/);if(!m)return '';var h=+m[1];if(/오후/.test(label)&&h<12)h+=12;if(/오전/.test(label)&&h===12)h=0;return String(h).padStart(2,'0')+':'+m[2];}
+function _fromTimeInput(v){var pp=v.split(':');var h=+pp[0];return (h<10?'0':'')+h+':'+pp[1];}
+// 지출 추가
+function _openAddExpense(trip){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('expAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='expAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var CATS=['식비','교통','숙소','관광','쇼핑','항공','기타'];
+  var curCat='식비';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:14px;">💳 지출 추가</div>'
+    +'<div style="margin-bottom:11px;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">내용</div><input id="exName" placeholder="예: 이치란 라멘" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;"></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:11px;"><div style="flex:2;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">금액</div><input id="exAmt" type="number" inputmode="decimal" placeholder="0" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:14px;font-weight:700;font-family:inherit;outline:none;box-sizing:border-box;"></div>'
+    +'<div style="flex:1;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">통화</div><select id="exCur" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;background:#fff;">'+['원','엔','달러','유로','위안','바트','동','파운드'].map(function(c){return '<option '+(trip.currency===c?'selected':'')+'>'+c+'</option>';}).join('')+'</select></div></div>'
+    +'<div id="exKrwPrev" style="font-size:9px;color:#9a948a;text-align:right;margin-top:-6px;margin-bottom:10px;height:11px;"></div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:6px;">카테고리</div><div id="exCatRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'+CATS.map(function(c){return '<button class="excat" data-c="'+c+'" style="font-size:11px;font-weight:600;padding:7px 12px;border-radius:12px;border:1px solid '+(c===curCat?'#c2410c':'#e6e2d8')+';background:'+(c===curCat?'#fff5ef':'#fff')+';color:'+(c===curCat?'#c2410c':'#666')+';cursor:pointer;font-family:inherit;">'+_catEmoji(c)+' '+c+'</button>';}).join('')+'</div>'
+    +'<button id="exSave" style="width:100%;border:none;background:#c2410c;color:#fff;font-size:13px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;">추가</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var selCat=curCat;
+  function updPrev(){var amt=parseFloat(sheet.querySelector('#exAmt').value)||0;var cur=sheet.querySelector('#exCur').value;var krw=Math.round(amt*(_CUR_RATE[cur]||1));sheet.querySelector('#exKrwPrev').textContent=(cur!=='원'&&amt)?('≈ ₩'+krw.toLocaleString()):'';}
+  sheet.querySelector('#exAmt').addEventListener('input',updPrev);
+  sheet.querySelector('#exCur').addEventListener('change',updPrev);
+  sheet.querySelectorAll('.excat').forEach(function(b){b.addEventListener('click',function(){selCat=b.getAttribute('data-c');sheet.querySelectorAll('.excat').forEach(function(x){var on=x.getAttribute('data-c')===selCat;x.style.border='1px solid '+(on?'#c2410c':'#e6e2d8');x.style.background=on?'#fff5ef':'#fff';x.style.color=on?'#c2410c':'#666';});});});
+  setTimeout(function(){try{sheet.querySelector('#exName').focus();}catch(e){}},60);
+  sheet.querySelector('#exSave').addEventListener('click',function(){
+    var name=sheet.querySelector('#exName').value.trim();var amt=parseFloat(sheet.querySelector('#exAmt').value)||0;
+    if(!name||!amt){if(!name)sheet.querySelector('#exName').focus();else sheet.querySelector('#exAmt').focus();return;}
+    var cur=sheet.querySelector('#exCur').value;var krw=Math.round(amt*(_CUR_RATE[cur]||1));
+    if(!trip.expenses)trip.expenses=[];
+    var today=new Date();var dk=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+    trip.expenses.push({name:name,amount:amt,cur:cur,krw:krw,cat:selCat,date:dk});
+    // 가계부 자동 반영 (원화 환산, budget 플래그로 기록엔 안 뜨게)
+    try{if(typeof addLog==='function')addLog(name+' '+krw+'원 지출 ('+trip.name+')',dk,true);}catch(e){}
+    if(window._saveState)window._saveState();wrap.remove();rerenderTravelPage();
+    showToast(name+' · '+(_CUR_SYMBOL[cur]||'')+amt.toLocaleString()+' 기록','add','ti-check');
+  });
+}
+// 지도에서 동선 보기 (앱 내 지도 활용)
+function _openTravelMap(trip,dayIdx){
+  showToast('지도 연동은 준비 중이에요','add','ti-map');
+}
+
 // ===== 단어장 (Vocabulary) =====
 function _vocabKey(){var n=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();}
 function _speak(text,voiceLang){
@@ -7107,6 +7465,7 @@ function setHomePage(p){
   if(p===8){try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}}
   if(p===9){try{renderHealthPage(document.getElementById('healthPage'));}catch(e){}}
   if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
+  if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -7129,6 +7488,7 @@ function buildHomeSlider(){
     {id:'tab-insight',  name:'인사이트'},
     {id:'tab-health',   name:'건강'},
     {id:'tab-vocab',    name:'단어장'},
+    {id:'tab-travel',   name:'여행'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -7213,6 +7573,12 @@ function buildHomeSlider(){
   vocabPage.id='vocabPage';
   renderVocabPage(vocabPage);
   slider.appendChild(vocabPage);
+
+  var travelPage=document.createElement('div');
+  travelPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  travelPage.id='travelPage';
+  renderTravelPage(travelPage);
+  slider.appendChild(travelPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -9474,6 +9840,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       shop:_shopItems,
       health:_healthData,
       vocab:_vocabData,
+      travel:_travelData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -9508,6 +9875,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.shop&&Array.isArray(d.shop)){_shopItems.length=0;d.shop.forEach(function(s){_shopItems.push(s);});}
       if(d.health&&typeof d.health==='object'){_healthData.workouts=d.health.workouts||{};_healthData.meals=d.health.meals||{};_healthData.water=d.health.water||{};}
       if(d.vocab&&typeof d.vocab==='object'){if(Array.isArray(d.vocab.langs)&&d.vocab.langs.length)_vocabData.langs=d.vocab.langs;_vocabData.words=d.vocab.words||{};}
+      if(d.travel&&typeof d.travel==='object'&&Array.isArray(d.travel.trips)){_travelData.trips=d.travel.trips;}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -9523,7 +9891,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
