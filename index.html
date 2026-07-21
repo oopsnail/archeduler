@@ -3148,7 +3148,13 @@ var _tipIdx=null;
 var _tipIdxDay=null;
 // ===== 건강 탭 =====
 var _healthData={workouts:{},meals:{},water:{}};
-var _healthTab='workout'; // 'workout' | 'diet'
+var _healthTab='workout'; // 'workout' | 'diet' | 'stats'
+var _healthStatsTab='workout'; // 기록 탭 안: 'workout' | 'diet'
+var _statsMonthOff=0; // 0=이번 달, -1=지난 달 …
+// 단어장: langs=언어 목록, words={lang:{dateKey:[{w,pron,mean,ex,exTrans,done}]}}
+var _vocabData={langs:[{id:'en',name:'영어',flag:'🇺🇸',voice:'en-US'},{id:'ja',name:'일본어',flag:'🇯🇵',voice:'ja-JP'},{id:'zh',name:'중국어',flag:'🇨🇳',voice:'zh-CN'}],words:{}};
+var _vocabLang='en';
+var _vocabView='today'; // 'today' | 'review'
 function _healthKey(){var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();}
 function _healthStreak(){
   // 오늘 기준 과거로 연속 운동한 날 수 (운동 1개라도 완료된 날)
@@ -3176,26 +3182,10 @@ function renderHealthPage(container){
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
 
-  // 헤더
-  var head=document.createElement('div');
-  head.style.cssText='padding:14px 16px 6px;flex-shrink:0;';
-  head.innerHTML='<div style="font-size:20px;font-weight:800;color:#111;letter-spacing:-0.02em;">건강</div>'
-    +'<div style="font-size:10px;color:#9a948a;margin-top:1px;">'+now.getFullYear()+'년 '+(now.getMonth()+1)+'월 '+now.getDate()+'일 '+WKF[now.getDay()]+'요일</div>';
-  container.appendChild(head);
-
-  // 대시보드
-  var dash=document.createElement('div');
-  dash.style.cssText='display:flex;gap:8px;padding:8px 16px 4px;flex-shrink:0;';
-  dash.innerHTML=
-    '<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#1a7a4a;line-height:1;">'+doneCnt+'<span style="font-size:10px;color:#b5b1a8;">/'+(workouts.length||0)+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💪 오늘 운동</div></div>'
-    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#3aa0d9;line-height:1;">'+water+'<span style="font-size:10px;color:#b5b1a8;">/'+WATER_GOAL+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💧 물(잔)</div></div>'
-    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#e0653e;line-height:1;">🔥'+streak+'</div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">연속일</div></div>';
-  container.appendChild(dash);
-
-  // 하위탭
+  // 하위탭 (상단 고정)
   var st=document.createElement('div');
-  st.style.cssText='display:flex;gap:6px;padding:12px 16px 8px;flex-shrink:0;';
-  [['workout','💪 운동'],['diet','🍽 식단']].forEach(function(t){
+  st.style.cssText='display:flex;gap:6px;padding:14px 16px 8px;flex-shrink:0;';
+  [['workout','💪 운동'],['diet','🍽 식단'],['stats','📊 기록']].forEach(function(t){
     var on=_healthTab===t[0];
     var b=document.createElement('button');
     b.style.cssText='flex:1;text-align:center;font-size:12px;font-weight:700;padding:8px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#1a7a4a;color:#fff;':'background:#f0eee8;color:#8a867c;');
@@ -3211,7 +3201,19 @@ function renderHealthPage(container){
   body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
   container.appendChild(body);
 
+  // 대시보드 (스크롤 영역 안으로 이동, 기록 탭에선 숨김)
+  if(_healthTab!=='stats'){
+  var dash=document.createElement('div');
+  dash.style.cssText='display:flex;gap:8px;padding:4px 0 10px;';
+  dash.innerHTML=
+    '<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#1a7a4a;line-height:1;">'+doneCnt+'<span style="font-size:10px;color:#b5b1a8;">/'+(workouts.length||0)+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💪 오늘 운동</div></div>'
+    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#3aa0d9;line-height:1;">'+water+'<span style="font-size:10px;color:#b5b1a8;">/'+WATER_GOAL+'</span></div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">💧 물(잔)</div></div>'
+    +'<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:10px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;color:#e0653e;line-height:1;">🔥'+streak+'</div><div style="font-size:8.5px;color:#9a948a;margin-top:3px;">연속일</div></div>';
+  body.appendChild(dash);
+  }
+
   if(_healthTab==='workout'){_healthRenderWorkout(body,k);}
+  else if(_healthTab==='stats'){_healthRenderStats(body);}
   else{_healthRenderDiet(body,k,water,WATER_GOAL);}
   if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
 }
@@ -3583,6 +3585,179 @@ var _calTable=[
   {kw:['달걀후라이','에그'],cal:90,name:'계란'}
 ];
 // 텍스트에서 음식 항목 추출 + 칼로리 어림
+function _healthRenderStats(body){
+  // 기록 탭 안 토글: 운동 / 식단
+  var seg=document.createElement('div');
+  seg.style.cssText='display:flex;gap:5px;background:#f0eee8;border-radius:11px;padding:3px;margin:8px 0 12px;';
+  [['workout','💪 운동'],['diet','🍽 식단']].forEach(function(t){
+    var on=_healthStatsTab===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:11px;font-weight:700;padding:7px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fff;color:#111;box-shadow:0 1px 2px rgba(0,0,0,0.08);':'background:none;color:#8a867c;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_healthStatsTab=t[0];renderHealthPage(document.getElementById('healthPage'));});
+    seg.appendChild(b);
+  });
+  body.appendChild(seg);
+  // 월 이동
+  var base=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
+  var mDate=new Date(base.getFullYear(),base.getMonth()+_statsMonthOff,1);
+  var mnav=document.createElement('div');
+  mnav.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+  var isCurMonth=(_statsMonthOff>=0);
+  mnav.innerHTML='<button id="stPrevM" style="width:28px;height:28px;border-radius:50%;border:none;background:#f0eee8;color:#8a867c;font-size:14px;cursor:pointer;">‹</button>'
+    +'<span style="font-size:13px;font-weight:800;color:#111;font-family:var(--font-display);">'+mDate.getFullYear()+'년 '+(mDate.getMonth()+1)+'월</span>'
+    +'<button id="stNextM" '+(isCurMonth?'disabled':'')+' style="width:28px;height:28px;border-radius:50%;border:none;background:'+(isCurMonth?'#f7f6f2':'#f0eee8')+';color:'+(isCurMonth?'#d8d5cd':'#8a867c')+';font-size:14px;cursor:'+(isCurMonth?'default':'pointer')+';">›</button>';
+  body.appendChild(mnav);
+  mnav.querySelector('#stPrevM').addEventListener('click',function(){_statsMonthOff--;renderHealthPage(document.getElementById('healthPage'));});
+  var nx=mnav.querySelector('#stNextM');if(nx&&!isCurMonth)nx.addEventListener('click',function(){_statsMonthOff++;renderHealthPage(document.getElementById('healthPage'));});
+  if(_healthStatsTab==='workout')_statsWorkout(body,mDate);
+  else _statsDiet(body,mDate);
+}
+function _statsWorkout(body,mDate){
+  var today=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
+  function dk(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
+  var y=mDate.getFullYear(),mo=mDate.getMonth();
+  var daysInMonth=new Date(y,mo+1,0).getDate();
+  var workoutDays=0, totalGoals=0, doneGoals=0;
+  for(var dd=1;dd<=daysInMonth;dd++){
+    var k=y+'-'+(mo+1)+'-'+dd;
+    var ws=_healthData.workouts[k]||[];
+    if(ws.some(function(w){return w.done;}))workoutDays++;
+    ws.forEach(function(w){if(w.target){totalGoals++;if(w.done)doneGoals++;}});
+  }
+  var rate=totalGoals?Math.round(doneGoals/totalGoals*100):0;
+  // 이 달의 최고 연속 (달 안에서)
+  var best=0,cur=0;
+  for(var dd3=1;dd3<=daysInMonth;dd3++){
+    var kk=y+'-'+(mo+1)+'-'+dd3;
+    var dws=_healthData.workouts[kk]||[];
+    if(dws.some(function(w){return w.done;})){cur++;if(cur>best)best=cur;}else{cur=0;}
+  }
+  // 요약
+  var stat=document.createElement('div');
+  stat.style.cssText='margin:2px 0 6px;';
+  stat.innerHTML='<div style="display:flex;gap:8px;">'
+    +'<div style="flex:1;background:#f7faf8;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#1a7a4a;line-height:1;">'+workoutDays+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">운동한 날</div></div>'
+    +'<div style="flex:1;background:#fff6ec;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#e0653e;line-height:1;">🔥'+best+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">최고 연속</div></div>'
+    +'<div style="flex:1;background:#f0f6fb;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#3aa0d9;line-height:1;">'+rate+'%</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">목표 달성률</div></div>'
+    +'</div>';
+  body.appendChild(stat);
+  // 월 히트맵 (달력 배치: 요일 헤더 + 1일~말일)
+  var heat=document.createElement('div');
+  heat.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:10px 0 6px;';
+  var WKH=['일','월','화','수','목','금','토'];
+  var firstDow=new Date(y,mo,1).getDay();
+  var cellsHtml='';
+  WKH.forEach(function(wname){cellsHtml+='<div style="font-size:7px;color:#b0aaa0;text-align:center;">'+wname+'</div>';});
+  for(var e=0;e<firstDow;e++){cellsHtml+='<div></div>';}
+  for(var day=1;day<=daysInMonth;day++){
+    var ck=y+'-'+(mo+1)+'-'+day;
+    var cws=_healthData.workouts[ck]||[];
+    var doneC=cws.filter(function(w){return w.done;}).length;
+    var col=doneC===0?'#eef0ec':doneC===1?'#c5e8d2':doneC===2?'#88ce9f':doneC===3?'#4caf6e':'#1a7a4a';
+    var isToday=(ck===dk(today));
+    cellsHtml+='<div title="'+(mo+1)+'/'+day+' · '+doneC+'개" style="aspect-ratio:1;border-radius:3px;background:'+col+';'+(isToday?'box-shadow:inset 0 0 0 1.5px #111;':'')+'"></div>';
+  }
+  heat.innerHTML='<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:11px;font-weight:700;color:#111;">'+(mo+1)+'월 히트맵</span><span style="font-size:9px;color:#9a948a;">최고 🔥'+best+'일</span></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">'+cellsHtml+'</div>'
+    +'<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;margin-top:8px;"><span style="font-size:7px;color:#b0aaa0;">적음</span>'
+    +'<span style="width:9px;height:9px;border-radius:2px;background:#c5e8d2;"></span><span style="width:9px;height:9px;border-radius:2px;background:#88ce9f;"></span><span style="width:9px;height:9px;border-radius:2px;background:#4caf6e;"></span><span style="width:9px;height:9px;border-radius:2px;background:#1a7a4a;"></span>'
+    +'<span style="font-size:7px;color:#b0aaa0;">많음</span></div>';
+  body.appendChild(heat);
+  // 주차별 막대 (이 달을 주 단위로)
+  var bar=document.createElement('div');
+  bar.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
+  var weeks=[],maxW=1;
+  var wsum=0,wstart=1;
+  for(var day2=1;day2<=daysInMonth;day2++){
+    var wk2=y+'-'+(mo+1)+'-'+day2;
+    var w2=_healthData.workouts[wk2]||[];
+    wsum+=w2.filter(function(w){return w.done;}).length;
+    var dow=new Date(y,mo,day2).getDay();
+    if(dow===6||day2===daysInMonth){weeks.push({sum:wsum,label:wstart+'~'+day2});if(wsum>maxW)maxW=wsum;wsum=0;wstart=day2+1;}
+  }
+  var barsHtml=weeks.map(function(o,idx){
+    var h=Math.round(o.sum/maxW*100);
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
+      +'<div style="font-size:8px;color:#9a948a;font-weight:700;height:11px;">'+(o.sum||'')+'</div>'
+      +'<div style="width:100%;height:56px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.sum?8:0)+'%;background:linear-gradient(180deg,#2a9d5f,#1a7a4a);border-radius:4px 4px 0 0;min-height:'+(o.sum?'4px':'0')+';"></div></div>'
+      +'<div style="font-size:7px;color:#9a948a;">'+(idx+1)+'주</div></div>';
+  }).join('');
+  bar.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:6px;">주차별 운동량</div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end;">'+barsHtml+'</div>';
+  body.appendChild(bar);
+  if(workoutDays===0){
+    var empW=document.createElement('div');
+    empW.style.cssText='text-align:center;font-size:10px;color:#b0aaa0;margin-top:10px;';
+    empW.textContent='이 달엔 운동 기록이 없어요';
+    body.appendChild(empW);
+  }
+}
+function _statsDiet(body,mDate){
+  var today=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
+  function dk(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
+  var y=mDate.getFullYear(),mo=mDate.getMonth();
+  var daysInMonth=new Date(y,mo+1,0).getDate();
+  // ===== 식단 기록 =====
+  var mealDays=0, calSum=0, calDays=0, waterSum=0, waterDays=0;
+  for(var dd2=1;dd2<=daysInMonth;dd2++){
+    var mk2=y+'-'+(mo+1)+'-'+dd2;
+    var meals=_healthData.meals[mk2]||{};
+    var mkeys=Object.keys(meals).filter(function(x){return meals[x]&&(meals[x].text||meals[x].cal);});
+    if(mkeys.length){mealDays++;}
+    var dcal=0;mkeys.forEach(function(x){if(meals[x].cal)dcal+=meals[x].cal;});
+    if(dcal>0){calSum+=dcal;calDays++;}
+    var wv=_healthData.water[mk2]||0;
+    if(wv>0){waterSum+=wv;waterDays++;}
+  }
+  var avgCal=calDays?Math.round(calSum/calDays/10)*10:0;
+  var avgWater=waterDays?(waterSum/waterDays).toFixed(1):0;
+
+  var dietHd=document.createElement('div');
+  dietHd.style.cssText='font-size:11px;font-weight:700;color:#111;margin:2px 0 9px;';
+  dietHd.textContent=(mo+1)+'월 식단 요약';
+  body.appendChild(dietHd);
+
+  var dietStat=document.createElement('div');
+  dietStat.style.cssText='display:flex;gap:8px;margin-bottom:8px;';
+  dietStat.innerHTML=
+    '<div style="flex:1;background:#f7faf8;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#1a7a4a;line-height:1;">'+mealDays+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">기록한 날</div></div>'
+    +'<div style="flex:1;background:#fff8f3;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#e0653e;line-height:1;">'+(avgCal||'—')+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">평균 kcal</div></div>'
+    +'<div style="flex:1;background:#f0f6fb;border-radius:11px;padding:12px 8px;text-align:center;"><div style="font-size:19px;font-weight:800;color:#3aa0d9;line-height:1;">'+avgWater+'</div><div style="font-size:8px;color:#9a948a;margin-top:4px;">평균 물(잔)</div></div>';
+  body.appendChild(dietStat);
+
+  // 주차별 평균 섭취 칼로리 (선택한 달)
+  var calBar=document.createElement('div');
+  calBar.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
+  var calWeeks=[],maxCal=1,anyCal=false;
+  var wSum=0,wDays=0,wStart=1;
+  for(var day2=1;day2<=daysInMonth;day2++){
+    var cbk=y+'-'+(mo+1)+'-'+day2;
+    var cmeals=_healthData.meals[cbk]||{};
+    var cc=0;Object.keys(cmeals).forEach(function(x){if(cmeals[x]&&cmeals[x].cal)cc+=cmeals[x].cal;});
+    if(cc>0){wSum+=cc;wDays++;anyCal=true;}
+    var dow=new Date(y,mo,day2).getDay();
+    if(dow===6||day2===daysInMonth){calWeeks.push({avg:wDays?Math.round(wSum/wDays):0});var av=wDays?Math.round(wSum/wDays):0;if(av>maxCal)maxCal=av;wSum=0;wDays=0;wStart=day2+1;}
+  }
+  var calBarsHtml=calWeeks.map(function(o,idx){
+    var h=Math.round(o.avg/maxCal*100);
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
+      +'<div style="font-size:7px;color:#b5a58a;font-weight:700;height:10px;">'+(o.avg||'')+'</div>'
+      +'<div style="width:100%;height:50px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.avg?8:0)+'%;background:linear-gradient(180deg,#f5c99a,#e8a45f);border-radius:4px 4px 0 0;min-height:'+(o.avg?'4px':'0')+';"></div></div>'
+      +'<div style="font-size:7px;color:#9a948a;">'+(idx+1)+'주</div></div>';
+  }).join('');
+  calBar.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:6px;">주차별 평균 섭취 kcal</div>'
+    +(anyCal?'<div style="display:flex;gap:5px;align-items:flex-end;">'+calBarsHtml+'</div>':'<div style="text-align:center;font-size:10px;color:#b0aaa0;padding:14px 0;">식단을 기록하면 칼로리 추이가 보여요</div>');
+  body.appendChild(calBar);
+
+  if(mealDays===0){
+    var empty=document.createElement('div');
+    empty.style.cssText='text-align:center;font-size:10px;color:#b0aaa0;margin-top:10px;';
+    empty.textContent='식단을 기록하면 여기에 쌓여요';
+    body.appendChild(empty);
+  }
+}
+
 function _estimateCalories(text){
   var items=[];var total=0;
   var parts=text.split(/[,\n·]|\s+그리고\s+/).map(function(s){return s.trim();}).filter(Boolean);
@@ -3806,6 +3981,201 @@ function _openSavedTips(){
   top.querySelector('.st-back').addEventListener('click',function(){wrap.remove();});
   host.appendChild(wrap);
 }
+// ===== 단어장 (Vocabulary) =====
+function _vocabKey(){var n=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();}
+function _speak(text,voiceLang){
+  try{
+    if(!('speechSynthesis' in window)){showToast('이 기기는 발음 재생을 지원하지 않아요','del','ti-x');return;}
+    window.speechSynthesis.cancel();
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang=voiceLang||'en-US';u.rate=0.9;
+    var vs=window.speechSynthesis.getVoices();
+    var match=vs.find(function(v){return v.lang===voiceLang;})||vs.find(function(v){return v.lang&&v.lang.indexOf((voiceLang||'en').split('-')[0])===0;});
+    if(match)u.voice=match;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+function _curLang(){return _vocabData.langs.find(function(l){return l.id===_vocabLang;})||_vocabData.langs[0];}
+function rerenderVocabPage(){var el=document.getElementById('vocabPage');if(el)renderVocabPage(el);}
+function renderVocabPage(container){
+  if(!container)return;
+  var _prevBody=container.querySelector('.vocab-body');
+  var _prevScroll=_prevBody?_prevBody.scrollTop:0;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
+  var lang=_curLang();
+  // 언어 탭 (상단 고정)
+  var langBar=document.createElement('div');
+  langBar.style.cssText='display:flex;gap:5px;padding:14px 16px 6px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;';
+  _vocabData.langs.forEach(function(l){
+    var on=l.id===_vocabLang;
+    var c=document.createElement('button');
+    c.style.cssText='flex-shrink:0;font-size:11px;font-weight:700;padding:6px 13px;border-radius:15px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;'+(on?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;');
+    c.innerHTML=l.flag+' '+l.name;
+    c.addEventListener('click',function(){_vocabLang=l.id;rerenderVocabPage();});
+    langBar.appendChild(c);
+  });
+  var addL=document.createElement('button');
+  addL.textContent='＋';
+  addL.style.cssText='flex-shrink:0;font-size:13px;font-weight:700;padding:6px 12px;border-radius:15px;border:1px dashed #d8d5cd;background:none;color:#a8a29a;cursor:pointer;';
+  addL.addEventListener('click',_openAddLang);
+  langBar.appendChild(addL);
+  container.appendChild(langBar);
+  // 오늘/복습 토글
+  var vt=document.createElement('div');
+  vt.style.cssText='display:flex;gap:6px;padding:6px 16px 8px;flex-shrink:0;';
+  [['today','오늘 단어'],['review','복습함']].forEach(function(t){
+    var on=_vocabView===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:12px;font-weight:700;padding:8px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_vocabView=t[0];rerenderVocabPage();});
+    vt.appendChild(b);
+  });
+  container.appendChild(vt);
+  // 본문
+  var body=document.createElement('div');
+  body.className='vocab-body';
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  if(_vocabView==='today')_vocabRenderToday(body,lang);
+  else _vocabRenderReview(body,lang);
+  if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
+}
+function _vocabWordCard(word,lang,onChange,i,arr){
+  var card=document.createElement('div');
+  card.style.cssText='display:flex;gap:10px;background:#fff;border:0.5px solid #ececE4;border-radius:12px;padding:12px;margin-bottom:7px;';
+  var chk=document.createElement('button');
+  chk.style.cssText='width:22px;height:22px;border-radius:7px;flex-shrink:0;cursor:pointer;margin-top:2px;'+(word.done?'background:#1a7a4a;border:2px solid #1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;':'background:#fff;border:2px solid #d8d6ce;');
+  chk.innerHTML=word.done?'✓':'';
+  chk.addEventListener('click',function(){word.done=!word.done;if(window._saveState)window._saveState();onChange();});
+  var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
+  info.innerHTML='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+    +'<span style="font-size:15px;font-weight:800;color:'+(word.done?'#9a9a93':'#111')+';'+(word.done?'text-decoration:line-through;':'')+'">'+word.w+'</span>'
+    +(word.pron?'<span style="font-size:10px;color:#3aa0d9;font-weight:500;">'+word.pron+'</span>':'')
+    +'</div>'
+    +(word.mean?'<div style="font-size:11.5px;color:#444;margin-top:3px;font-weight:600;">'+word.mean+'</div>':'')
+    +(word.ex?'<div style="font-size:10px;color:#9a948a;margin-top:5px;line-height:1.5;border-left:2px solid #eee;padding-left:8px;">'+word.ex+(word.exTrans?'<br><span style="color:#b5b1a8;">'+word.exTrans+'</span>':'')+'</div>':'');
+  var side=document.createElement('div');side.style.cssText='display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:center;';
+  var spk=document.createElement('button');
+  spk.innerHTML='🔊';spk.title='발음 듣기';
+  spk.style.cssText='border:none;background:#eef4f8;border-radius:8px;width:30px;height:30px;font-size:14px;cursor:pointer;';
+  spk.addEventListener('click',function(){_speak(word.w,lang.voice);});
+  side.appendChild(spk);
+  if(word.ex){
+    var spkEx=document.createElement('button');
+    spkEx.innerHTML='📢';spkEx.title='예문 듣기';
+    spkEx.style.cssText='border:none;background:#f4f0e8;border-radius:8px;width:30px;height:30px;font-size:12px;cursor:pointer;';
+    spkEx.addEventListener('click',function(){_speak(word.ex,lang.voice);});
+    side.appendChild(spkEx);
+  }
+  var del=document.createElement('button');
+  del.textContent='✕';del.style.cssText='border:none;background:none;color:#ddd;font-size:12px;cursor:pointer;';
+  del.addEventListener('click',function(){arr.splice(i,1);if(window._saveState)window._saveState();onChange();});
+  side.appendChild(del);
+  card.appendChild(chk);card.appendChild(info);card.appendChild(side);
+  return card;
+}
+function _vocabRenderToday(body,lang){
+  var k=_vocabKey();
+  if(!_vocabData.words[lang.id])_vocabData.words[lang.id]={};
+  var words=_vocabData.words[lang.id][k]||[];
+  var doneN=words.filter(function(w){return w.done;}).length;
+  // 진행 요약
+  if(words.length){
+    var sum=document.createElement('div');
+    sum.style.cssText='display:flex;align-items:center;justify-content:space-between;background:#f7f9fc;border:0.5px solid #e3e8f0;border-radius:11px;padding:10px 13px;margin:4px 0 10px;';
+    sum.innerHTML='<span style="font-size:11px;color:#5a6577;font-weight:600;">오늘 '+lang.name+' 단어</span>'
+      +'<span style="font-size:12px;font-weight:800;color:#20304a;">'+doneN+' / '+words.length+' 외움</span>';
+    body.appendChild(sum);
+  }else{
+    body.innerHTML='<div style="text-align:center;padding:28px 0 16px;color:#9a9a93;font-size:12px;">오늘 외울 '+lang.name+' 단어를 추가해보세요<br><span style="font-size:10px;">단어 · 발음 · 뜻 · 예문</span></div>';
+  }
+  words.forEach(function(word,i){
+    body.appendChild(_vocabWordCard(word,lang,rerenderVocabPage,i,words));
+  });
+  // 추가 버튼
+  var addBtn=document.createElement('button');
+  addBtn.innerHTML='＋ 단어 추가';
+  addBtn.style.cssText='width:100%;border:1.5px dashed #cdd5e0;background:none;color:#20304a;font-size:12px;font-weight:700;padding:11px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:4px;';
+  addBtn.addEventListener('click',function(){_openAddWord(lang,k);});
+  body.appendChild(addBtn);
+}
+function _vocabRenderReview(body,lang){
+  if(!_vocabData.words[lang.id])_vocabData.words[lang.id]={};
+  var byDate=_vocabData.words[lang.id];
+  // 외운 단어만 모음
+  var learned=[];
+  Object.keys(byDate).forEach(function(dk){(byDate[dk]||[]).forEach(function(w){if(w.done)learned.push({word:w,dk:dk,arr:byDate[dk],i:byDate[dk].indexOf(w)});});});
+  if(!learned.length){
+    body.innerHTML='<div style="text-align:center;padding:28px 0;color:#9a9a93;font-size:12px;">아직 외운 '+lang.name+' 단어가 없어요<br><span style="font-size:10px;">오늘 단어에서 ✓ 체크하면 여기 쌓여요</span></div>';
+    return;
+  }
+  var hd=document.createElement('div');
+  hd.style.cssText='font-size:11px;color:#5a6577;font-weight:700;margin:4px 2px 10px;';
+  hd.textContent='📚 외운 '+lang.name+' 단어 '+learned.length+'개';
+  body.appendChild(hd);
+  learned.forEach(function(it){
+    body.appendChild(_vocabWordCard(it.word,lang,rerenderVocabPage,it.i,it.arr));
+  });
+}
+// 단어 추가 시트
+function _openAddWord(lang,dateKey){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('vocabAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='vocabAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  function field(label,ph,id){return '<div style="margin-bottom:10px;"><div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:4px;">'+label+'</div><input id="'+id+'" placeholder="'+ph+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:10px 12px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;"></div>';}
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:14px;">'+lang.flag+' '+lang.name+' 단어 추가</div>'
+    +field('단어','예: accomplish','vaWord')
+    +field('발음 (선택)','예: /əˈkɑːmplɪʃ/','vaPron')
+    +field('뜻','예: 완수하다, 성취하다','vaMean')
+    +field('예문 (선택)','예: She accomplished her goal.','vaEx')
+    +field('예문 해석 (선택)','예: 그녀는 목표를 달성했다.','vaExT')
+    +'<button id="vaSave" style="width:100%;border:none;background:#20304a;color:#fff;font-size:13px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:4px;">추가</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  setTimeout(function(){try{document.getElementById('vaWord').focus();}catch(e){}},60);
+  document.getElementById('vaSave').addEventListener('click',function(){
+    var w=document.getElementById('vaWord').value.trim();
+    if(!w){document.getElementById('vaWord').focus();return;}
+    var word={w:w,pron:document.getElementById('vaPron').value.trim(),mean:document.getElementById('vaMean').value.trim(),ex:document.getElementById('vaEx').value.trim(),exTrans:document.getElementById('vaExT').value.trim(),done:false};
+    if(!_vocabData.words[lang.id])_vocabData.words[lang.id]={};
+    if(!_vocabData.words[lang.id][dateKey])_vocabData.words[lang.id][dateKey]=[];
+    _vocabData.words[lang.id][dateKey].push(word);
+    if(window._saveState)window._saveState();
+    wrap.remove();
+    _vocabView='today';rerenderVocabPage();
+    _speak(w,lang.voice);
+  });
+}
+// 언어 추가 시트
+function _openAddLang(){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('langAddSheet');if(old)old.remove();
+  var presets=[{id:'es',name:'스페인어',flag:'🇪🇸',voice:'es-ES'},{id:'fr',name:'프랑스어',flag:'🇫🇷',voice:'fr-FR'},{id:'de',name:'독일어',flag:'🇩🇪',voice:'de-DE'},{id:'it',name:'이탈리아어',flag:'🇮🇹',voice:'it-IT'},{id:'ru',name:'러시아어',flag:'🇷🇺',voice:'ru-RU'},{id:'vi',name:'베트남어',flag:'🇻🇳',voice:'vi-VN'},{id:'th',name:'태국어',flag:'🇹🇭',voice:'th-TH'},{id:'pt',name:'포르투갈어',flag:'🇵🇹',voice:'pt-PT'}];
+  var avail=presets.filter(function(p){return !_vocabData.langs.some(function(l){return l.id===p.id;});});
+  var wrap=document.createElement('div');wrap.id='langAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var chips=avail.map(function(p){return '<button class="lang-preset" data-id="'+p.id+'" style="font-size:12px;font-weight:600;padding:9px 14px;border-radius:12px;border:1px solid #e6e2d8;background:#fff;color:#444;cursor:pointer;font-family:inherit;">'+p.flag+' '+p.name+'</button>';}).join('');
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:14px;">언어 추가</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;">'+(chips||'<span style="font-size:11px;color:#9a948a;">추가할 언어가 다 있어요</span>')+'</div>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.lang-preset').forEach(function(b){
+    b.addEventListener('click',function(){
+      var p=presets.find(function(x){return x.id===b.getAttribute('data-id');});
+      if(p){_vocabData.langs.push(p);_vocabLang=p.id;if(window._saveState)window._saveState();wrap.remove();rerenderVocabPage();}
+    });
+  });
+}
+
 function renderInsightPage(container){
   if(!container)return;
   container.innerHTML='';
@@ -6663,6 +7033,7 @@ function setHomePage(p){
   if(p===7){try{renderGoalPage(document.getElementById('goalPage'));}catch(e){}}
   if(p===8){try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}}
   if(p===9){try{renderHealthPage(document.getElementById('healthPage'));}catch(e){}}
+  if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -6684,6 +7055,7 @@ function buildHomeSlider(){
     {id:'tab-goal',     name:'목표'},
     {id:'tab-insight',  name:'인사이트'},
     {id:'tab-health',   name:'건강'},
+    {id:'tab-vocab',    name:'단어장'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -6762,6 +7134,12 @@ function buildHomeSlider(){
   healthPage.id='healthPage';
   renderHealthPage(healthPage);
   slider.appendChild(healthPage);
+
+  var vocabPage=document.createElement('div');
+  vocabPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  vocabPage.id='vocabPage';
+  renderVocabPage(vocabPage);
+  slider.appendChild(vocabPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -8990,6 +9368,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       catRenames:_baseCatRenames,
       shop:_shopItems,
       health:_healthData,
+      vocab:_vocabData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -9023,6 +9402,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.catRenames){Object.keys(_baseCatRenames).forEach(function(k){delete _baseCatRenames[k];});Object.assign(_baseCatRenames,d.catRenames);}
       if(d.shop&&Array.isArray(d.shop)){_shopItems.length=0;d.shop.forEach(function(s){_shopItems.push(s);});}
       if(d.health&&typeof d.health==='object'){_healthData.workouts=d.health.workouts||{};_healthData.meals=d.health.meals||{};_healthData.water=d.health.water||{};}
+      if(d.vocab&&typeof d.vocab==='object'){if(Array.isArray(d.vocab.langs)&&d.vocab.langs.length)_vocabData.langs=d.vocab.langs;_vocabData.words=d.vocab.words||{};}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -9038,7 +9418,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
