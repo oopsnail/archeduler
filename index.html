@@ -1672,6 +1672,7 @@ function _dayItems(y,m,d){
   if(_recordMode){
     var logs=_dailyLogs[k]||[];
     logs.forEach(function(lg){
+      if(lg.budget)return; // 가계부 전용 기록은 기록 화면에 안 뜨게
       items.push({name:(lg.text||'기록'),color:'#a08b52',kind:'record',done:false,isLog:true});
     });
     // 완료된 일정도 '한 일'이므로 기록 모드에 포함
@@ -2117,7 +2118,7 @@ function renderEvs(){
   document.getElementById('evLbl').textContent=isT?'오늘':`${selectedMonth+1}월 ${selectedDay}일`;
   const rows=document.getElementById('evRows');
   rows.innerHTML='';
-  var dayLogs=_recordMode?(_dailyLogs[k]||[]):[];
+  var dayLogs=_recordMode?((_dailyLogs[k]||[]).filter(function(lg){return !lg.budget;})):[];
   if(!evs.length&&!dayLogs.length){const noev=document.createElement('div');noev.className='noev';noev.textContent=_recordMode?'기록 없음':'일정 없음';rows.appendChild(noev);return;}
   evs.forEach(e=>{
     const wrap=document.createElement('div');
@@ -2817,7 +2818,7 @@ function _dayRecapData(y,m,d){
   var evs=(events[k]||[]).filter(function(e){return e.type!=='budget';});
   var done=evs.filter(function(e){return e.done;});
   var miss=evs.filter(function(e){return !e.done;});
-  var logs=_dailyLogs[k]||[];
+  var logs=(_dailyLogs[k]||[]).filter(function(lg){return !lg.budget;});
   return {evs:evs,done:done,miss:miss,logs:logs,total:evs.length};
 }
 function renderDayRecap(container,y,m,d){
@@ -2860,7 +2861,7 @@ function _reportData(y,m,d){
   var evs=(events[k]||[]).filter(function(e){return e.type!=='budget';});
   var done=evs.filter(function(e){return e.done;});
   var miss=evs.filter(function(e){return !e.done;});
-  var logs=_dailyLogs[k]||[];
+  var logs=(_dailyLogs[k]||[]).filter(function(lg){return !lg.budget;});
   // 가계부: 그날 지출/수입 합
   var inc=0,exp=0;
   try{
@@ -2888,7 +2889,7 @@ var _WKN=['일','월','화','수','목','금','토'];
 function _reportDays(){
   var set={};
   Object.keys(events||{}).forEach(function(k){if((events[k]||[]).some(function(e){return e.type!=='budget';}))set[k]=true;});
-  Object.keys(_dailyLogs||{}).forEach(function(k){if((_dailyLogs[k]||[]).length)set[k]=true;});
+  Object.keys(_dailyLogs||{}).forEach(function(k){if((_dailyLogs[k]||[]).some(function(lg){return !lg.budget;}))set[k]=true;});
   try{if(typeof getBudgetData==='function'){(getBudgetData().list||[]).forEach(function(it){if(it.date)set[it.date]=true;});}}catch(e){}
   var today=new Date();today.setHours(0,0,0,0);
   return Object.keys(set).map(function(k){var p=k.split('-').map(Number);return {k:k,y:p[0],m:p[1]-1,d:p[2]};})
@@ -3162,6 +3163,8 @@ function _healthStreak(){
 }
 function renderHealthPage(container){
   if(!container)return;
+  var _prevBodyEl=container.querySelector('.health-body');
+  var _prevScroll=_prevBodyEl?_prevBodyEl.scrollTop:0;
   var k=_healthKey();
   var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();
   var WKF=['일','월','화','수','목','금','토'];
@@ -3202,13 +3205,15 @@ function renderHealthPage(container){
   });
   container.appendChild(st);
 
-  // 본문
+  // 본문 (재렌더 시 스크롤 위치 유지)
   var body=document.createElement('div');
-  body.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
+  body.className='health-body';
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 24px;-webkit-overflow-scrolling:touch;';
   container.appendChild(body);
 
   if(_healthTab==='workout'){_healthRenderWorkout(body,k);}
   else{_healthRenderDiet(body,k,water,WATER_GOAL);}
+  if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
 }
 function _healthRenderWorkout(body,k){
   var workouts=_healthData.workouts[k]||[];
@@ -4170,13 +4175,13 @@ function _logEndTime(t,dur){
   var h=Math.floor(tot/60),m=tot%60;
   return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
 }
-function addLog(text,dateKey){
+function addLog(text,dateKey,isBudget){
   var k=dateKey||getTodayLogKey();
   if(!_dailyLogs[k])_dailyLogs[k]=[];
   var now=new Date();
   var h=now.getHours(),m=now.getMinutes();
   var timeStr=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
-  _dailyLogs[k].push({text:_logStripDur(text),time:timeStr,emoji:guessEmoji(text),dur:_logDuration(text)});
+  _dailyLogs[k].push({text:_logStripDur(text),time:timeStr,emoji:guessEmoji(text),dur:_logDuration(text),budget:!!isBudget});
 
   // 목표 자동 카운트 (기록 → 목표 연동)
   try{_goalAutoTick(text);}catch(e){}
@@ -4197,7 +4202,7 @@ function renderLogPage(container){
   var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();
   var mo=now.getMonth()+1;
   var k=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
-  var logs=_dailyLogs[k]||[];
+  var logs=(_dailyLogs[k]||[]).filter(function(lg){return !lg.budget;});
 
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
@@ -6349,7 +6354,7 @@ function _budgetInputBar(container){
     if(r.income===0&&r.expense===0){showToast('금액을 함께 적어주세요 (예: 점심 12000원)','del','ti-x');return;}
     var n=_budgetInputDate||new Date();
     var vk=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
-    addLog(txt,vk);
+    addLog(txt,vk,true);
     _budgetWeekSel=null;
     renderBudgetPage(container);
     var bi2=document.getElementById('budgetInput');if(bi2)bi2.focus();
@@ -6602,7 +6607,7 @@ function renderBudgetPage(container){
     }
     var n=_budgetInputDate||new Date();
     var vk=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
-    addLog(txt,vk);
+    addLog(txt,vk,true);
     _budgetWeekSel=null;
     renderBudgetPage(container);
     var bi2=document.getElementById('budgetInput');
