@@ -913,6 +913,7 @@
     </div>
     <div id="healthFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#fbfaf7;flex-direction:column;"></div>
     <div id="indexFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f0ebe1;flex-direction:column;"></div>
+    <div id="mindFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f0ebe1;flex-direction:column;"></div>
     <div class="dock-bar" id="dockBar">
       <button class="dock-btn" id="dockToday" aria-label="일정">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
@@ -3259,6 +3260,81 @@ var _idxCross=null; // 교집합 보기 (null 또는 {a,b})
 var _idxCompareOpen=false; // 나란히 비교 화면
 var _idxCmpInsight=''; // 나란히 비교 통찰 텍스트 (재렌더 보존용)
 var _IDX_COLORS=['#378ADD','#639922','#D85A30','#534AB7','#1D9E75','#D4537E','#BA7517','#888780'];
+// 마인드: 마음을 챙기는 공간 (기분·버킷리스트·명상)
+var _mindData={moods:{},bucket:[],meditations:[]};
+// moods: {dateKey:{mood:'happy'|'calm'|'meh'|'down'|'hard', note:''}}
+// bucket: [{id,text,cat,done,doneDate}]
+// meditations: [dateKey,...] (명상 완료한 날)
+var _mindTab='mood'; // 'mood'|'bucket'|'meditate'
+var _MOODS=[
+  {id:'happy',label:'기쁨'},
+  {id:'excited',label:'신남'},
+  {id:'wonderful',label:'설렘'},
+  {id:'joyful',label:'즐거움'},
+  {id:'love',label:'사랑'},
+  {id:'calm',label:'평온'},
+  {id:'blessed',label:'감사'},
+  {id:'confident',label:'뿌듯'},
+  {id:'cool',label:'여유'},
+  {id:'refreshed',label:'상쾌'},
+  {id:'wonder',label:'궁금'},
+  {id:'inspired',label:'영감'},
+  {id:'meh',label:'그저그럼'},
+  {id:'bored',label:'지루'},
+  {id:'tired',label:'피곤'},
+  {id:'sleepy',label:'졸림'},
+  {id:'worried',label:'걱정'},
+  {id:'anxious',label:'불안'},
+  {id:'down',label:'지침'},
+  {id:'sad',label:'슬픔'},
+  {id:'hurt',label:'상처'},
+  {id:'angry',label:'화남'},
+  {id:'ill',label:'아픔'},
+  {id:'hard',label:'힘듦'}
+];
+// 라인 아이콘 감정 표정 (색 없음, 원 테두리 + 표정선)
+function _moodFaceSVG(id,size){
+  var s=size||46;var INK='#3a352c';
+  var P={
+    happy:'<path d="M15 19 q2 -2.5 4 0" /><path d="M27 19 q2 -2.5 4 0" /><path d="M15 27 q8 7 16 0" />',
+    excited:'<circle cx="17" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><ellipse cx="23" cy="29" rx="4" ry="5"/>',
+    wonderful:'<path d="M13 18 q3 -3 6 0" /><path d="M27 18 q3 -3 6 0" /><path d="M15 26 q8 8 16 0" />',
+    joyful:'<path d="M14 19 q2.5 -3 5 0" /><path d="M27 19 q2.5 -3 5 0" /><path d="M15 27 q8 6 16 0" /><circle cx="14" cy="26" r="1.6" fill="'+INK+'" stroke="none" opacity="0.5"/><circle cx="32" cy="26" r="1.6" fill="'+INK+'" stroke="none" opacity="0.5"/>',
+    love:'<path d="M13 19 q2 -3 4 0 q2 -3 4 0 q0 3 -4 5.5 q-4 -2.5 -4 -5.5" fill="'+INK+'" stroke="none"/><path d="M25 19 q2 -3 4 0 q2 -3 4 0 q0 3 -4 5.5 q-4 -2.5 -4 -5.5" fill="'+INK+'" stroke="none"/><path d="M17 28 q6 5 12 0" />',
+    calm:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M17 28 q6 4 12 0" />',
+    blessed:'<path d="M14 21 q2.5 -2 5 0" /><path d="M27 21 q2.5 -2 5 0" /><path d="M17 28 q6 4 12 0" /><path d="M15 12 q8 -3 16 0" opacity="0.6"/>',
+    confident:'<path d="M14 19 q2.5 -2 5 0" /><path d="M27 19 q2.5 -2 5 0" /><path d="M16 27 q7 4 14 0" /><path d="M16 27 l0 2" opacity="0.4"/>',
+    cool:'<rect x="12" y="17" width="8" height="5" rx="2"/><rect x="26" y="17" width="8" height="5" rx="2"/><line x1="20" y1="19" x2="26" y2="19"/><path d="M17 29 h12" stroke-linecap="round"/>',
+    refreshed:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M17 27 q6 5 12 0" /><path d="M23 9 v3 M18 10 l1.5 2.5 M28 10 l-1.5 2.5" opacity="0.5"/>',
+    wonder:'<circle cx="17" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><circle cx="23" cy="29" r="2.5"/>',
+    inspired:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M17 27 q6 4 12 0" /><circle cx="31" cy="11" r="2.5" opacity="0.6"/><line x1="31" y1="13.5" x2="31" y2="15" opacity="0.6"/>',
+    meh:'<circle cx="17" cy="20" r="1.4" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.4" fill="'+INK+'" stroke="none"/><line x1="16" y1="28" x2="30" y2="28" stroke-linecap="round"/>',
+    bored:'<path d="M14 20 h5" stroke-linecap="round"/><path d="M27 20 h5" stroke-linecap="round"/><line x1="17" y1="29" x2="29" y2="29" stroke-linecap="round"/>',
+    tired:'<path d="M14 21 h5" stroke-linecap="round"/><path d="M27 21 h5" stroke-linecap="round"/><circle cx="23" cy="30" r="2.5"/>',
+    sleepy:'<path d="M14 21 q2.5 2 5 0" /><path d="M27 21 q2.5 2 5 0" /><path d="M20 29 h6" stroke-linecap="round"/><path d="M30 13 h4 l-4 4 h4" stroke-width="1.2" opacity="0.6"/>',
+    worried:'<path d="M14 18 q2.5 -1.5 5 0" /><path d="M27 18 q2.5 -1.5 5 0" /><circle cx="17" cy="22" r="1.3" fill="'+INK+'" stroke="none"/><circle cx="29" cy="22" r="1.3" fill="'+INK+'" stroke="none"/><path d="M17 30 q6 -3 12 0" />',
+    anxious:'<path d="M14 19 l5 2" stroke-linecap="round"/><path d="M32 19 l-5 2" stroke-linecap="round"/><path d="M16 29 q3 -3 6.5 0 q3.5 3 6.5 0" />',
+    down:'<path d="M14 22 q2.5 2 5 0" /><path d="M27 22 q2.5 2 5 0" /><path d="M17 30 q6 -4 12 0" />',
+    sad:'<circle cx="17" cy="20" r="1.4" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.4" fill="'+INK+'" stroke="none"/><path d="M17 30 q6 -5 12 0" /><path d="M17 23 q-1 3 0 5" opacity="0.5"/>',
+    hurt:'<path d="M14 19 l5 3 l-5 0" stroke-linejoin="round"/><path d="M32 19 l-5 3 l5 0" stroke-linejoin="round"/><path d="M17 30 q6 -4 12 0" /><path d="M22 26 l2 2 l-2 2" opacity="0.5"/>',
+    angry:'<path d="M14 17 l6 3" stroke-linecap="round"/><path d="M32 17 l-6 3" stroke-linecap="round"/><circle cx="18" cy="23" r="1.3" fill="'+INK+'" stroke="none"/><circle cx="28" cy="23" r="1.3" fill="'+INK+'" stroke="none"/><path d="M16 31 q7 -5 14 0" />',
+    ill:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M16 29 q3 2 6 0 q3 -2 6 0" /><path d="M31 20 q2 3 0 5" opacity="0.5"/>',
+    hard:'<path d="M14 18 l5 3" stroke-linecap="round"/><path d="M32 18 l-5 3" stroke-linecap="round"/><path d="M16 29 q3 3 6.5 0 q3.5 -3 6.5 0" />'
+  };
+  var parts=P[id]||P.meh;
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 46 46" fill="none" stroke="'+INK+'" stroke-width="1.6" stroke-linecap="round"><circle cx="23" cy="23" r="20"/>'+parts+'</svg>';
+}
+var _BUCKET_CATS=[['travel','✈️','여행'],['learn','📚','배움'],['exp','🌟','경험'],['etc','🌱','기타']];
+var _MIND_QUOTES=[
+  '지금 이 순간, 당신은 충분히 잘하고 있어요',
+  '숨을 고르는 것만으로도 괜찮아져요',
+  '완벽하지 않아도 괜찮아요',
+  '오늘의 나를 조금 더 아껴주세요',
+  '쉬어가는 것도 앞으로 나아가는 일이에요',
+  '마음이 무거울 땐 잠시 멈춰도 돼요',
+  '작은 평온이 하루를 바꿔요',
+  '나에게 친절한 하루가 되기를'
+];
 function _healthKey(){var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();}
 function _healthStreak(){
   // 오늘 기준 과거로 연속 운동한 날 수 (운동 1개라도 완료된 날)
@@ -5198,6 +5274,392 @@ function _openConnectSheet(preSel){
     if(window._saveState)window._saveState();wrap.remove();_idxView='index';rerenderIndexPage();
     showToast('연결을 저장했어요 ✦','add','ti-check');
   });
+}
+
+// ===== 마인드 (마음 챙기기) =====
+function _mindContainer(){
+  var f=document.getElementById('mindFull');
+  if(f&&f.style.display!=='none'){var inner=document.getElementById('mindFullInner');if(inner)return inner;}
+  return document.getElementById('mindPage');
+}
+function rerenderMindPage(){var el=_mindContainer();if(el)renderMindPage(el);}
+function openMindFull(){
+  var f=document.getElementById('mindFull');if(!f)return;
+  f.style.display='flex';f.innerHTML='';
+  var inner=document.createElement('div');inner.id='mindFullInner';inner.style.cssText='flex:1;min-height:0;display:flex;flex-direction:column;';
+  f.appendChild(inner);renderMindPage(inner);
+}
+function closeMindFull(){
+  var f=document.getElementById('mindFull');
+  if(f){f.style.display='none';f.innerHTML='';}
+  try{if(_homePage===14)setHomePage(0);}catch(e){}
+}
+function _mindKey(dt){var d=dt||new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function _moodById(id){return _MOODS.find(function(m){return m.id===id;});}
+function renderMindPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;background:#f0ebe1;';
+  var fullOpen=document.getElementById('mindFull')&&document.getElementById('mindFull').style.display!=='none';
+  // 헤더 + 서브탭
+  var top=document.createElement('div');top.style.cssText='padding:18px 17px 0;flex-shrink:0;';
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:16px;';
+  if(fullOpen){
+    var closeB=document.createElement('div');
+    closeB.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+    closeB.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+    closeB.addEventListener('click',function(){closeMindFull();});
+    head.appendChild(closeB);
+  }
+  var htxt=document.createElement('div');htxt.style.cssText='flex:1;';
+  htxt.innerHTML='<div style="font-size:22px;color:#2d2920;letter-spacing:-0.02em;font-weight:800;">마인드</div><div style="font-size:11px;color:#a89e8c;margin-top:1px;">마음을 돌보는 시간</div>';
+  head.appendChild(htxt);
+  top.appendChild(head);
+  // 서브탭
+  var seg=document.createElement('div');seg.style.cssText='display:flex;gap:5px;background:#e5ded0;border-radius:13px;padding:4px;margin-bottom:4px;';
+  [['mood','🌤 기분'],['bucket','✨ 버킷'],['meditate','🧘 명상']].forEach(function(t){
+    var on=_mindTab===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:12px;font-weight:700;padding:9px 4px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fbf9f4;color:#2d2920;':'background:none;color:#8a8474;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_mindTab=t[0];renderMindPage(container);});
+    seg.appendChild(b);
+  });
+  top.appendChild(seg);
+  container.appendChild(top);
+  // 본문
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  if(_mindTab==='mood')_mindRenderMood(body);
+  else if(_mindTab==='bucket')_mindRenderBucket(body);
+  else _mindRenderMeditate(body);
+}
+// ---- 오늘의 기분 ----
+function _mindRenderMood(body){
+  var todayKey=_mindKey();
+  var today=_mindData.moods[todayKey];
+  // 오늘 기분 고르기 카드
+  var card=document.createElement('div');
+  card.style.cssText='background:#fbf9f4;border-radius:20px;padding:18px;margin-bottom:14px;';
+  card.innerHTML='<div style="font-size:14px;color:#2d2920;font-weight:700;margin-bottom:3px;">오늘 마음은 어때요?</div><div style="font-size:11px;color:#a89e8c;margin-bottom:14px;">지금 느끼는 감정을 골라보세요</div>';
+  // 파친코 슬롯 + 레버 (한 박스 안, 돌아가는 애니메이션)
+  if(typeof window._moodPage!=='number')window._moodPage=0;
+  var PER=4;var totalPages=Math.ceil(_MOODS.length/PER);
+  if(window._moodPage>=totalPages)window._moodPage=0;
+
+  // 슬롯 박스 (이모지 4개 + 레버 한 칸)
+  var box=document.createElement('div');
+  box.style.cssText='background:#f4efe6;border-radius:16px;padding:12px 8px;display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;';
+  // 릴 창 (돌아가는 부분)
+  var reelWin=document.createElement('div');
+  reelWin.style.cssText='flex:1;min-width:0;position:relative;height:62px;overflow:hidden;';
+  var reelInner=document.createElement('div');
+  reelInner.className='moodSlots';
+  reelInner.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:2px;transition:none;';
+  function slotCellHTML(m){
+    var on=today&&today.mood===m.id;
+    return '<div class="mood-cell" data-mid="'+m.id+'" style="text-align:center;padding:4px 0;border-radius:11px;cursor:pointer;min-width:0;overflow:hidden;height:54px;box-sizing:border-box;'+(on?'background:#efe7d6;':'')+'"><div style="display:flex;justify-content:center;'+(on?'transform:scale(1.05);':'')+'">'+_moodFaceSVG(m.id,38)+'</div><div style="font-size:8.5px;color:'+(on?'#2d2920':'#8a8474')+';margin-top:3px;font-weight:'+(on?'700':'400')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+m.label+'</div></div>';
+  }
+  function paintReel(page){
+    var start=page*PER;var pageMoods=_MOODS.slice(start,start+PER);
+    reelInner.innerHTML=pageMoods.map(slotCellHTML).join('');
+    bindCells();
+  }
+  function bindCells(){
+    reelInner.querySelectorAll('.mood-cell').forEach(function(c){
+      c.addEventListener('click',function(){
+        var mid=c.getAttribute('data-mid');
+        if(!_mindData.moods[todayKey])_mindData.moods[todayKey]={};
+        _mindData.moods[todayKey].mood=mid;
+        if(window._saveState)window._saveState();rerenderMindPage();
+      });
+    });
+  }
+  paintReel(window._moodPage);
+  reelWin.appendChild(reelInner);
+  box.appendChild(reelWin);
+  // 레버 (같은 박스 안)
+  var leverBox=document.createElement('div');
+  leverBox.style.cssText='width:22px;height:52px;flex-shrink:0;position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;border-left:1px solid #e5ddcd;padding-left:4px;';
+  var track=document.createElement('div');track.style.cssText='position:absolute;left:calc(50% + 2px);transform:translateX(-50%);top:5px;bottom:4px;width:3.5px;border-radius:2px;background:#cfc6b4;';
+  var knob=document.createElement('div');knob.className='leverKnob';knob.style.cssText='position:absolute;left:calc(50% + 2px);transform:translateX(-50%);top:0;width:16px;height:16px;border-radius:50%;background:#e05a4a;box-shadow:0 2px 4px rgba(0,0,0,0.25);transition:top 0.14s ease;';
+  var base=document.createElement('div');base.style.cssText='width:12px;height:5px;border-radius:2px;background:#b0a690;margin-left:4px;';
+  leverBox.appendChild(track);leverBox.appendChild(knob);leverBox.appendChild(base);
+
+  var spinning=false;
+  function pullLever(){
+    if(spinning)return;spinning=true;
+    knob.style.top='28px';setTimeout(function(){knob.style.top='0';},180);
+    if(navigator.vibrate)try{navigator.vibrate(12);}catch(e){}
+    var target=(window._moodPage+1)%totalPages;
+    // 돌아가는 과정: 여러 페이지를 빠르게 스쳐 지나가며 target에서 멈춤
+    var steps=totalPages+ (target - window._moodPage + totalPages)%totalPages; // 최소 한 바퀴 느낌
+    if(steps<5)steps+=totalPages; // 충분히 돌게
+    var cur=window._moodPage;var count=0;
+    var delay=45;
+    function tick(){
+      cur=(cur+1)%totalPages;count++;
+      // 스쳐가는 페이지: 위로 살짝 슬라이드하며 교체
+      reelInner.style.transition='transform 0.04s linear';
+      reelInner.style.transform='translateY(-8px)';
+      setTimeout(function(){
+        paintReel(cur);
+        reelInner.style.transition='none';
+        reelInner.style.transform='translateY(8px)';
+        requestAnimationFrame(function(){
+          reelInner.style.transition='transform 0.06s ease-out';
+          reelInner.style.transform='translateY(0)';
+        });
+      },40);
+      if(count>=steps || cur===target && count>=totalPages){
+        // 멈춤
+        setTimeout(function(){
+          window._moodPage=target;
+          paintReel(target);
+          reelInner.style.transition='none';reelInner.style.transform='translateY(0)';
+          updatePageLabel();
+          spinning=false;
+        },delay+40);
+        return;
+      }
+      // 점점 느려지게
+      if(count>steps-4)delay+=35;
+      setTimeout(tick,delay);
+    }
+    tick();
+  }
+  leverBox.addEventListener('click',pullLever);
+  box.appendChild(leverBox);
+  card.appendChild(box);
+  // 페이지 라벨
+  var pageLabel=document.createElement('div');pageLabel.style.cssText='text-align:center;font-size:10px;color:#b0a690;margin-top:12px;';
+  function updatePageLabel(){var s=window._moodPage*PER+1;var e=Math.min(window._moodPage*PER+PER,_MOODS.length);pageLabel.textContent=s+'–'+e+' / '+_MOODS.length+' · 레버를 당겨 감정 굴리기';}
+  updatePageLabel();
+  card.appendChild(pageLabel);
+  // 위아래 스와이프로도 당김
+  var sy=null;
+  reelWin.addEventListener('touchstart',function(ev){sy=ev.touches[0].clientY;},{passive:true});
+  reelWin.addEventListener('touchmove',function(ev){if(sy===null||spinning)return;var dy=ev.touches[0].clientY-sy;if(Math.abs(dy)>35){pullLever();sy=null;}},{passive:true});
+  reelWin.addEventListener('touchend',function(){sy=null;});
+  // 한 줄 메모 (기분 골랐을 때)
+  if(today&&today.mood){
+    var noteWrap=document.createElement('div');noteWrap.style.cssText='margin-top:14px;';
+    var ta=document.createElement('textarea');ta.rows=2;ta.placeholder='한 줄 남기기 (선택)';ta.value=today.note||'';
+    ta.style.cssText='width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:11px;font-size:12px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;';
+    ta.addEventListener('change',function(){_mindData.moods[todayKey].note=ta.value;if(window._saveState)window._saveState();});
+    noteWrap.appendChild(ta);
+    card.appendChild(noteWrap);
+  }
+  body.appendChild(card);
+  // 주간 기분 통계
+  var days=[];var base=new Date();base.setHours(0,0,0,0);
+  for(var i=6;i>=0;i--){var d=new Date(base.getTime()-i*86400000);days.push(d);}
+  var moodCount={};var total=0;
+  days.forEach(function(d){var e=_mindData.moods[_mindKey(d)];if(e&&e.mood){moodCount[e.mood]=(moodCount[e.mood]||0)+1;total++;}});
+  var statCard=document.createElement('div');
+  statCard.style.cssText='background:#fbf9f4;border-radius:20px;padding:18px;margin-bottom:14px;';
+  if(total===0){
+    statCard.innerHTML='<div style="font-size:13px;color:#a89e8c;text-align:center;padding:10px 0;">이번 주 기분을 기록하면<br>여기 통계가 보여요</div>';
+  }else{
+    var DOW=['일','월','화','수','목','금','토'];
+    var bars=days.map(function(d){
+      var e=_mindData.moods[_mindKey(d)];var m=e&&e.mood?_moodById(e.mood):null;
+      var isToday=_mindKey(d)===todayKey;
+      return '<div style="flex:1;text-align:center;"><div style="height:60px;display:flex;align-items:flex-end;justify-content:center;"><div style="width:20px;height:'+(m?'54px':'8px')+';border-radius:7px;background:'+(m?'#d8b878':'#e5ded0')+';"></div></div><div style="margin-top:5px;display:flex;justify-content:center;height:20px;align-items:center;">'+(m?_moodFaceSVG(m.id,20):'<span style="color:#c9c0ae;">·</span>')+'</div><div style="font-size:9px;color:'+(isToday?'#2d2920':'#b0a690')+';font-weight:'+(isToday?'700':'400')+';margin-top:2px;">'+DOW[d.getDay()]+'</div></div>';
+    }).join('');
+    statCard.innerHTML='<div style="font-size:14px;color:#2d2920;font-weight:700;margin-bottom:14px;">이번 주 마음 흐름</div><div style="display:flex;gap:4px;">'+bars+'</div>';
+  }
+  body.appendChild(statCard);
+  // 최근 기록
+  var recentKeys=Object.keys(_mindData.moods).filter(function(k){return _mindData.moods[k].mood;}).sort().reverse().slice(0,7);
+  if(recentKeys.length){
+    var hd=document.createElement('div');hd.style.cssText='font-size:13px;color:#6b6455;font-weight:700;margin:4px 2px 10px;';hd.textContent='기록';
+    body.appendChild(hd);
+    recentKeys.forEach(function(k){
+      var e=_mindData.moods[k];var m=_moodById(e.mood);if(!m)return;
+      var pp=k.split('-');
+      var r=document.createElement('div');
+      r.style.cssText='display:flex;align-items:center;gap:11px;background:#fbf9f4;border-radius:14px;padding:12px 14px;margin-bottom:7px;';
+      r.innerHTML='<span style="display:flex;">'+_moodFaceSVG(m.id,30)+'</span>'
+        +'<div style="flex:1;min-width:0;"><div style="font-size:12px;color:#2d2920;font-weight:600;">'+m.label+'</div>'+(e.note?'<div style="font-size:11px;color:#a89e8c;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.note+'</div>':'')+'</div>'
+        +'<span style="font-size:10px;color:#b0a690;">'+(pp[1])+'.'+(pp[2])+'</span>';
+      body.appendChild(r);
+    });
+  }
+}
+// ---- 버킷리스트 ----
+function _mindRenderBucket(body){
+  var items=_mindData.bucket||[];
+  var todo=items.filter(function(b){return !b.done;});
+  var done=items.filter(function(b){return b.done;});
+  // 진행률
+  if(items.length){
+    var prog=document.createElement('div');
+    prog.style.cssText='background:#fbf9f4;border-radius:20px;padding:18px;margin-bottom:14px;';
+    var pct=Math.round(done.length/items.length*100);
+    prog.innerHTML='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;"><span style="font-size:14px;color:#2d2920;font-weight:700;">이룬 꿈 '+done.length+'개</span><span style="font-size:12px;color:#a89e8c;">'+pct+'%</span></div>'
+      +'<div style="height:8px;background:#e5ded0;border-radius:5px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:#e5a63a;border-radius:5px;"></div></div>';
+    body.appendChild(prog);
+  }
+  // 추가 버튼
+  var addBtn=document.createElement('div');
+  addBtn.style.cssText='background:#2d2920;border-radius:15px;padding:14px;text-align:center;font-size:13px;color:#f4efe4;cursor:pointer;font-weight:700;margin-bottom:16px;';
+  addBtn.textContent='＋ 하고 싶은 것 추가';
+  addBtn.addEventListener('click',function(){_openAddBucket();});
+  body.appendChild(addBtn);
+  // 할 일(미완료)
+  if(!items.length){
+    var emp=document.createElement('div');emp.style.cssText='text-align:center;color:#b0a690;font-size:12px;padding:14px 0;';emp.innerHTML='해보고 싶은 것을 적어보세요<br>여행, 배움, 경험 무엇이든';body.appendChild(emp);
+  }
+  todo.forEach(function(b){body.appendChild(_bucketRow(b));});
+  // 이룬 것
+  if(done.length){
+    var hd=document.createElement('div');hd.style.cssText='font-size:12px;color:#a89e8c;font-weight:700;margin:16px 2px 10px;';hd.textContent='🎉 이룬 것들';
+    body.appendChild(hd);
+    done.forEach(function(b){body.appendChild(_bucketRow(b));});
+  }
+}
+function _bucketRow(b){
+  var cat=_BUCKET_CATS.find(function(c){return c[0]===b.cat;})||_BUCKET_CATS[3];
+  var r=document.createElement('div');
+  r.style.cssText='display:flex;align-items:center;gap:11px;background:#fbf9f4;border-radius:14px;padding:13px 14px;margin-bottom:7px;'+(b.done?'opacity:0.62;':'');
+  var chk=document.createElement('div');
+  chk.style.cssText='width:22px;height:22px;border-radius:50%;flex-shrink:0;cursor:pointer;box-sizing:border-box;'+(b.done?'background:#e5a63a;':'border:2px solid #d8d2c4;')+'display:flex;align-items:center;justify-content:center;';
+  chk.innerHTML=b.done?'<span style="color:#fff;font-size:12px;">✓</span>':'';
+  chk.addEventListener('click',function(){b.done=!b.done;b.doneDate=b.done?_mindKey():null;if(window._saveState)window._saveState();rerenderMindPage();});
+  var txt=document.createElement('div');txt.style.cssText='flex:1;min-width:0;';
+  txt.innerHTML='<div style="font-size:13px;color:#2d2920;'+(b.done?'text-decoration:line-through;color:#a89e8c;':'')+'">'+b.text+'</div><div style="font-size:10px;color:#b0a690;margin-top:2px;">'+cat[1]+' '+cat[2]+'</div>';
+  txt.style.cursor='pointer';
+  txt.addEventListener('click',function(){_openAddBucket(b);});
+  r.appendChild(chk);r.appendChild(txt);
+  return r;
+}
+function _openAddBucket(edit){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('bucketSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='bucketSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var curCat=edit?edit.cat:'travel';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:14px;">'+(edit?'수정':'하고 싶은 것')+'</div>'
+    +'<input id="bkText" placeholder="예: 오로라 보러 가기" value="'+(edit?edit.text.replace(/"/g,'&quot;'):'')+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px;background:#fff;">'
+    +'<div style="font-size:10px;color:#a89e8c;font-weight:600;margin-bottom:7px;">분류</div>'
+    +'<div id="bkCatRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">'+_BUCKET_CATS.map(function(c){var on=c[0]===curCat;return '<button class="bk-cat" data-c="'+c[0]+'" style="font-size:12px;font-weight:600;padding:8px 13px;border-radius:14px;border:1px solid '+(on?'#e5a63a':'#e2dccf')+';background:'+(on?'#faf0dc':'#fff')+';color:'+(on?'#7a5c12':'#8a8474')+';cursor:pointer;font-family:inherit;">'+c[1]+' '+c[2]+'</button>';}).join('')+'</div>'
+    +'<button id="bkSave" style="width:100%;border:none;background:#2d2920;color:#f4efe4;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'추가')+'</button>'
+    +(edit?'<button id="bkDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var selCat=curCat;
+  sheet.querySelectorAll('.bk-cat').forEach(function(b){b.addEventListener('click',function(){selCat=b.getAttribute('data-c');sheet.querySelectorAll('.bk-cat').forEach(function(x){x.style.border='1px solid #e2dccf';x.style.background='#fff';x.style.color='#8a8474';});b.style.border='1px solid #e5a63a';b.style.background='#faf0dc';b.style.color='#7a5c12';});});
+  setTimeout(function(){try{sheet.querySelector('#bkText').focus();}catch(e){}},60);
+  sheet.querySelector('#bkSave').addEventListener('click',function(){
+    var t=sheet.querySelector('#bkText').value.trim();if(!t){sheet.querySelector('#bkText').focus();return;}
+    if(edit){edit.text=t;edit.cat=selCat;}
+    else{if(!_mindData.bucket)_mindData.bucket=[];_mindData.bucket.push({id:'bk'+Date.now(),text:t,cat:selCat,done:false});}
+    if(window._saveState)window._saveState();wrap.remove();rerenderMindPage();
+  });
+  if(edit){sheet.querySelector('#bkDel').addEventListener('click',function(){_mindData.bucket=_mindData.bucket.filter(function(x){return x.id!==edit.id;});if(window._saveState)window._saveState();wrap.remove();rerenderMindPage();});}
+}
+// ---- 명상 ----
+function _mindRenderMeditate(body){
+  var todayKey=_mindKey();
+  var doneToday=(_mindData.meditations||[]).indexOf(todayKey)>=0;
+  // 오늘의 마음 문장
+  var qIdx=(function(){var d=new Date();var seed=d.getFullYear()*1000+ (Math.floor((d-new Date(d.getFullYear(),0,0))/86400000));return ((seed*2654435761)>>>0)%_MIND_QUOTES.length;})();
+  var quote=document.createElement('div');
+  quote.style.cssText='background:#e5a63a;border-radius:20px;padding:20px;margin-bottom:16px;';
+  quote.innerHTML='<div style="font-size:11px;color:#7a5c12;margin-bottom:8px;">오늘의 마음 문장</div><div style="font-size:16px;color:#4a3a10;line-height:1.55;font-weight:600;">"'+_MIND_QUOTES[qIdx]+'"</div>';
+  body.appendChild(quote);
+  // 호흡 타이머 카드
+  var breathCard=document.createElement('div');
+  breathCard.style.cssText='background:#fbf9f4;border-radius:20px;padding:22px 18px;margin-bottom:14px;text-align:center;';
+  breathCard.innerHTML='<div style="font-size:14px;color:#2d2920;font-weight:700;margin-bottom:4px;">호흡 명상</div><div style="font-size:11px;color:#a89e8c;margin-bottom:18px;">원을 따라 천천히 숨쉬어요</div>';
+  // 호흡 원
+  var circleWrap=document.createElement('div');circleWrap.style.cssText='position:relative;height:150px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;';
+  var circle=document.createElement('div');circle.id='breathCircle';
+  circle.style.cssText='width:90px;height:90px;border-radius:50%;background:#7ba05b;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;transition:transform 4s ease-in-out,background 4s;';
+  circle.textContent='시작';
+  circleWrap.appendChild(circle);
+  breathCard.appendChild(circleWrap);
+  // 시간 선택 + 시작
+  var durRow=document.createElement('div');durRow.style.cssText='display:flex;gap:8px;justify-content:center;margin-bottom:14px;';
+  [[60,'1분'],[180,'3분'],[300,'5분']].forEach(function(dd){
+    var b=document.createElement('button');
+    b.style.cssText='font-size:12px;font-weight:600;padding:8px 16px;border-radius:14px;border:1px solid '+(window._breathDur===dd[0]?'#7ba05b':'#e2dccf')+';background:'+(window._breathDur===dd[0]?'#eef3e6':'#fff')+';color:'+(window._breathDur===dd[0]?'#3d4a24':'#8a8474')+';cursor:pointer;font-family:inherit;';
+    b.textContent=dd[1];
+    b.addEventListener('click',function(){window._breathDur=dd[0];rerenderMindPage();});
+    durRow.appendChild(b);
+  });
+  breathCard.appendChild(durRow);
+  var startBtn=document.createElement('button');
+  startBtn.id='breathStart';
+  startBtn.style.cssText='width:100%;border:none;background:#7ba05b;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;';
+  startBtn.textContent=window._breathActive?'멈추기':'시작하기';
+  startBtn.addEventListener('click',function(){
+    if(window._breathActive){_stopBreath();}
+    else{_startBreath(window._breathDur||60);}
+  });
+  breathCard.appendChild(startBtn);
+  body.appendChild(breathCard);
+  // 명상 완료 기록
+  var doneCard=document.createElement('div');
+  doneCard.style.cssText='background:#fbf9f4;border-radius:16px;padding:15px 17px;display:flex;align-items:center;gap:12px;';
+  var mcount=(_mindData.meditations||[]).length;
+  doneCard.innerHTML='<span style="font-size:22px;">🧘</span><div style="flex:1;"><div style="font-size:13px;color:#2d2920;font-weight:600;">'+(doneToday?'오늘 마음챙김 완료':'오늘 아직 안 했어요')+'</div><div style="font-size:11px;color:#a89e8c;margin-top:1px;">지금까지 '+mcount+'번 함께했어요</div></div>';
+  var mbtn=document.createElement('button');
+  mbtn.style.cssText='border:none;border-radius:12px;padding:9px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'+(doneToday?'background:#eef3e6;color:#3d4a24;':'background:#7ba05b;color:#fff;');
+  mbtn.textContent=doneToday?'✓ 완료':'완료 표시';
+  mbtn.addEventListener('click',function(){
+    if(!_mindData.meditations)_mindData.meditations=[];
+    var ix=_mindData.meditations.indexOf(todayKey);
+    if(ix>=0)_mindData.meditations.splice(ix,1);else _mindData.meditations.push(todayKey);
+    if(window._saveState)window._saveState();rerenderMindPage();
+  });
+  doneCard.appendChild(mbtn);
+  body.appendChild(doneCard);
+}
+function _startBreath(dur){
+  window._breathActive=true;
+  var circle=document.getElementById('breathCircle');
+  var startBtn=document.getElementById('breathStart');
+  if(startBtn)startBtn.textContent='멈추기';
+  var endAt=Date.now()+dur*1000;
+  function cycle(){
+    if(!window._breathActive)return;
+    if(Date.now()>=endAt){_finishBreath();return;}
+    // 들숨 (커짐)
+    if(circle){circle.style.transform='scale(1.5)';circle.style.background='#5a8a3a';circle.textContent='들숨';}
+    window._breathT1=setTimeout(function(){
+      if(!window._breathActive)return;
+      if(circle){circle.textContent='멈춤';}
+      window._breathT2=setTimeout(function(){
+        if(!window._breathActive)return;
+        // 날숨 (작아짐)
+        if(circle){circle.style.transform='scale(1)';circle.style.background='#7ba05b';circle.textContent='날숨';}
+        window._breathT3=setTimeout(cycle,4000);
+      },1500);
+    },4000);
+  }
+  cycle();
+}
+function _stopBreath(){
+  window._breathActive=false;
+  clearTimeout(window._breathT1);clearTimeout(window._breathT2);clearTimeout(window._breathT3);
+  var circle=document.getElementById('breathCircle');
+  if(circle){circle.style.transform='scale(1)';circle.style.background='#7ba05b';circle.textContent='시작';}
+  var startBtn=document.getElementById('breathStart');if(startBtn)startBtn.textContent='시작하기';
+}
+function _finishBreath(){
+  _stopBreath();
+  var todayKey=_mindKey();
+  if(!_mindData.meditations)_mindData.meditations=[];
+  if(_mindData.meditations.indexOf(todayKey)<0)_mindData.meditations.push(todayKey);
+  if(window._saveState)window._saveState();
+  try{showToast('마음챙김을 완료했어요 🧘','add','ti-check');}catch(e){}
+  rerenderMindPage();
 }
 
 // ===== 뉴스 (지역 사건사고) =====
@@ -9019,6 +9481,7 @@ function setHomePage(p){
   if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
   if(p===12){try{renderRegionNewsPage(document.getElementById('regionNewsPage'));}catch(e){}}
   if(p===13){try{openIndexFull();}catch(e){}}
+  if(p===14){try{openMindFull();}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -9044,6 +9507,7 @@ function buildHomeSlider(){
     {id:'tab-travel',   name:'여행'},
     {id:'tab-news2',    name:'뉴스'},
     {id:'tab-index',    name:'인덱스'},
+    {id:'tab-mind',     name:'마인드'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -9146,6 +9610,12 @@ function buildHomeSlider(){
   indexPage.id='indexPage';
   renderIndexPage(indexPage);
   slider.appendChild(indexPage);
+
+  var mindPage=document.createElement('div');
+  mindPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  mindPage.id='mindPage';
+  renderMindPage(mindPage);
+  slider.appendChild(mindPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -11411,6 +11881,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       travel:_travelData,
       news:_newsData,
       index:_idxData,
+      mind:_mindData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -11449,6 +11920,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.travel&&typeof d.travel==='object'&&Array.isArray(d.travel.trips)){_travelData.trips=d.travel.trips;}
       if(d.news&&typeof d.news==='object'&&Array.isArray(d.news.regions)){_newsData.regions=d.news.regions;}
       if(d.index&&typeof d.index==='object'){_idxData.fragments=d.index.fragments||[];_idxData.topics=d.index.topics||[];_idxData.links=d.index.links||[];}
+      if(d.mind&&typeof d.mind==='object'){_mindData.moods=d.mind.moods||{};_mindData.bucket=d.mind.bucket||[];_mindData.meditations=d.mind.meditations||[];}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -11464,7 +11936,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
