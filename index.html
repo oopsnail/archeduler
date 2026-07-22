@@ -912,6 +912,7 @@
       <div id="shopBody" style="flex:1;min-height:0;position:relative;"></div>
     </div>
     <div id="healthFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#fbfaf7;flex-direction:column;"></div>
+    <div id="indexFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f0ebe1;flex-direction:column;"></div>
     <div class="dock-bar" id="dockBar">
       <button class="dock-btn" id="dockToday" aria-label="일정">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
@@ -4400,7 +4401,28 @@ function _openSavedTips(){
   host.appendChild(wrap);
 }
 // ===== 생각 인덱스 (Index) =====
-function rerenderIndexPage(){var el=document.getElementById('indexPage');if(el)renderIndexPage(el);}
+function _idxContainer(){
+  var f=document.getElementById('indexFull');
+  if(f&&f.style.display!=='none'){var inner=document.getElementById('indexFullInner');if(inner)return inner;}
+  return document.getElementById('indexPage');
+}
+function rerenderIndexPage(){var el=_idxContainer();if(el)renderIndexPage(el);}
+function openIndexFull(){
+  var f=document.getElementById('indexFull');
+  if(!f)return;
+  f.style.display='flex';
+  f.innerHTML='';
+  var inner=document.createElement('div');
+  inner.id='indexFullInner';
+  inner.style.cssText='flex:1;min-height:0;display:flex;flex-direction:column;';
+  f.appendChild(inner);
+  renderIndexPage(inner);
+}
+function closeIndexFull(){
+  var f=document.getElementById('indexFull');
+  if(f){f.style.display='none';f.innerHTML='';}
+  try{if(_homePage===13)setHomePage(0);}catch(e){}
+}
 function _idxTopicById(id){return _idxData.topics.find(function(t){return t.id===id;});}
 function _idxTopicColor(id){var t=_idxTopicById(id);return t?t.color:'#b0a892';}
 function _idxTopicName(id){var t=_idxTopicById(id);return t?t.name:'미분류';}
@@ -4431,9 +4453,19 @@ function _idxRenderHome(container){
   var now=new Date();
   var DOWK=['SUN','MON','TUE','WED','THU','FRI','SAT'];
   // 헤더
-  var head=document.createElement('div');head.style.cssText='margin-bottom:20px;';
-  head.innerHTML='<div style="font-size:12px;color:#b0a690;letter-spacing:0.04em;">'+DOWK[now.getDay()]+' · '+(now.getMonth()+1)+'월 '+now.getDate()+'일</div>'
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:flex-start;gap:12px;margin-bottom:20px;';
+  var fullOpen=document.getElementById('indexFull')&&document.getElementById('indexFull').style.display!=='none';
+  if(fullOpen){
+    var closeB=document.createElement('div');
+    closeB.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;';
+    closeB.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+    closeB.addEventListener('click',function(){closeIndexFull();});
+    head.appendChild(closeB);
+  }
+  var htxt=document.createElement('div');htxt.style.cssText='flex:1;';
+  htxt.innerHTML='<div style="font-size:12px;color:#b0a690;letter-spacing:0.04em;">'+DOWK[now.getDay()]+' · '+(now.getMonth()+1)+'월 '+now.getDate()+'일</div>'
     +'<div style="font-size:22px;color:#2d2920;letter-spacing:-0.02em;margin-top:3px;font-weight:800;">생각 인덱스</div>';
+  head.appendChild(htxt);
   body.appendChild(head);
   // 다크 히어로: 연결(links) 수 + 미니 그래프
   var links=_idxData.links||[];
@@ -8986,7 +9018,7 @@ function setHomePage(p){
   if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
   if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
   if(p===12){try{renderRegionNewsPage(document.getElementById('regionNewsPage'));}catch(e){}}
-  if(p===13){try{renderIndexPage(document.getElementById('indexPage'));}catch(e){}}
+  if(p===13){try{openIndexFull();}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
