@@ -3208,9 +3208,10 @@ function _dayOfYearNum(){
   return t.getFullYear()*1000+Math.floor((t-new Date(t.getFullYear(),0,0))/86400000);
 }
 function _tipTodayIndex(){
-  // 큰 소수를 곱해 연속된 날에도 팁이 멀리 떨어지게(순차 반복 느낌 제거)
+  // 날짜를 해시해서 매일 다른 명언 (연속된 날에도 멀리 떨어지게)
   var seed=_dayOfYearNum();
-  return (seed*7)%_tipData.length;
+  var h=(seed*2654435761)>>>0; // Knuth multiplicative hash
+  return h%_tipData.length;
 }
 var _tipIdx=null;
 var _tipIdxDay=null;
@@ -3223,12 +3224,16 @@ var _statsMonthOff=0; // (통계는 주간 기반으로 재설계, 미사용)
 // 단어장: langs=언어 목록, words={lang:{dateKey:[{w,pron,mean,ex,exTrans,done}]}}
 var _vocabData={langs:[{id:'en',name:'영어',flag:'🇺🇸',voice:'en-US'},{id:'ja',name:'일본어',flag:'🇯🇵',voice:'ja-JP'},{id:'zh',name:'중국어',flag:'🇨🇳',voice:'zh-CN'}],words:{}};
 var _vocabLang='en';
+var _vocabLangSel=null; // null=언어 선택 화면, id=해당 언어 전체화면
 var _vocabView='today'; // 'today' | 'review'
 // 여행: trips=[{id,name,emoji,dest,start,end,budget,currency,days:[{plan:[{time,place,note,tag,lat,lng}]}],expenses:[{name,amount,cur,krw,cat,date}],photos:[],notes}]
 var _travelData={trips:[]};
 var _travelSel=null; // 선택된 여행 id (null=목록)
 var _travelStage='plan'; // 'plan'|'during'|'memory'
 var _travelDay=0; // 선택된 Day 인덱스
+// 뉴스: regions=[{id,name,isMine}], 지역별 사건사고 뉴스 바로가기
+var _newsData={regions:[]};
+var _newsCat='사건사고'; // 뉴스 카테고리 필터
 function _healthKey(){var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();}
 function _healthStreak(){
   // 오늘 기준 과거로 연속 운동한 날 수 (운동 1개라도 완료된 날)
@@ -4028,6 +4033,184 @@ function _openSavedTips(){
   top.querySelector('.st-back').addEventListener('click',function(){wrap.remove();});
   host.appendChild(wrap);
 }
+// ===== 뉴스 (지역 사건사고) =====
+function rerenderNewsPage(){var el=document.getElementById('newsPage');if(el)renderNewsPage(el);}
+// 구글 뉴스 검색 링크 (지역+카테고리)
+function _newsLink(region,cat){
+  var q=encodeURIComponent(region+' '+cat);
+  return 'https://news.google.com/search?q='+q+'&hl=ko&gl=KR&ceid=KR:ko';
+}
+function _naverNewsLink(region,cat){
+  var q=encodeURIComponent(region+' '+cat);
+  return 'https://search.naver.com/search.naver?where=news&query='+q+'&sort=1';
+}
+var _NEWS_CATS=[['사건사고','🚨'],['재난·날씨','🌪'],['교통','🚗'],['생활·지역','🏙'],['전체','📰']];
+function renderNewsPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
+  // 헤더
+  var head=document.createElement('div');
+  head.style.cssText='padding:14px 16px 8px;flex-shrink:0;';
+  head.innerHTML='<div style="font-size:18px;font-weight:800;color:#111;">📰 지역 뉴스</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-top:1px;">내 지역·관심 지역의 사건사고를 확인해요</div>';
+  container.appendChild(head);
+  // 카테고리 필터
+  var catBar=document.createElement('div');
+  catBar.style.cssText='display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:6px 16px 8px;flex-shrink:0;';
+  _NEWS_CATS.forEach(function(c){
+    var on=_newsCat===c[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex-shrink:0;font-size:11px;font-weight:700;padding:6px 12px;border-radius:14px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;'+(on?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;');
+    b.innerHTML=c[1]+' '+c[0];
+    b.addEventListener('click',function(){_newsCat=c[0];rerenderNewsPage();});
+    catBar.appendChild(b);
+  });
+  container.appendChild(catBar);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px 24px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  if(!_newsData.regions.length){
+    var emp=document.createElement('div');
+    emp.style.cssText='text-align:center;padding:30px 0 16px;color:#9a9a93;font-size:12px;';
+    emp.innerHTML='관심 지역을 추가해보세요<br><span style="font-size:10px;">내 동네·자주 가는 곳의 소식을 모아봐요</span>';
+    body.appendChild(emp);
+    // 내 위치로 빠른 추가
+    var locBtn=document.createElement('button');
+    locBtn.innerHTML='📍 내 위치로 추가';
+    locBtn.style.cssText='width:100%;border:1px solid #dde3ee;background:#f7f9fc;color:#3a4a63;font-size:12px;font-weight:700;padding:12px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:8px;';
+    locBtn.addEventListener('click',_addMyLocation);
+    body.appendChild(locBtn);
+  }else{
+    _newsData.regions.forEach(function(r,idx){
+      var card=document.createElement('div');
+      card.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:14px;margin-bottom:9px;';
+      var catLabel=_newsCat==='전체'?'뉴스':_newsCat;
+      card.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+        +'<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:14px;">'+(r.isMine?'📍':'⭐')+'</span><span style="font-size:14px;font-weight:800;color:#111;">'+r.name+'</span>'+(r.isMine?'<span style="font-size:8px;background:#eef4fc;color:#3a7bd5;border-radius:5px;padding:1px 6px;font-weight:700;">내 지역</span>':'')+'</div></div>'
+        +'<div style="font-size:10px;color:#9a948a;margin-bottom:10px;">'+r.name+'의 '+catLabel+' 소식을 확인하세요</div>';
+      var linkRow=document.createElement('div');linkRow.style.cssText='display:flex;gap:7px;';
+      var gBtn=document.createElement('a');
+      gBtn.href=_newsLink(r.name,_newsCat==='전체'?'':_newsCat);gBtn.target='_blank';gBtn.rel='noopener';
+      gBtn.style.cssText='flex:1;text-align:center;text-decoration:none;font-size:11px;font-weight:700;padding:10px;border-radius:10px;background:#20304a;color:#fff;';
+      gBtn.textContent='구글 뉴스';
+      var nBtn=document.createElement('a');
+      nBtn.href=_naverNewsLink(r.name,_newsCat==='전체'?'':_newsCat);nBtn.target='_blank';nBtn.rel='noopener';
+      nBtn.style.cssText='flex:1;text-align:center;text-decoration:none;font-size:11px;font-weight:700;padding:10px;border-radius:10px;background:#2db400;color:#fff;';
+      nBtn.textContent='네이버 뉴스';
+      linkRow.appendChild(gBtn);linkRow.appendChild(nBtn);
+      card.appendChild(linkRow);
+      // 삭제
+      var delR=document.createElement('button');
+      delR.textContent='지역 삭제';delR.style.cssText='width:100%;border:none;background:none;color:#c9c5bd;font-size:9px;font-weight:600;padding:6px 0 0;cursor:pointer;font-family:inherit;';
+      delR.addEventListener('click',function(){_newsData.regions.splice(idx,1);if(window._saveState)window._saveState();rerenderNewsPage();});
+      card.appendChild(delR);
+      body.appendChild(card);
+    });
+    var addR=document.createElement('button');
+    addR.innerHTML='＋ 관심 지역 추가';
+    addR.style.cssText='width:100%;border:1.5px dashed #cdd5e0;background:none;color:#20304a;font-size:12px;font-weight:700;padding:12px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:2px;';
+    addR.addEventListener('click',_openAddRegion);
+    body.appendChild(addR);
+  }
+}
+function _openAddRegion(){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('regionAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='regionAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var POP=['서울','부산','대구','인천','광주','대전','제주','수원','성남','강남구','송파구','해운대구'];
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:14px;">관심 지역 추가</div>'
+    +'<input id="regInput" placeholder="지역명 (예: 서울 강남구, 부산 해운대)" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:10px;">'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:600;margin-bottom:6px;">빠른 선택</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">'+POP.map(function(p){return '<button class="reg-pop" data-r="'+p+'" style="font-size:11px;font-weight:600;padding:7px 12px;border-radius:12px;border:1px solid #e6e2d8;background:#fff;color:#555;cursor:pointer;font-family:inherit;">'+p+'</button>';}).join('')+'</div>'
+    +'<label style="display:flex;align-items:center;gap:7px;margin-bottom:14px;font-size:11px;color:#555;cursor:pointer;"><input type="checkbox" id="regMine" style="width:16px;height:16px;"> 내 지역으로 표시</label>'
+    +'<button id="regSave" style="width:100%;border:none;background:#20304a;color:#fff;font-size:13px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;">추가</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.reg-pop').forEach(function(b){b.addEventListener('click',function(){sheet.querySelector('#regInput').value=b.getAttribute('data-r');});});
+  setTimeout(function(){try{sheet.querySelector('#regInput').focus();}catch(e){}},60);
+  sheet.querySelector('#regSave').addEventListener('click',function(){
+    var name=sheet.querySelector('#regInput').value.trim();if(!name){sheet.querySelector('#regInput').focus();return;}
+    var mine=sheet.querySelector('#regMine').checked;
+    if(mine)_newsData.regions.forEach(function(r){r.isMine=false;});
+    _newsData.regions.push({id:'rg'+Date.now(),name:name,isMine:mine});
+    if(window._saveState)window._saveState();wrap.remove();rerenderNewsPage();
+  });
+}
+function _addMyLocation(){
+  if(!navigator.geolocation){_openAddRegion();return;}
+  showToast('위치 확인 중…','add','ti-map');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    // 좌표만으로는 지명 변환이 어려워 사용자가 직접 입력하도록 안내
+    _openAddRegion();
+    setTimeout(function(){var inp=document.getElementById('regInput');if(inp){inp.placeholder='내 지역명을 입력하세요';var m=document.getElementById('regMine');if(m)m.checked=true;}},100);
+  },function(){_openAddRegion();});
+}
+
+// 내장 여행지 데이터 (스마트 템플릿) — 추천 코스·시즌 이벤트·월별 날씨
+var _DEST_DB={
+  '도쿄':{emoji:'🗼',aliases:['tokyo','동경'],
+    weather:{1:'5°C 맑고 건조',2:'6°C 쌀쌀',3:'10°C 벚꽃 시작',4:'15°C 벚꽃 절정',5:'20°C 쾌적',6:'23°C 장마',7:'27°C 무덥고 습함',8:'29°C 가장 더움',9:'25°C 태풍 주의',10:'19°C 선선',11:'13°C 단풍',12:'8°C 맑고 추움'},
+    events:{1:['하츠모데(신년 참배)'],3:['우에노 벚꽃축제'],4:['벚꽃 명소 만개'],5:['간다 마츠리'],7:['스미다가와 불꽃축제'],8:['아사쿠사 삼바 카니발'],10:['할로윈 시부야'],12:['일루미네이션·연말']},
+    course:[
+      [{time:'09:00',place:'센소지 절',tag:'관광',note:'아사쿠사, 나카미세 거리'},{time:'12:00',place:'스카이트리',tag:'관광'},{time:'15:00',place:'우에노 공원',tag:'관광'},{time:'18:00',place:'아메요코 시장',tag:'맛집'}],
+      [{time:'09:30',place:'메이지 신궁',tag:'관광'},{time:'11:30',place:'하라주쿠·다케시타',tag:'쇼핑'},{time:'14:00',place:'시부야 스크램블',tag:'관광'},{time:'19:00',place:'신주쿠 오모이데요코초',tag:'맛집'}],
+      [{time:'10:00',place:'츠키지 장외시장',tag:'맛집'},{time:'13:00',place:'긴자 쇼핑',tag:'쇼핑'},{time:'16:00',place:'도쿄타워',tag:'관광'},{time:'19:00',place:'롯폰기 야경',tag:'관광'}]
+    ]},
+  '오사카':{emoji:'🏯',aliases:['osaka'],
+    weather:{1:'6°C 쌀쌀',4:'16°C 벚꽃',5:'21°C 쾌적',7:'28°C 무더움',8:'30°C 폭염',10:'20°C 선선',12:'8°C 추움'},
+    events:{4:['오사카성 벚꽃'],7:['텐진 마츠리'],8:['나니와 요도가와 불꽃축제'],10:['기시와다 단지리']},
+    course:[
+      [{time:'09:00',place:'오사카성',tag:'관광'},{time:'12:00',place:'도톤보리',tag:'맛집',note:'타코야키·오코노미야키'},{time:'15:00',place:'신사이바시',tag:'쇼핑'},{time:'19:00',place:'난바 야경',tag:'관광'}],
+      [{time:'09:30',place:'유니버설 스튜디오',tag:'관광',note:'하루 종일'},{time:'20:00',place:'우메다 스카이빌딩',tag:'관광'}],
+      [{time:'10:00',place:'쿠로몬 시장',tag:'맛집'},{time:'13:00',place:'덴덴타운',tag:'쇼핑'},{time:'16:00',place:'스미요시타이샤',tag:'관광'}]
+    ]},
+  '파리':{emoji:'🗼',aliases:['paris'],
+    weather:{1:'5°C 흐림',4:'13°C 봄',6:'20°C 쾌적',7:'25°C 성수기',8:'25°C 더움',10:'14°C 선선',12:'6°C 추움'},
+    events:{6:['음악 축제 Fête de la Musique'],7:['바스티유의 날 7/14'],10:['화이트 나이트'],12:['샹젤리제 일루미네이션']},
+    course:[
+      [{time:'09:00',place:'에펠탑',tag:'관광'},{time:'12:00',place:'샹드마르스 피크닉',tag:'맛집'},{time:'14:30',place:'개선문·샹젤리제',tag:'쇼핑'},{time:'18:00',place:'센강 유람선',tag:'관광'}],
+      [{time:'09:30',place:'루브르 박물관',tag:'관광',note:'예약 필수'},{time:'14:00',place:'튀일리 정원',tag:'관광'},{time:'16:00',place:'오르세 미술관',tag:'관광'},{time:'19:00',place:'라탱 지구',tag:'맛집'}],
+      [{time:'10:00',place:'몽마르트·사크레쾨르',tag:'관광'},{time:'13:00',place:'몽마르트 카페',tag:'카페'},{time:'16:00',place:'갤러리 라파예트',tag:'쇼핑'}]
+    ]},
+  '방콕':{emoji:'🛕',aliases:['bangkok'],
+    weather:{1:'27°C 건기 쾌적',3:'30°C 더워짐',4:'32°C 가장 더움 송끄란',7:'29°C 우기',10:'28°C 우기 끝',12:'26°C 건기 최적'},
+    events:{4:['송끄란 물축제 4/13-15'],11:['러이끄라통 등불축제'],12:['연말 카운트다운']},
+    course:[
+      [{time:'08:30',place:'왓 프라깨우·왕궁',tag:'관광',note:'복장 규정'},{time:'11:30',place:'왓 포',tag:'관광'},{time:'14:00',place:'짜오프라야 보트',tag:'관광'},{time:'18:00',place:'아시아티크',tag:'쇼핑'}],
+      [{time:'10:00',place:'짜뚜짝 주말시장',tag:'쇼핑'},{time:'14:00',place:'시암 파라곤',tag:'쇼핑'},{time:'19:00',place:'루프탑 바',tag:'관광'}],
+      [{time:'09:00',place:'담넌사두억 수상시장',tag:'관광'},{time:'14:00',place:'마사지·스파',tag:'기타'},{time:'18:00',place:'카오산 로드',tag:'맛집'}]
+    ]},
+  '제주':{emoji:'🌴',aliases:['jeju','제주도'],
+    weather:{1:'7°C 바람 강함',4:'15°C 유채꽃',5:'19°C 쾌적',7:'27°C 장마',8:'29°C 성수기',10:'19°C 선선',12:'9°C 겨울'},
+    events:{3:['제주 들불축제'],4:['유채꽃 축제'],7:['한여름 밤의 축제'],11:['감귤 축제']},
+    course:[
+      [{time:'09:00',place:'성산일출봉',tag:'관광'},{time:'11:30',place:'섭지코지',tag:'관광'},{time:'14:00',place:'우도',tag:'관광'},{time:'18:00',place:'흑돼지 거리',tag:'맛집'}],
+      [{time:'09:30',place:'한라산 트래킹',tag:'관광',note:'날씨 확인'},{time:'15:00',place:'카멜리아힐',tag:'관광'},{time:'18:00',place:'중문 해변',tag:'관광'}],
+      [{time:'10:00',place:'협재해변',tag:'관광'},{time:'12:30',place:'애월 카페거리',tag:'카페'},{time:'15:00',place:'오설록 티뮤지엄',tag:'카페'},{time:'18:00',place:'제주 흑돼지',tag:'맛집'}]
+    ]},
+  '후쿠오카':{emoji:'🍜',aliases:['fukuoka'],
+    weather:{1:'7°C 쌀쌀',4:'16°C 봄',7:'28°C 무더움',8:'30°C 더움',10:'20°C 선선',12:'9°C 추움'},
+    events:{5:['하카타 돈타쿠'],7:['하카타 기온 야마카사'],11:['단풍']},
+    course:[
+      [{time:'10:00',place:'다자이후 텐만구',tag:'관광'},{time:'13:00',place:'캐널시티',tag:'쇼핑'},{time:'18:00',place:'나카스 포장마차',tag:'맛집',note:'야타이 라멘'}],
+      [{time:'09:30',place:'오호리 공원',tag:'관광'},{time:'12:00',place:'텐진 쇼핑',tag:'쇼핑'},{time:'16:00',place:'후쿠오카 타워',tag:'관광'}]
+    ]}
+};
+function _findDest(name){
+  if(!name)return null;
+  var n=name.toLowerCase();
+  for(var key in _DEST_DB){
+    if(name.indexOf(key)>=0)return {key:key,data:_DEST_DB[key]};
+    if(_DEST_DB[key].aliases.some(function(a){return n.indexOf(a)>=0;}))return {key:key,data:_DEST_DB[key]};
+  }
+  return null;
+}
+
 // ===== 여행 (Travel) =====
 function rerenderTravelPage(){var el=document.getElementById('travelPage');if(el)renderTravelPage(el);}
 function _travelCurTrip(){return _travelData.trips.find(function(t){return t.id===_travelSel;});}
@@ -4081,6 +4264,18 @@ function _travelRenderList(container){
   body.appendChild(addBtn);
 }
 function _fmtTripDate(d){return (d.getMonth()+1)+'.'+d.getDate();}
+function _autoFillTrip(trip,dest){
+  var hasAny=trip.days.some(function(d){return d.plan&&d.plan.length;});
+  if(hasAny&&!confirm('기존 동선을 추천 코스로 덮어쓸까요?'))return;
+  var courses=dest.data.course;
+  trip.days.forEach(function(day,i){
+    var c=courses[i%courses.length];
+    day.plan=c.map(function(p){return {place:p.place,time:p.time,tag:p.tag,note:p.note||''};});
+  });
+  if(window._saveState)window._saveState();
+  rerenderTravelPage();
+  showToast(dest.key+' 추천 일정을 채웠어요 ✨','add','ti-check');
+}
 // 여행 상세 (3단계)
 function _travelRenderTrip(container){
   var trip=_travelCurTrip();
@@ -4126,6 +4321,28 @@ function _travelRenderPlan(body,trip){
   if(!trip.days)trip.days=[];
   while(trip.days.length<nDays)trip.days.push({plan:[]});
   if(_travelDay>=nDays)_travelDay=0;
+  // 스마트 여행 정보 (여행지 인식 시)
+  var dest=_findDest(trip.name);
+  var month=start.getMonth()+1;
+  if(dest){
+    var weather=dest.data.weather[month]||dest.data.weather[Object.keys(dest.data.weather)[0]];
+    var evs=dest.data.events[month]||[];
+    var smart=document.createElement('div');
+    smart.style.cssText='background:linear-gradient(135deg,#eef4fc,#e3edfa);border:0.5px solid #d5e2f2;border-radius:14px;padding:13px;margin-bottom:10px;';
+    var evHtml=evs.length?('<div style="font-size:9px;color:#5a6577;margin-top:7px;"><b style="color:#3a7bd5;">🎉 '+month+'월 이벤트</b> · '+evs.join(', ')+'</div>'):'';
+    smart.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;">'
+      +'<span style="font-size:12px;font-weight:800;color:#2a5298;">'+dest.data.emoji+' '+dest.key+' 여행 정보</span>'
+      +'<span style="font-size:10px;color:#5a6577;">🌤 '+weather+'</span></div>'
+      +evHtml;
+    body.appendChild(smart);
+    // 자동 생성 버튼 (아직 동선 없을 때 강조)
+    var hasAny=trip.days.some(function(d){return d.plan&&d.plan.length;});
+    var autoBtn=document.createElement('button');
+    autoBtn.innerHTML=hasAny?'✨ 추천 코스 다시 채우기':'✨ 추천 일정 자동 생성';
+    autoBtn.style.cssText='width:100%;border:none;background:'+(hasAny?'#eef4fc':'#3a7bd5')+';color:'+(hasAny?'#3a7bd5':'#fff')+';font-size:12px;font-weight:700;padding:11px;border-radius:11px;cursor:pointer;font-family:inherit;margin-bottom:10px;';
+    autoBtn.addEventListener('click',function(){_autoFillTrip(trip,dest);});
+    body.appendChild(autoBtn);
+  }
   // Day 탭
   var dayTabs=document.createElement('div');
   dayTabs.style.cssText='display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:2px 0 10px;';
@@ -4176,6 +4393,31 @@ function _travelRenderPlan(body,trip){
 }
 // 여행 중: 오늘 일정 + 지출
 function _travelRenderDuring(body,trip){
+  // 여행지 날씨·안전 (스마트 정보)
+  var destName=trip.name.replace(/여행|트립|trip/gi,'').trim()||trip.name;
+  var destD=_findDest(trip.name);
+  if(destD){
+    var mo=new Date().getMonth()+1;
+    var wt=destD.data.weather[mo];
+    if(wt){
+      var wcard=document.createElement('div');
+      wcard.style.cssText='background:linear-gradient(135deg,#eef4fc,#e3edfa);border-radius:12px;padding:11px 13px;margin:6px 0 10px;display:flex;align-items:center;justify-content:space-between;';
+      wcard.innerHTML='<span style="font-size:11px;font-weight:700;color:#2a5298;">🌤 '+destD.key+' 오늘 날씨</span><span style="font-size:11px;color:#3a4a63;font-weight:600;">'+wt+'</span>';
+      body.appendChild(wcard);
+    }
+  }
+  var newsCard=document.createElement('div');
+  newsCard.style.cssText='background:linear-gradient(135deg,#fff4f0,#ffe9e0);border:0.5px solid #f5d5c5;border-radius:13px;padding:12px 13px;margin:6px 0 12px;';
+  newsCard.innerHTML='<div style="font-size:11px;font-weight:800;color:#c2410c;margin-bottom:2px;">🚨 '+destName+' 안전 소식</div>'
+    +'<div style="font-size:9px;color:#b06a4a;margin-bottom:9px;">현지 사건사고·안전 뉴스를 확인하세요</div>';
+  var nr=document.createElement('div');nr.style.cssText='display:flex;gap:7px;';
+  var g=document.createElement('a');g.href=_newsLink(destName,'안전 사건사고');g.target='_blank';g.rel='noopener';
+  g.style.cssText='flex:1;text-align:center;text-decoration:none;font-size:10.5px;font-weight:700;padding:9px;border-radius:9px;background:#c2410c;color:#fff;';g.textContent='구글 뉴스';
+  var travelAlert=document.createElement('a');
+  travelAlert.href='https://www.0404.go.kr/dev/newest_list.mofa';travelAlert.target='_blank';travelAlert.rel='noopener';
+  travelAlert.style.cssText='flex:1;text-align:center;text-decoration:none;font-size:10.5px;font-weight:700;padding:9px;border-radius:9px;background:#fff;border:1px solid #e8b89a;color:#c2410c;';travelAlert.textContent='외교부 안전공지';
+  nr.appendChild(g);nr.appendChild(travelAlert);newsCard.appendChild(nr);
+  body.appendChild(newsCard);
   var today=new Date();today.setHours(0,0,0,0);
   var start=new Date(trip.start);start.setHours(0,0,0,0);
   var dayIdx=Math.round((today-start)/(1000*60*60*24));
@@ -4403,27 +4645,26 @@ function renderVocabPage(container){
   var _prevScroll=_prevBody?_prevBody.scrollTop:0;
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
+  if(!_vocabLangSel||!_vocabData.langs.some(function(l){return l.id===_vocabLangSel;})){
+    _vocabRenderLangPicker(container);
+    return;
+  }
+  _vocabLang=_vocabLangSel;
   var lang=_curLang();
-  // 언어 탭 (상단 고정)
-  var langBar=document.createElement('div');
-  langBar.style.cssText='display:flex;gap:5px;padding:14px 16px 6px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;';
-  _vocabData.langs.forEach(function(l){
-    var on=l.id===_vocabLang;
-    var c=document.createElement('button');
-    c.style.cssText='flex-shrink:0;font-size:11px;font-weight:700;padding:6px 13px;border-radius:15px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;'+(on?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;');
-    c.innerHTML=l.flag+' '+l.name;
-    c.addEventListener('click',function(){_vocabLang=l.id;rerenderVocabPage();});
-    langBar.appendChild(c);
-  });
-  var addL=document.createElement('button');
-  addL.textContent='＋';
-  addL.style.cssText='flex-shrink:0;font-size:13px;font-weight:700;padding:6px 12px;border-radius:15px;border:1px dashed #d8d5cd;background:none;color:#a8a29a;cursor:pointer;';
-  addL.addEventListener('click',_openAddLang);
-  langBar.appendChild(addL);
-  container.appendChild(langBar);
+  // 상단바: 뒤로 + 언어명
+  var top=document.createElement('div');
+  top.style.cssText='padding:13px 14px 8px;flex-shrink:0;display:flex;align-items:center;gap:10px;';
+  var back=document.createElement('button');
+  back.innerHTML='‹';back.style.cssText='border:none;background:#f0eee8;color:#5a5346;width:30px;height:30px;border-radius:50%;font-size:17px;cursor:pointer;flex-shrink:0;';
+  back.addEventListener('click',function(){_vocabLangSel=null;rerenderVocabPage();});
+  top.appendChild(back);
+  var tt=document.createElement('div');tt.style.cssText='flex:1;';
+  tt.innerHTML='<span style="font-size:16px;font-weight:800;color:#111;">'+lang.flag+' '+lang.name+' 단어장</span>';
+  top.appendChild(tt);
+  container.appendChild(top);
   // 오늘/복습 토글
   var vt=document.createElement('div');
-  vt.style.cssText='display:flex;gap:6px;padding:6px 16px 8px;flex-shrink:0;';
+  vt.style.cssText='display:flex;gap:6px;padding:2px 16px 8px;flex-shrink:0;';
   [['today','오늘 단어'],['review','복습함']].forEach(function(t){
     var on=_vocabView===t[0];
     var b=document.createElement('button');
@@ -4442,16 +4683,50 @@ function renderVocabPage(container){
   else _vocabRenderReview(body,lang);
   if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
 }
+// 언어 선택 화면
+function _vocabRenderLangPicker(container){
+  var head=document.createElement('div');
+  head.style.cssText='padding:16px 16px 10px;flex-shrink:0;';
+  head.innerHTML='<div style="font-size:19px;font-weight:800;color:#111;">📖 단어장</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-top:2px;">언어를 선택하세요</div>';
+  container.appendChild(head);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px 24px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var todayKey=_vocabKey();
+  _vocabData.langs.forEach(function(l){
+    // 오늘 단어 수·외운 수
+    var words=(_vocabData.words[l.id]&&_vocabData.words[l.id][todayKey])||[];
+    var doneN=words.filter(function(w){return w.done;}).length;
+    // 전체 외운 수
+    var learnedTot=0;var byd=_vocabData.words[l.id]||{};Object.keys(byd).forEach(function(dk){learnedTot+=(byd[dk]||[]).filter(function(w){return w.done;}).length;});
+    var card=document.createElement('div');
+    card.style.cssText='display:flex;align-items:center;gap:13px;background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:16px 15px;margin-bottom:9px;cursor:pointer;';
+    card.innerHTML='<span style="font-size:30px;flex-shrink:0;">'+l.flag+'</span>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:800;color:#111;">'+l.name+'</div>'
+      +'<div style="font-size:10px;color:#9a948a;margin-top:2px;">'+(words.length?('오늘 '+doneN+'/'+words.length+' 외움'):'오늘 단어 없음')+' · 복습함 '+learnedTot+'개</div></div>'
+      +'<span style="font-size:16px;color:#c9c5bd;flex-shrink:0;">›</span>';
+    card.addEventListener('click',function(){_vocabLangSel=l.id;_vocabLang=l.id;_vocabView='today';rerenderVocabPage();});
+    body.appendChild(card);
+  });
+  var addL=document.createElement('button');
+  addL.innerHTML='＋ 언어 추가';
+  addL.style.cssText='width:100%;border:1.5px dashed #cdd5e0;background:none;color:#20304a;font-size:12px;font-weight:700;padding:13px;border-radius:13px;cursor:pointer;font-family:inherit;margin-top:2px;';
+  addL.addEventListener('click',_openAddLang);
+  body.appendChild(addL);
+}
 function _vocabWordCard(word,lang,onChange,i,arr){
   var card=document.createElement('div');
-  // 완료된 단어는 접힘(아코디언)
-  var collapsed=word.done && word.vCollapsed!==false;
+  // 단어는 언제든 접을 수 있음 (완료는 기본 접힘)
+  var collapsed=word.vCollapsed===true || (word.done && word.vCollapsed===undefined);
   if(word.done && word.vCollapsed===undefined)word.vCollapsed=true;
   if(collapsed){
-    card.style.cssText='display:flex;align-items:center;gap:10px;background:#f4faf6;border:0.5px solid #cde8d8;border-radius:12px;padding:11px 12px;margin-bottom:7px;cursor:pointer;';
-    card.innerHTML='<span style="width:22px;height:22px;border-radius:7px;background:#1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">✓</span>'
-      +'<span style="flex:1;min-width:0;font-size:14px;font-weight:800;color:#1a7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+word.w+'</span>'
-      +'<span style="font-size:13px;color:#a8c8b5;flex-shrink:0;">▾</span>';
+    var cbg=word.done?'#f4faf6':'#fff', cbd=word.done?'#cde8d8':'#ececE4', ccol=word.done?'#1a7a4a':'#111', carrow=word.done?'#a8c8b5':'#c9c5bd';
+    card.style.cssText='display:flex;align-items:center;gap:10px;background:'+cbg+';border:0.5px solid '+cbd+';border-radius:12px;padding:11px 12px;margin-bottom:7px;cursor:pointer;';
+    var chkMark=word.done?'<span style="width:22px;height:22px;border-radius:7px;background:#1a7a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">✓</span>':'<span style="width:22px;height:22px;border-radius:7px;border:2px solid #d8d6ce;flex-shrink:0;box-sizing:border-box;"></span>';
+    card.innerHTML=chkMark
+      +'<span style="flex:1;min-width:0;font-size:14px;font-weight:800;color:'+ccol+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+word.w+'</span>'
+      +'<span style="font-size:13px;color:'+carrow+';flex-shrink:0;">▾</span>';
     card.addEventListener('click',function(){word.vCollapsed=false;if(window._saveState)window._saveState();onChange();});
     return card;
   }
@@ -4482,13 +4757,11 @@ function _vocabWordCard(word,lang,onChange,i,arr){
   del.textContent='✕';del.style.cssText='border:none;background:none;color:#ccc;font-size:13px;cursor:pointer;padding:0;line-height:1;';
   del.addEventListener('click',function(){arr.splice(i,1);if(window._saveState)window._saveState();onChange();});
   actions.appendChild(del);
-  if(word.done){
-    var collapseB=document.createElement('button');
-    collapseB.innerHTML='▴';collapseB.title='접기';
-    collapseB.style.cssText='border:none;background:none;font-size:14px;color:#1a7a4a;cursor:pointer;padding:0;line-height:1;';
-    collapseB.addEventListener('click',function(){word.vCollapsed=true;if(window._saveState)window._saveState();onChange();});
-    actions.appendChild(collapseB);
-  }
+  var collapseB=document.createElement('button');
+  collapseB.innerHTML='▴';collapseB.title='접기';
+  collapseB.style.cssText='border:none;background:none;font-size:14px;color:'+(word.done?'#1a7a4a':'#a8a29a')+';cursor:pointer;padding:0;line-height:1;';
+  collapseB.addEventListener('click',function(){word.vCollapsed=true;if(window._saveState)window._saveState();onChange();});
+  actions.appendChild(collapseB);
   card.appendChild(chk);card.appendChild(info);card.appendChild(actions);
   return card;
 }
@@ -4648,6 +4921,7 @@ function _renderDailyTip(host,isPage){
       +'<span style="font-size:12px;font-weight:800;color:#111;">💡 오늘의 자기관리</span>'
       +'<span style="font-size:9px;color:#b0aaa0;">'+(_tipIdx+1)+' / '+_tipData.length+'</span></div>')
       +'<div style="border:0.5px solid #ece7da;border-radius:16px;padding:22px 18px;text-align:center;background:linear-gradient(160deg,#faf8f2,#fff);">'
+        +(_tipIdx===_tipTodayIndex()?('<div style="font-size:9px;color:#c0a86a;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">오늘의 명언 · '+(new Date().getMonth()+1)+'월 '+new Date().getDate()+'일</div>'):'')
         +'<div style="font-size:32px;">'+t.emoji+'</div>'
         +'<div style="font-size:14px;font-weight:800;color:#111;margin-top:12px;line-height:1.5;">“'+t.quote+'”</div>'
         +'<div style="font-size:10px;color:#9a948a;margin-top:10px;">'+t.source+'</div>'
@@ -7466,6 +7740,7 @@ function setHomePage(p){
   if(p===9){try{renderHealthPage(document.getElementById('healthPage'));}catch(e){}}
   if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
   if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
+  if(p===12){try{renderNewsPage(document.getElementById('newsPage'));}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -7489,6 +7764,7 @@ function buildHomeSlider(){
     {id:'tab-health',   name:'건강'},
     {id:'tab-vocab',    name:'단어장'},
     {id:'tab-travel',   name:'여행'},
+    {id:'tab-news2',    name:'뉴스'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -7579,6 +7855,12 @@ function buildHomeSlider(){
   travelPage.id='travelPage';
   renderTravelPage(travelPage);
   slider.appendChild(travelPage);
+
+  var newsPage2=document.createElement('div');
+  newsPage2.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  newsPage2.id='newsPage';
+  renderNewsPage(newsPage2);
+  slider.appendChild(newsPage2);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -9841,6 +10123,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       health:_healthData,
       vocab:_vocabData,
       travel:_travelData,
+      news:_newsData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -9876,6 +10159,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.health&&typeof d.health==='object'){_healthData.workouts=d.health.workouts||{};_healthData.meals=d.health.meals||{};_healthData.water=d.health.water||{};}
       if(d.vocab&&typeof d.vocab==='object'){if(Array.isArray(d.vocab.langs)&&d.vocab.langs.length)_vocabData.langs=d.vocab.langs;_vocabData.words=d.vocab.words||{};}
       if(d.travel&&typeof d.travel==='object'&&Array.isArray(d.travel.trips)){_travelData.trips=d.travel.trips;}
+      if(d.news&&typeof d.news==='object'&&Array.isArray(d.news.regions)){_newsData.regions=d.news.regions;}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -9891,7 +10175,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
