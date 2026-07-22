@@ -4389,7 +4389,7 @@ function _openSavedTips(){
   host.appendChild(wrap);
 }
 // ===== 뉴스 (지역 사건사고) =====
-function rerenderNewsPage(){var el=document.getElementById('newsPage');if(el)renderNewsPage(el);}
+function rerenderRegionNews(){var el=document.getElementById('regionNewsPage');if(el)renderRegionNewsPage(el);}
 // 구글 뉴스 검색 링크 (지역+카테고리)
 function _newsLink(region,cat){
   var q=encodeURIComponent(region+' '+cat);
@@ -4400,7 +4400,7 @@ function _naverNewsLink(region,cat){
   return 'https://search.naver.com/search.naver?where=news&query='+q+'&sort=1';
 }
 var _NEWS_CATS=[['사건사고','🚨'],['재난·날씨','🌪'],['교통','🚗'],['생활·지역','🏙'],['전체','📰']];
-function renderNewsPage(container){
+function renderRegionNewsPage(container){
   if(!container)return;
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
@@ -4418,7 +4418,7 @@ function renderNewsPage(container){
     var b=document.createElement('button');
     b.style.cssText='flex-shrink:0;font-size:11px;font-weight:700;padding:6px 12px;border-radius:14px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;'+(on?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;');
     b.innerHTML=c[1]+' '+c[0];
-    b.addEventListener('click',function(){_newsCat=c[0];rerenderNewsPage();});
+    b.addEventListener('click',function(){_newsCat=c[0];rerenderRegionNews();});
     catBar.appendChild(b);
   });
   container.appendChild(catBar);
@@ -4458,7 +4458,7 @@ function renderNewsPage(container){
       // 삭제
       var delR=document.createElement('button');
       delR.textContent='지역 삭제';delR.style.cssText='width:100%;border:none;background:none;color:#c9c5bd;font-size:9px;font-weight:600;padding:6px 0 0;cursor:pointer;font-family:inherit;';
-      delR.addEventListener('click',function(){_newsData.regions.splice(idx,1);if(window._saveState)window._saveState();rerenderNewsPage();});
+      delR.addEventListener('click',function(){_newsData.regions.splice(idx,1);if(window._saveState)window._saveState();rerenderRegionNews();});
       card.appendChild(delR);
       body.appendChild(card);
     });
@@ -4493,7 +4493,7 @@ function _openAddRegion(){
     var mine=sheet.querySelector('#regMine').checked;
     if(mine)_newsData.regions.forEach(function(r){r.isMine=false;});
     _newsData.regions.push({id:'rg'+Date.now(),name:name,isMine:mine});
-    if(window._saveState)window._saveState();wrap.remove();rerenderNewsPage();
+    if(window._saveState)window._saveState();wrap.remove();rerenderRegionNews();
   });
 }
 function _addMyLocation(){
@@ -8178,7 +8178,7 @@ function setHomePage(p){
   if(p===9){try{openHealthFull();}catch(e){}}
   if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
   if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
-  if(p===12){try{renderNewsPage(document.getElementById('newsPage'));}catch(e){}}
+  if(p===12){try{renderRegionNewsPage(document.getElementById('regionNewsPage'));}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -8296,8 +8296,8 @@ function buildHomeSlider(){
 
   var newsPage2=document.createElement('div');
   newsPage2.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
-  newsPage2.id='newsPage';
-  renderNewsPage(newsPage2);
+  newsPage2.id='regionNewsPage';
+  renderRegionNewsPage(newsPage2);
   slider.appendChild(newsPage2);
 
   // 인디케이터 (드로어 도입으로 숨김)
