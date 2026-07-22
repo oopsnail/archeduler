@@ -3247,6 +3247,17 @@ var _travelDay=0; // 선택된 Day 인덱스
 // 뉴스: regions=[{id,name,isMine}], 지역별 사건사고 뉴스 바로가기
 var _newsData={regions:[]};
 var _newsCat='사건사고'; // 뉴스 카테고리 필터
+// 인덱스: fragments=[{id,text,ts,topics:[topicId]}], topics=[{id,name,color}], links=[{id,fragIds:[],insight,ts}]
+var _idxData={fragments:[],topics:[],links:[]};
+var _idxView='capture'; // 'capture'|'compare'|'index'
+var _idxCompareSel=[]; // 비교용 선택된 fragment id
+var _idxTopicFilter=null; // 인덱스 뷰에서 선택된 주제
+var _idxLinkSel=null; // 선택된 연결(link) id
+var _idxShowLinksList=false; // 전체 연결 목록 보기
+var _idxCross=null; // 교집합 보기 (null 또는 {a,b})
+var _idxCompareOpen=false; // 나란히 비교 화면
+var _idxCmpInsight=''; // 나란히 비교 통찰 텍스트 (재렌더 보존용)
+var _IDX_COLORS=['#378ADD','#639922','#D85A30','#534AB7','#1D9E75','#D4537E','#BA7517','#888780'];
 function _healthKey(){var now=(typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date();return now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();}
 function _healthStreak(){
   // 오늘 기준 과거로 연속 운동한 날 수 (운동 1개라도 완료된 날)
@@ -4388,6 +4399,775 @@ function _openSavedTips(){
   top.querySelector('.st-back').addEventListener('click',function(){wrap.remove();});
   host.appendChild(wrap);
 }
+// ===== 생각 인덱스 (Index) =====
+function rerenderIndexPage(){var el=document.getElementById('indexPage');if(el)renderIndexPage(el);}
+function _idxTopicById(id){return _idxData.topics.find(function(t){return t.id===id;});}
+function _idxTopicColor(id){var t=_idxTopicById(id);return t?t.color:'#b0a892';}
+function _idxTopicName(id){var t=_idxTopicById(id);return t?t.name:'미분류';}
+function _idxFragTopics(f){return (f.topics||[]).map(_idxTopicById).filter(Boolean);}
+function _idxCountByTopic(tid){return _idxData.fragments.filter(function(f){return (f.topics||[]).indexOf(tid)>=0;}).length;}
+function _idxUncategorized(){return _idxData.fragments.filter(function(f){return !f.topics||!f.topics.length;});}
+function _idxFmtAgo(ts){
+  var diff=Date.now()-ts;var d=Math.floor(diff/86400000);
+  if(d<=0)return '오늘';if(d===1)return '어제';if(d<7)return d+'일 전';
+  if(d<30)return Math.floor(d/7)+'주 전';return Math.floor(d/30)+'개월 전';
+}
+function renderIndexPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;background:#f0ebe1;';
+  if(_idxCompareOpen){_idxRenderCompare(container);return;}
+  if(_idxCross){_idxRenderCross(container);return;}
+  if(_idxShowLinksList){_idxRenderLinksList(container);return;}
+  if(_idxLinkSel){_idxRenderLinkDetail(container);return;}
+  if(_idxTopicFilter){_idxRenderTopicDetail(container);return;}
+  _idxRenderHome(container);
+}
+// 인덱스 홈
+function _idxRenderHome(container){
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var now=new Date();
+  var DOWK=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  // 헤더
+  var head=document.createElement('div');head.style.cssText='margin-bottom:20px;';
+  head.innerHTML='<div style="font-size:12px;color:#b0a690;letter-spacing:0.04em;">'+DOWK[now.getDay()]+' · '+(now.getMonth()+1)+'월 '+now.getDate()+'일</div>'
+    +'<div style="font-size:22px;color:#2d2920;letter-spacing:-0.02em;margin-top:3px;font-weight:800;">생각 인덱스</div>';
+  body.appendChild(head);
+  // 다크 히어로: 연결(links) 수 + 미니 그래프
+  var links=_idxData.links||[];
+  var hero=document.createElement('div');
+  hero.style.cssText='background:#2d2920;border-radius:20px;padding:18px 19px;margin-bottom:11px;position:relative;overflow:hidden;min-height:74px;'+(links.length?'cursor:pointer;':'');
+  var nodesSvg=_idxHeroGraph();
+  hero.innerHTML='<div style="font-size:12px;color:#c9b98a;">이번 주 연결'+(links.length>1?' · 전체 보기 ›':'')+'</div>'
+    +'<div style="font-size:26px;color:#f4efe4;margin:5px 0 2px;letter-spacing:-0.01em;font-weight:800;">'+links.length+'개의 실</div>'
+    +'<div style="font-size:11px;color:#8f8674;line-height:1.5;max-width:66%;">'+(links.length?'서로 다른 분야가 하나의 개념으로 이어졌어요':'조각을 골라 연결하면 여기 쌓여요')+'</div>'
+    +nodesSvg;
+  if(links.length)hero.addEventListener('click',function(){_idxShowLinksList=true;rerenderIndexPage();});
+  body.appendChild(hero);
+  // 최근 발견한 연결 카드 (가장 최근 link)
+  if(links.length){
+    var last=links[links.length-1];
+    var disc=document.createElement('div');
+    disc.style.cssText='background:#e5a63a;border-radius:20px;padding:17px 19px;margin-bottom:18px;cursor:pointer;';
+    var frg=(last.fragIds||[]).map(function(fid){var f=_idxData.fragments.find(function(x){return x.id===fid;});return f?f.text:'';}).filter(Boolean);
+    var joined=frg.slice(0,3).map(function(t){return '<span style="border-bottom:1.5px solid #b3841e;">'+(t.length>14?t.slice(0,14)+'…':t)+'</span>';}).join(', ');
+    disc.innerHTML='<div style="font-size:12px;color:#7a5c12;margin-bottom:9px;">✦ 최근 발견한 연결</div>'
+      +'<div style="font-size:15px;color:#4a3a10;line-height:1.55;">'+(last.insight?('"'+last.insight+'" — '):'')+joined+'</div>';
+    disc.addEventListener('click',function(){_idxLinkSel=last.id;rerenderIndexPage();});
+    body.appendChild(disc);
+  }else{
+    body.appendChild(_idxSpacer(8));
+  }
+  // 교집합 · 나란히 비교 진입 (주제 2개 이상일 때)
+  if(_idxData.topics.length>=2||_idxData.fragments.length>=2){
+    var tools=document.createElement('div');tools.style.cssText='display:flex;gap:9px;margin-bottom:18px;';
+    var crossBtn=document.createElement('div');
+    crossBtn.style.cssText='flex:1;background:#fbf9f4;border-radius:15px;padding:13px 10px;text-align:center;cursor:pointer;';
+    crossBtn.innerHTML='<div style="font-size:16px;">⋈</div><div style="font-size:11px;color:#6b6455;font-weight:700;margin-top:3px;">교집합 보기</div>';
+    crossBtn.addEventListener('click',function(){_idxCross={a:null,b:null};rerenderIndexPage();});
+    var cmpBtn=document.createElement('div');
+    cmpBtn.style.cssText='flex:1;background:#fbf9f4;border-radius:15px;padding:13px 10px;text-align:center;cursor:pointer;';
+    cmpBtn.innerHTML='<div style="font-size:15px;">⇹</div><div style="font-size:11px;color:#6b6455;font-weight:700;margin-top:3px;">나란히 비교</div>';
+    cmpBtn.addEventListener('click',function(){_idxCompareOpen=true;_idxCompareSel=[];rerenderIndexPage();});
+    tools.appendChild(crossBtn);tools.appendChild(cmpBtn);
+    body.appendChild(tools);
+  }
+  // 주제 서랍
+  var drawerHd=document.createElement('div');
+  drawerHd.style.cssText='display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;';
+  drawerHd.innerHTML='<div style="font-size:14px;color:#4a4335;font-weight:700;">주제 서랍</div><div style="font-size:11px;color:#b0a690;">'+_idxData.fragments.length+' 조각</div>';
+  body.appendChild(drawerHd);
+  // 주제 카드 (2열 그리드)
+  var topics=_idxData.topics.slice();
+  var grid=document.createElement('div');grid.style.cssText='display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;';
+  topics.forEach(function(t){
+    var cnt=_idxCountByTopic(t.id);
+    var card=document.createElement('div');
+    card.style.cssText='flex:1 1 calc(50% - 5px);min-width:calc(50% - 5px);box-sizing:border-box;background:#fbf9f4;border-radius:18px;padding:15px;cursor:pointer;';
+    card.innerHTML='<div style="width:26px;height:26px;border-radius:9px;background:'+_idxTint(t.color)+';display:flex;align-items:center;justify-content:center;margin-bottom:10px;"><span style="width:9px;height:9px;border-radius:50%;background:'+t.color+';"></span></div>'
+      +'<div style="font-size:14px;color:#2d2920;font-weight:700;">'+t.name+'</div>'
+      +'<div style="font-size:22px;color:#2d2920;margin-top:6px;letter-spacing:-0.01em;font-weight:800;">'+cnt+'<span style="font-size:11px;color:#b0a690;font-weight:400;"> 조각</span></div>';
+    card.addEventListener('click',function(){_idxTopicFilter=t.id;rerenderIndexPage();});
+    grid.appendChild(card);
+  });
+  body.appendChild(grid);
+  // 미분류
+  var unc=_idxUncategorized();
+  if(unc.length||!topics.length){
+    var uncCard=document.createElement('div');
+    uncCard.style.cssText='background:#fbf9f4;border-radius:18px;padding:15px 17px;display:flex;align-items:center;margin-bottom:20px;cursor:pointer;';
+    uncCard.innerHTML='<div style="width:20px;height:20px;border-radius:7px;background:#efe9df;display:flex;align-items:center;justify-content:center;margin-right:12px;"><span style="width:8px;height:8px;border-radius:50%;background:#b0a892;"></span></div>'
+      +'<div style="flex:1;font-size:13px;color:#6b6455;">미분류 — '+(unc.length?unc.length+'개, 정리를 기다려요':'모든 조각이 정리됐어요')+'</div>'
+      +(unc.length?'<div style="font-size:14px;color:#8a8474;">'+unc.length+'</div>':'');
+    uncCard.addEventListener('click',function(){_idxTopicFilter='__uncat__';rerenderIndexPage();});
+    body.appendChild(uncCard);
+  }else{body.appendChild(_idxSpacer(20));}
+  // 하단 버튼
+  var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:10px;';
+  var addBtn=document.createElement('div');
+  addBtn.style.cssText='flex:1;background:#2d2920;border-radius:15px;padding:14px;text-align:center;font-size:13px;color:#f4efe4;cursor:pointer;font-weight:700;';
+  addBtn.textContent='＋ 생각 적기';
+  addBtn.addEventListener('click',function(){_openAddFragment();});
+  var connBtn=document.createElement('div');
+  connBtn.style.cssText='width:52px;background:#fbf9f4;border-radius:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  connBtn.innerHTML='<span style="font-size:18px;color:#6b6455;">⇄</span>';
+  connBtn.title='연결 만들기';
+  connBtn.addEventListener('click',function(){_openConnectSheet();});
+  btnRow.appendChild(addBtn);btnRow.appendChild(connBtn);
+  body.appendChild(btnRow);
+}
+function _idxSpacer(px){var d=document.createElement('div');d.style.height=px+'px';return d;}
+function _idxTint(hex){
+  // 옅은 배경색 생성 (주제 점 뒤 타일)
+  var m=hex.replace('#','');var r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);
+  return 'rgba('+r+','+g+','+b+',0.14)';
+}
+function _idxHeroGraph(){
+  var links=_idxData.links||[];
+  var topics=_idxData.topics.slice(0,4);
+  if(!topics.length)return '';
+  var pts=[[14,20],[52,16],[46,48],[16,46]];
+  var circles=topics.map(function(t,i){return '<circle cx="'+pts[i][0]+'" cy="'+pts[i][1]+'" r="5" fill="'+t.color+'"/>';}).join('');
+  var lines='';
+  if(topics.length>=2){
+    var seq=[[0,1],[1,2],[2,3],[3,0],[0,2]];
+    lines=seq.filter(function(s){return s[0]<topics.length&&s[1]<topics.length;}).map(function(s){
+      return '<line x1="'+pts[s[0]][0]+'" y1="'+pts[s[0]][1]+'" x2="'+pts[s[1]][0]+'" y2="'+pts[s[1]][1]+'"/>';
+    }).join('');
+  }
+  return '<svg width="66" height="66" viewBox="0 0 66 66" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);">'
+    +'<g stroke="#5a5344" stroke-width="1.3" opacity="0.75">'+lines+'</g>'+circles+'</svg>';
+}
+// 주제 상세
+function _idxRenderTopicDetail(container){
+  var isUncat=_idxTopicFilter==='__uncat__';
+  var topic=isUncat?{id:'__uncat__',name:'미분류',color:'#b0a892'}:_idxTopicById(_idxTopicFilter);
+  if(!topic){_idxTopicFilter=null;rerenderIndexPage();return;}
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var frags=isUncat?_idxUncategorized():_idxData.fragments.filter(function(f){return (f.topics||[]).indexOf(topic.id)>=0;});
+  frags=frags.slice().sort(function(a,b){return b.ts-a.ts;});
+  // 헤더
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:20px;';
+  var back=document.createElement('div');
+  back.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+  back.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+  back.addEventListener('click',function(){_idxTopicFilter=null;rerenderIndexPage();});
+  head.appendChild(back);
+  var htitle=document.createElement('div');htitle.style.cssText='flex:1;';
+  htitle.innerHTML='<div style="display:flex;align-items:center;gap:8px;"><span style="width:10px;height:10px;border-radius:50%;background:'+topic.color+';"></span><span style="font-size:19px;color:#2d2920;letter-spacing:-0.02em;font-weight:800;">'+topic.name+'</span></div>';
+  head.appendChild(htitle);
+  var cntEl=document.createElement('div');cntEl.style.cssText='font-size:12px;color:#b0a690;';cntEl.textContent=frags.length+' 조각';
+  head.appendChild(cntEl);
+  // 주제 수정(미분류 아닐 때)
+  if(!isUncat){
+    var editT=document.createElement('div');editT.style.cssText='cursor:pointer;font-size:14px;margin-left:8px;';editT.textContent='⚙️';
+    editT.addEventListener('click',function(){_openEditTopic(topic);});
+    head.appendChild(editT);
+  }
+  body.appendChild(head);
+  // 이어진 곳 (이 주제 조각들이 가진 다른 주제)
+  if(!isUncat){
+    var linkedCount={};
+    frags.forEach(function(f){(f.topics||[]).forEach(function(tid){if(tid!==topic.id)linkedCount[tid]=(linkedCount[tid]||0)+1;});});
+    var linkedIds=Object.keys(linkedCount);
+    if(linkedIds.length){
+      var linkBox=document.createElement('div');
+      linkBox.style.cssText='background:'+_idxTint(topic.color)+';border-radius:18px;padding:14px 16px;margin-bottom:18px;';
+      var chips=linkedIds.map(function(tid){
+        return '<span class="idx-link-chip" data-tid="'+tid+'" style="background:#fbf9f4;border-radius:20px;padding:6px 13px;font-size:12px;color:#2d2920;display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><span style="width:7px;height:7px;border-radius:50%;background:'+_idxTopicColor(tid)+';"></span>'+_idxTopicName(tid)+' · '+linkedCount[tid]+'</span>';
+      }).join(' ');
+      linkBox.innerHTML='<div style="font-size:11px;color:#5a5344;margin-bottom:8px;">이 주제와 이어진 곳</div><div style="display:flex;gap:7px;flex-wrap:wrap;">'+chips+'</div>';
+      body.appendChild(linkBox);
+      linkBox.querySelectorAll('.idx-link-chip').forEach(function(c){c.addEventListener('click',function(){_idxTopicFilter=c.getAttribute('data-tid');rerenderIndexPage();});});
+    }
+  }
+  // 조각 목록
+  var fhd=document.createElement('div');fhd.style.cssText='font-size:13px;color:#6b6455;margin-bottom:11px;font-weight:700;';fhd.textContent='조각';
+  body.appendChild(fhd);
+  if(!frags.length){
+    var emp=document.createElement('div');emp.style.cssText='text-align:center;padding:20px 0;color:#b0a690;font-size:12px;';emp.textContent='아직 조각이 없어요';
+    body.appendChild(emp);
+  }
+  frags.forEach(function(f){
+    var card=document.createElement('div');
+    card.style.cssText='background:#fbf9f4;border-radius:16px;padding:14px 16px;margin-bottom:9px;position:relative;cursor:pointer;';
+    var allTags=(f.topics||[]).map(function(tid){
+      return '<span style="font-size:10px;font-weight:600;color:'+_idxTopicColor(tid)+';background:'+_idxTint(_idxTopicColor(tid))+';border-radius:7px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:'+_idxTopicColor(tid)+';"></span>'+_idxTopicName(tid)+'</span>';
+    }).join(' ');
+    var collapsed=!!f._collapsed;
+    var textStyle=collapsed
+      ?'font-size:14px;color:#2d2920;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:26px;'
+      :'font-size:14px;color:#2d2920;line-height:1.5;margin-bottom:'+(allTags?'9px':'0')+';padding-right:26px;';
+    card.innerHTML='<div class="idxf-text" style="'+textStyle+'">'+f.text+'</div>'
+      +(collapsed?'':'<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">'+allTags+'<span style="font-size:10px;color:#b0a690;margin-left:auto;">'+_idxFmtAgo(f.ts)+'</span></div>');
+    // ⋮ 메뉴 버튼
+    var menu=document.createElement('span');menu.innerHTML='⋮';menu.style.cssText='position:absolute;top:11px;right:13px;font-size:16px;color:#b0a690;cursor:pointer;line-height:1;padding:2px 4px;';
+    menu.addEventListener('click',function(ev){ev.stopPropagation();_openFragmentMenu(f,menu);});
+    card.appendChild(menu);
+    // 카드 짧게 터치 → 펼침/접힘 토글
+    card.addEventListener('click',function(){f._collapsed=!f._collapsed;rerenderIndexPage();});
+    body.appendChild(card);
+  });
+  body.appendChild(_idxSpacer(10));
+  // 하단 버튼
+  var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:10px;';
+  var addBtn=document.createElement('div');
+  addBtn.style.cssText='flex:1;background:#2d2920;border-radius:15px;padding:13px;text-align:center;font-size:13px;color:#f4efe4;cursor:pointer;font-weight:700;';
+  addBtn.textContent='＋ 이 주제에 적기';
+  addBtn.addEventListener('click',function(){_openAddFragment(isUncat?null:topic.id);});
+  btnRow.appendChild(addBtn);
+  if(!isUncat){
+    var connBtn=document.createElement('div');
+    connBtn.style.cssText='flex:1;background:#e5a63a;border-radius:15px;padding:13px;text-align:center;font-size:13px;color:#4a3a10;cursor:pointer;font-weight:700;';
+    connBtn.textContent='다른 주제와 잇기';
+    connBtn.addEventListener('click',function(){_openConnectSheet();});
+    btnRow.appendChild(connBtn);
+  }
+  body.appendChild(btnRow);
+}
+
+// 교집합 보기 (두 주제 겹치는 조각)
+function _idxRenderCross(container){
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:20px;';
+  var back=document.createElement('div');
+  back.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+  back.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+  back.addEventListener('click',function(){_idxCross=null;rerenderIndexPage();});
+  head.appendChild(back);
+  var ht=document.createElement('div');ht.style.cssText='flex:1;font-size:19px;color:#2d2920;letter-spacing:-0.02em;font-weight:800;';ht.textContent='교집합 보기';
+  head.appendChild(ht);
+  body.appendChild(head);
+  var hint=document.createElement('div');hint.style.cssText='font-size:11px;color:#a89e8c;margin-bottom:14px;';hint.textContent='주제 2개를 고르면 둘 다 걸친 조각을 모아줘요';
+  body.appendChild(hint);
+  function topicPicker(slot,cur){
+    var row=document.createElement('div');row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;';
+    _idxData.topics.forEach(function(t){
+      var on=cur===t.id;
+      var b=document.createElement('button');
+      b.style.cssText='font-size:12px;font-weight:600;padding:7px 13px;border-radius:16px;border:1px solid '+(on?t.color:'#e2dccf')+';background:'+(on?_idxTint(t.color):'#fff')+';color:'+(on?'#2d2920':'#8a8474')+';cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;';
+      b.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:'+t.color+';"></span>'+t.name;
+      b.addEventListener('click',function(){_idxCross[slot]=(_idxCross[slot]===t.id?null:t.id);rerenderIndexPage();});
+      row.appendChild(b);
+    });
+    return row;
+  }
+  var lblA=document.createElement('div');lblA.style.cssText='font-size:10px;color:#a89e8c;font-weight:700;margin-bottom:7px;';lblA.textContent='첫 번째 주제';body.appendChild(lblA);
+  body.appendChild(topicPicker('a',_idxCross.a));
+  var lblB=document.createElement('div');lblB.style.cssText='font-size:10px;color:#a89e8c;font-weight:700;margin-bottom:7px;';lblB.textContent='두 번째 주제';body.appendChild(lblB);
+  body.appendChild(topicPicker('b',_idxCross.b));
+  if(_idxCross.a&&_idxCross.b&&_idxCross.a!==_idxCross.b){
+    var inter=_idxData.fragments.filter(function(f){return (f.topics||[]).indexOf(_idxCross.a)>=0&&(f.topics||[]).indexOf(_idxCross.b)>=0;});
+    var resHd=document.createElement('div');resHd.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;margin:16px 0 12px;flex-wrap:wrap;';
+    resHd.innerHTML='<span style="font-size:12px;color:'+_idxTopicColor(_idxCross.a)+';background:'+_idxTint(_idxTopicColor(_idxCross.a))+';border-radius:14px;padding:5px 12px;">'+_idxTopicName(_idxCross.a)+'</span>'
+      +'<span style="font-size:13px;color:#a89e8c;">∩</span>'
+      +'<span style="font-size:12px;color:'+_idxTopicColor(_idxCross.b)+';background:'+_idxTint(_idxTopicColor(_idxCross.b))+';border-radius:14px;padding:5px 12px;">'+_idxTopicName(_idxCross.b)+'</span>'
+      +'<span style="font-size:11px;color:#8a8474;margin-left:2px;">'+inter.length+'개</span>';
+    body.appendChild(resHd);
+    if(!inter.length){
+      var e=document.createElement('div');e.style.cssText='text-align:center;color:#b0a690;font-size:12px;padding:14px 0;';e.textContent='두 주제에 겹치는 조각이 아직 없어요';body.appendChild(e);
+    }
+    inter.forEach(function(f){
+      var card=document.createElement('div');card.style.cssText='background:#fbf9f4;border-radius:14px;padding:13px 15px;margin-bottom:8px;cursor:pointer;';
+      card.innerHTML='<div style="font-size:13px;color:#2d2920;line-height:1.5;">'+f.text+'</div>';
+      card.addEventListener('click',function(){_openFragmentSheet(f);});
+      body.appendChild(card);
+    });
+    if(inter.length>=2){
+      var mkLink=document.createElement('div');
+      mkLink.style.cssText='background:#e5a63a;border-radius:14px;padding:12px;text-align:center;font-size:12px;color:#4a3a10;font-weight:700;cursor:pointer;margin-top:6px;';
+      mkLink.textContent='이 조각들로 연결 만들기';
+      mkLink.addEventListener('click',function(){_openConnectSheet(inter.map(function(f){return f.id;}));});
+      body.appendChild(mkLink);
+    }
+  }
+}
+// 나란히 비교 (여러 조각 골라 맞대기)
+function _idxRenderCompare(container){
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:16px;';
+  var back=document.createElement('div');
+  back.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+  back.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+  back.addEventListener('click',function(){_idxCompareOpen=false;_idxCompareSel=[];_idxCmpInsight='';rerenderIndexPage();});
+  head.appendChild(back);
+  var ht=document.createElement('div');ht.style.cssText='flex:1;font-size:19px;color:#2d2920;letter-spacing:-0.02em;font-weight:800;';ht.textContent='나란히 비교';
+  head.appendChild(ht);
+  body.appendChild(head);
+  var selFrags=_idxCompareSel.map(function(fid){return _idxData.fragments.find(function(f){return f.id===fid;});}).filter(Boolean);
+  if(selFrags.length){
+    var strip=document.createElement('div');strip.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;touch-action:pan-y;position:relative;';
+    var drag={active:false,fid:null,el:null,ghost:null,timer:null,offX:0,offY:0,order:null};
+    function pointFrom(ev){var t=ev.touches&&ev.touches[0];return t?{x:t.clientX,y:t.clientY}:{x:ev.clientX,y:ev.clientY};}
+    function buildCard(f){
+      var tid=(f.topics||[])[0];var col=tid?_idxTopicColor(tid):'#b0a892';
+      var c=document.createElement('div');
+      c.setAttribute('data-fid',f.id);
+      c.style.cssText='background:#fbf9f4;border-top:3px solid '+col+';border-radius:12px;padding:11px 11px 10px;position:relative;transition:transform 0.16s ease,opacity 0.16s;user-select:none;-webkit-user-select:none;cursor:pointer;';
+      var collapsed=!!f._cmpCollapsed;
+      var textStyle=collapsed
+        ?'font-size:12px;color:#2d2920;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+        :'font-size:12px;color:#2d2920;line-height:1.5;';
+      c.innerHTML='<div style="font-size:10px;color:'+col+';margin-bottom:6px;padding-right:22px;">'+(tid?_idxTopicName(tid):'미분류')+'</div><div class="cmp-text" style="'+textStyle+'">'+f.text+'</div>';
+      // ⋮ 메뉴
+      var menu=document.createElement('span');menu.innerHTML='⋮';menu.style.cssText='position:absolute;top:8px;right:8px;font-size:15px;color:#b0a690;cursor:pointer;line-height:1;padding:2px 4px;z-index:3;';
+      menu.addEventListener('mousedown',function(ev){ev.stopPropagation();});
+      menu.addEventListener('click',function(ev){ev.stopPropagation();var ta=document.getElementById('cmpInsight');if(ta)_idxCmpInsight=ta.value;_openFragmentMenu(f,menu,true);});
+      c.appendChild(menu);
+      c._menu=menu;c._f=f;
+      return c;
+    }
+    var cards=selFrags.map(buildCard);
+    cards.forEach(function(c){strip.appendChild(c);});
+
+    function cardCenters(){
+      return cards.map(function(c){var r=c.getBoundingClientRect();return {fid:c.getAttribute('data-fid'),cx:r.left+r.width/2,cy:r.top+r.height/2};});
+    }
+    function startDrag(c,ev){
+      var r=c.getBoundingClientRect();var p=pointFrom(ev);
+      drag.active=true;drag.fid=c.getAttribute('data-fid');drag.el=c;
+      drag.offX=p.x-r.left;drag.offY=p.y-r.top;
+      // 고스트 (실제로 떠서 따라다니는 카드)
+      var g=c.cloneNode(true);
+      g.style.position='fixed';g.style.left=r.left+'px';g.style.top=r.top+'px';g.style.width=r.width+'px';g.style.margin='0';
+      g.style.transition='transform 0.05s';g.style.transform='scale(1.06)';g.style.boxShadow='0 10px 26px rgba(0,0,0,0.22)';g.style.zIndex='9999';g.style.pointerEvents='none';g.style.opacity='0.97';
+      document.body.appendChild(g);drag.ghost=g;
+      // 원본은 자리 표시(반투명)
+      c.style.opacity='0.28';
+      if(navigator.vibrate)try{navigator.vibrate(15);}catch(e){}
+    }
+    function moveDrag(ev){
+      if(!drag.active)return;
+      ev.preventDefault();
+      var p=pointFrom(ev);
+      if(drag.ghost){drag.ghost.style.left=(p.x-drag.offX)+'px';drag.ghost.style.top=(p.y-drag.offY)+'px';}
+      // 포인터 아래 카드 찾아 자리 이동(라이브)
+      var centers=cardCenters();
+      var target=null,best=1e9;
+      centers.forEach(function(o){var dx=p.x-o.cx,dy=p.y-o.cy;var d=dx*dx+dy*dy;if(d<best){best=d;target=o.fid;}});
+      if(target&&target!==drag.fid){
+        var arr=_idxCompareSel;var fi=arr.indexOf(drag.fid),ti=arr.indexOf(target);
+        if(fi>=0&&ti>=0){
+          arr.splice(fi,1);arr.splice(ti,0,drag.fid);
+          // DOM도 재배치 (부드럽게)
+          reflowCards();
+        }
+      }
+    }
+    function reflowCards(){
+      // _idxCompareSel 순서대로 카드 DOM 재배열
+      _idxCompareSel.forEach(function(fid){
+        var c=cards.find(function(cc){return cc.getAttribute('data-fid')===fid;});
+        if(c)strip.appendChild(c);
+      });
+    }
+    function endDrag(){
+      if(drag.timer){clearTimeout(drag.timer);drag.timer=null;}
+      if(drag.active){
+        if(drag.ghost){drag.ghost.remove();drag.ghost=null;}
+        if(drag.el)drag.el.style.opacity='';
+        var ta=document.getElementById('cmpInsight');if(ta)_idxCmpInsight=ta.value;
+        if(window._saveState)window._saveState();
+        window._idxJustDragged=true;
+      }
+      drag.active=false;drag.fid=null;drag.el=null;
+    }
+    cards.forEach(function(c){
+      var pressInfo={start:null,moved:false};
+      function inMenu(ev){return ev.target&&ev.target.closest&&ev.target.closest('span')&&ev.target.parentNode&&ev.target.parentNode.style&&ev.target.parentNode.style.position==='absolute';}
+      function press(ev){
+        if(inMenu(ev)||ev.target===c._menu)return;
+        var p=pointFrom(ev);pressInfo.start=p;pressInfo.moved=false;
+        drag.timer=setTimeout(function(){startDrag(c,ev);},300);
+      }
+      function cancelIfNotStarted(){if(!drag.active&&drag.timer){clearTimeout(drag.timer);drag.timer=null;}}
+      function tapEnd(ev){
+        var wasDragging=drag.active;
+        endDrag();
+        // 드래그도 아니고 크게 움직이지도 않았으면 → 짧은 터치 = 펼침/접힘 토글
+        if(!wasDragging&&!pressInfo.moved){
+          var f=c._f;f._cmpCollapsed=!f._cmpCollapsed;
+          var ta=document.getElementById('cmpInsight');if(ta)_idxCmpInsight=ta.value;
+          rerenderIndexPage();
+        }
+      }
+      c.addEventListener('touchstart',press,{passive:true});
+      c.addEventListener('touchmove',function(ev){
+        if(pressInfo.start){var p=pointFrom(ev);if(Math.abs(p.x-pressInfo.start.x)>8||Math.abs(p.y-pressInfo.start.y)>8)pressInfo.moved=true;}
+        if(!drag.active){cancelIfNotStarted();return;}moveDrag(ev);
+      },{passive:false});
+      c.addEventListener('touchend',tapEnd);
+      c.addEventListener('touchcancel',endDrag);
+      c.addEventListener('mousedown',press);
+      c.addEventListener('click',function(ev){
+        if(inMenu(ev)||ev.target===c._menu)return;
+        if(window._idxJustDragged){window._idxJustDragged=false;return;}
+        // 마우스 짧은 클릭 → 토글
+        var f=c._f;f._cmpCollapsed=!f._cmpCollapsed;
+        var ta=document.getElementById('cmpInsight');if(ta)_idxCmpInsight=ta.value;
+        rerenderIndexPage();
+      });
+    });
+    if(window._idxDragMove)document.removeEventListener('mousemove',window._idxDragMove);
+    if(window._idxDragUp)document.removeEventListener('mouseup',window._idxDragUp);
+    window._idxDragMove=function(ev){if(!drag.active){if(drag.timer){clearTimeout(drag.timer);drag.timer=null;}return;}moveDrag(ev);};
+    window._idxDragUp=function(){endDrag();};
+    document.addEventListener('mousemove',window._idxDragMove);
+    document.addEventListener('mouseup',window._idxDragUp);
+
+    body.appendChild(strip);
+    var hint=document.createElement('div');hint.style.cssText='font-size:9px;color:#b0a690;text-align:center;margin-bottom:12px;';hint.textContent='카드를 길게 눌러 끌어서 순서를 바꿔요';
+    body.appendChild(hint);
+    var ins=document.createElement('textarea');ins.id='cmpInsight';ins.rows=2;ins.placeholder='공통점·차이를 적어요 (예: 둘 다 관성 개념)';
+    ins.value=_idxCmpInsight||'';
+    ins.style.cssText='width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:11px;font-size:12px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;margin-bottom:10px;';
+    body.appendChild(ins);
+    if(selFrags.length>=2){
+      var save=document.createElement('div');
+      save.style.cssText='background:#e5a63a;border-radius:14px;padding:13px;text-align:center;font-size:13px;color:#4a3a10;font-weight:800;cursor:pointer;margin-bottom:18px;';
+      save.textContent='연결로 저장';
+      save.addEventListener('click',function(){
+        _idxData.links.push({id:'ln'+Date.now(),fragIds:_idxCompareSel.slice(),insight:ins.value.trim(),ts:Date.now()});
+        if(window._saveState)window._saveState();_idxCompareOpen=false;_idxCompareSel=[];_idxCmpInsight='';_idxLinkSel=null;rerenderIndexPage();
+        showToast('연결로 저장했어요 ✦','add','ti-check');
+      });
+      body.appendChild(save);
+    }
+  }else{
+    var ph=document.createElement('div');ph.style.cssText='text-align:center;color:#b0a690;font-size:12px;padding:10px 0 18px;';ph.textContent='아래에서 비교할 조각을 골라보세요';body.appendChild(ph);
+  }
+  var listHd=document.createElement('div');listHd.style.cssText='font-size:11px;color:#a89e8c;font-weight:700;margin-bottom:10px;';listHd.textContent='조각 고르기 ('+_idxCompareSel.length+'개 선택됨)';
+  body.appendChild(listHd);
+  _idxData.fragments.slice().sort(function(a,b){return b.ts-a.ts;}).forEach(function(f){
+    var on=_idxCompareSel.indexOf(f.id)>=0;
+    var tid=(f.topics||[])[0];
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;background:#fbf9f4;margin-bottom:7px;cursor:pointer;border:1.5px solid '+(on?'#e5a63a':'transparent')+';';
+    row.innerHTML='<span style="width:18px;height:18px;border-radius:5px;flex-shrink:0;box-sizing:border-box;'+(on?'background:#e5a63a;':'border:2px solid #d8d2c4;')+'display:flex;align-items:center;justify-content:center;">'+(on?'<span style="color:#fff;font-size:11px;">✓</span>':'')+'</span>'
+      +'<span style="flex:1;font-size:12px;color:#2d2920;">'+(f.text.length>30?f.text.slice(0,30)+'…':f.text)+'</span>'
+      +(tid?'<span style="width:8px;height:8px;border-radius:50%;background:'+_idxTopicColor(tid)+';"></span>':'');
+    row.addEventListener('click',function(){var ix=_idxCompareSel.indexOf(f.id);if(ix>=0)_idxCompareSel.splice(ix,1);else _idxCompareSel.push(f.id);rerenderIndexPage();});
+    body.appendChild(row);
+  });
+}
+// 전체 연결 목록
+function _idxRenderLinksList(container){
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:20px;';
+  var back=document.createElement('div');
+  back.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+  back.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+  back.addEventListener('click',function(){_idxShowLinksList=false;rerenderIndexPage();});
+  head.appendChild(back);
+  var ht=document.createElement('div');ht.style.cssText='flex:1;font-size:19px;color:#2d2920;letter-spacing:-0.02em;font-weight:800;';ht.textContent='모든 연결';
+  head.appendChild(ht);
+  var cnt=document.createElement('div');cnt.style.cssText='font-size:12px;color:#b0a690;';cnt.textContent=(_idxData.links||[]).length+'개';
+  head.appendChild(cnt);
+  body.appendChild(head);
+  var links=(_idxData.links||[]).slice().sort(function(a,b){return b.ts-a.ts;});
+  links.forEach(function(link){
+    var frags=(link.fragIds||[]).map(function(fid){return _idxData.fragments.find(function(f){return f.id===fid;});}).filter(Boolean);
+    var dots=frags.slice(0,4).map(function(f){var tid=(f.topics||[])[0];return '<span style="width:8px;height:8px;border-radius:50%;background:'+(tid?_idxTopicColor(tid):'#b0a892')+';display:inline-block;"></span>';}).join(' ');
+    var card=document.createElement('div');
+    card.style.cssText='background:#fbf9f4;border-radius:16px;padding:15px 16px;margin-bottom:9px;cursor:pointer;';
+    card.innerHTML='<div style="font-size:14px;color:#2d2920;line-height:1.5;margin-bottom:8px;">'+(link.insight||'<span style="color:#a89e8c;">통찰 없음</span>')+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;"><span style="display:flex;gap:4px;">'+dots+'</span><span style="font-size:10px;color:#b0a690;margin-left:auto;">'+frags.length+'조각 · '+_idxFmtAgo(link.ts)+'</span></div>';
+    card.addEventListener('click',function(){_idxShowLinksList=false;_idxLinkSel=link.id;rerenderIndexPage();});
+    body.appendChild(card);
+  });
+}
+// 연결(link) 상세
+function _idxRenderLinkDetail(container){
+  var link=(_idxData.links||[]).find(function(l){return l.id===_idxLinkSel;});
+  if(!link){_idxLinkSel=null;rerenderIndexPage();return;}
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 17px 28px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  // 헤더
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:20px;';
+  var back=document.createElement('div');
+  back.style.cssText='width:34px;height:34px;border-radius:50%;background:#fbf9f4;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+  back.innerHTML='<span style="font-size:18px;color:#6b6455;">‹</span>';
+  back.addEventListener('click',function(){_idxLinkSel=null;rerenderIndexPage();});
+  head.appendChild(back);
+  var ht=document.createElement('div');ht.style.cssText='flex:1;font-size:19px;color:#2d2920;letter-spacing:-0.02em;font-weight:800;';ht.textContent='연결';
+  head.appendChild(ht);
+  var ago=document.createElement('div');ago.style.cssText='font-size:12px;color:#b0a690;';ago.textContent=_idxFmtAgo(link.ts);
+  head.appendChild(ago);
+  body.appendChild(head);
+  // 통찰 카드
+  var insCard=document.createElement('div');
+  insCard.style.cssText='background:#e5a63a;border-radius:22px;padding:20px;margin-bottom:20px;';
+  insCard.innerHTML='<div style="font-size:12px;color:#7a5c12;margin-bottom:8px;">✦ 발견한 연결</div>'
+    +'<div style="font-size:17px;color:#4a3a10;line-height:1.5;">'+(link.insight?link.insight:'<span style="color:#8a6a1e;">통찰을 아직 안 적었어요</span>')+'</div>';
+  body.appendChild(insCard);
+  // 엮은 조각
+  var frags=(link.fragIds||[]).map(function(fid){return _idxData.fragments.find(function(f){return f.id===fid;});}).filter(Boolean);
+  var fhd=document.createElement('div');fhd.style.cssText='font-size:13px;color:#6b6455;margin-bottom:12px;font-weight:700;';fhd.textContent='엮은 조각 '+frags.length+'개';
+  body.appendChild(fhd);
+  frags.forEach(function(f){
+    var firstTopic=(f.topics||[])[0];
+    var col=firstTopic?_idxTopicColor(firstTopic):'#b0a892';
+    var nm=firstTopic?_idxTopicName(firstTopic):'미분류';
+    var card=document.createElement('div');
+    card.style.cssText='background:#fbf9f4;border-left:4px solid '+col+';border-radius:0 16px 16px 0;padding:14px 16px;margin-bottom:9px;cursor:pointer;';
+    card.innerHTML='<div style="font-size:10px;color:#8a7d68;margin-bottom:4px;">'+nm+'</div><div style="font-size:14px;color:#2d2920;line-height:1.5;">'+f.text+'</div>';
+    card.addEventListener('click',function(){_openFragmentSheet(f);});
+    body.appendChild(card);
+  });
+  body.appendChild(_idxSpacer(10));
+  // 하단: 통찰 수정 / 연결 풀기
+  var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:10px;';
+  var editBtn=document.createElement('div');
+  editBtn.style.cssText='flex:1;background:#fbf9f4;border-radius:15px;padding:13px;text-align:center;font-size:13px;color:#6b6455;cursor:pointer;font-weight:700;';
+  editBtn.textContent='통찰 수정';
+  editBtn.addEventListener('click',function(){_openEditInsight(link);});
+  var delBtn=document.createElement('div');
+  delBtn.style.cssText='flex:1;background:#fbf9f4;border-radius:15px;padding:13px;text-align:center;font-size:13px;color:#a05a4a;cursor:pointer;font-weight:700;';
+  delBtn.textContent='연결 풀기';
+  delBtn.addEventListener('click',function(){
+    if(!confirm('이 연결을 풀까요? (조각은 그대로 남아요)'))return;
+    _idxData.links=_idxData.links.filter(function(l){return l.id!==link.id;});
+    _idxLinkSel=null;if(window._saveState)window._saveState();rerenderIndexPage();
+  });
+  btnRow.appendChild(editBtn);btnRow.appendChild(delBtn);
+  body.appendChild(btnRow);
+}
+function _openEditInsight(link){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('insightEditSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='insightEditSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:12px;">통찰 수정</div>'
+    +'<textarea id="ieText" rows="3" placeholder="이 조각들이 어떻게 이어지나요?" style="width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:12px;font-size:13px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;">'+(link.insight||'')+'</textarea>'
+    +'<button id="ieSave" style="width:100%;border:none;background:#e5a63a;color:#4a3a10;font-size:13px;font-weight:800;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;margin-top:10px;">저장</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  setTimeout(function(){try{sheet.querySelector('#ieText').focus();}catch(e){}},60);
+  sheet.querySelector('#ieSave').addEventListener('click',function(){link.insight=sheet.querySelector('#ieText').value.trim();if(window._saveState)window._saveState();wrap.remove();rerenderIndexPage();});
+}
+// 생각(조각) 추가
+function _openAddFragment(preTopicId){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('fragAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='fragAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var selTopics=preTopicId?[preTopicId]:[];
+  var topicChips=_idxData.topics.map(function(t){
+    var on=selTopics.indexOf(t.id)>=0;
+    return '<button class="fa-topic" data-tid="'+t.id+'" style="font-size:11px;font-weight:600;padding:6px 12px;border-radius:14px;border:1px solid '+(on?t.color:'#e2dccf')+';background:'+(on?_idxTint(t.color):'#fff')+';color:'+(on?'#2d2920':'#8a8474')+';cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:'+t.color+';"></span>'+t.name+'</button>';
+  }).join(' ');
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:14px;">생각 적기</div>'
+    +'<textarea id="faText" rows="3" placeholder="떠오르는 걸 자유롭게 적어요" style="width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:12px;font-size:13px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;"></textarea>'
+    +'<div style="font-size:10px;color:#a89e8c;font-weight:600;margin:12px 0 7px;">주제 (여러 개 가능 · 나중에 달아도 돼요)</div>'
+    +'<div id="faTopicRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'+topicChips+'<button id="faNewTopic" style="font-size:11px;font-weight:600;padding:6px 12px;border-radius:14px;border:1px dashed #cfc7b6;background:none;color:#a89e8c;cursor:pointer;font-family:inherit;">＋ 새 주제</button></div>'
+    +'<button id="faSave" style="width:100%;border:none;background:#2d2920;color:#f4efe4;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;margin-top:6px;">적기</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  function renderChips(){
+    var row=sheet.querySelector('#faTopicRow');if(!row)return;
+    var chipsH=_idxData.topics.map(function(t){
+      var on=selTopics.indexOf(t.id)>=0;
+      return '<button class="fa-topic" data-tid="'+t.id+'" style="font-size:11px;font-weight:600;padding:6px 12px;border-radius:14px;border:1px solid '+(on?t.color:'#e2dccf')+';background:'+(on?_idxTint(t.color):'#fff')+';color:'+(on?'#2d2920':'#8a8474')+';cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:'+t.color+';"></span>'+t.name+'</button>';
+    }).join(' ');
+    row.innerHTML=chipsH+'<button id="faNewTopic" style="font-size:11px;font-weight:600;padding:6px 12px;border-radius:14px;border:1px dashed #cfc7b6;background:none;color:#a89e8c;cursor:pointer;font-family:inherit;">＋ 새 주제</button>';
+    bindChips();
+  }
+  function bindChips(){
+    sheet.querySelectorAll('.fa-topic').forEach(function(b){b.addEventListener('click',function(){var tid=b.getAttribute('data-tid');var ix=selTopics.indexOf(tid);if(ix>=0)selTopics.splice(ix,1);else selTopics.push(tid);renderChips();});});
+    var nt=sheet.querySelector('#faNewTopic');
+    if(nt)nt.addEventListener('click',function(){
+      // 텍스트 보존한 채 주제만 새로 추가
+      _openInlineNewTopic(function(newId){selTopics.push(newId);renderChips();});
+    });
+  }
+  bindChips();
+  setTimeout(function(){try{sheet.querySelector('#faText').focus();}catch(e){}},60);
+  sheet.querySelector('#faSave').addEventListener('click',function(){
+    var txt=sheet.querySelector('#faText').value.trim();if(!txt){sheet.querySelector('#faText').focus();return;}
+    _idxData.fragments.push({id:'fr'+Date.now(),text:txt,ts:Date.now(),topics:selTopics.slice()});
+    if(window._saveState)window._saveState();wrap.remove();rerenderIndexPage();
+  });
+}
+// 인라인 새 주제 추가 (생각 시트 위에 겹쳐서, 텍스트 보존)
+function _openInlineNewTopic(onCreate){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('inlineTopicSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='inlineTopicSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3800;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.4);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var curColor=_IDX_COLORS[_idxData.topics.length%_IDX_COLORS.length];
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:14px;">새 주제</div>'
+    +'<input id="itName" placeholder="주제 이름 (예: 물리학)" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px;background:#fff;">'
+    +'<div style="font-size:10px;color:#a89e8c;font-weight:600;margin-bottom:7px;">색상</div>'
+    +'<div id="itColorRow" style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px;">'+_IDX_COLORS.map(function(c){return '<button class="it-color" data-c="'+c+'" style="width:28px;height:28px;border-radius:50%;background:'+c+';border:3px solid '+(c===curColor?'#2d2920':'transparent')+';cursor:pointer;"></button>';}).join('')+'</div>'
+    +'<button id="itSave" style="width:100%;border:none;background:#2d2920;color:#f4efe4;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">추가</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var selColor=curColor;
+  sheet.querySelectorAll('.it-color').forEach(function(b){b.addEventListener('click',function(){selColor=b.getAttribute('data-c');sheet.querySelectorAll('.it-color').forEach(function(x){x.style.border='3px solid transparent';});b.style.border='3px solid #2d2920';});});
+  setTimeout(function(){try{sheet.querySelector('#itName').focus();}catch(e){}},60);
+  sheet.querySelector('#itSave').addEventListener('click',function(){
+    var nm=sheet.querySelector('#itName').value.trim();if(!nm){sheet.querySelector('#itName').focus();return;}
+    var nt={id:'tp'+Date.now(),name:nm,color:selColor};_idxData.topics.push(nt);
+    if(window._saveState)window._saveState();
+    wrap.remove();
+    if(onCreate)onCreate(nt.id);
+  });
+}
+// 조각 상세/편집
+function _openFragmentMenu(f,anchor,isCompare){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('fragMenu');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='fragMenu';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3900;';
+  wrap.addEventListener('click',function(){wrap.remove();});
+  var pop=document.createElement('div');
+  pop.style.cssText='position:absolute;background:#fff;border-radius:13px;box-shadow:0 8px 24px rgba(0,0,0,0.16);padding:5px;width:128px;animation:logoMenuIn 0.14s ease;';
+  // 앵커 위치 계산
+  var hr=host.getBoundingClientRect();var ar=anchor.getBoundingClientRect();
+  var top=(ar.bottom-hr.top)+4;var right=(hr.right-ar.right);
+  pop.style.top=top+'px';pop.style.right=right+'px';
+  function item(label,color,fn){
+    var it=document.createElement('div');
+    it.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:9px;font-size:12.5px;color:'+(color||'#2d2920')+';cursor:pointer;';
+    it.textContent=label;
+    it.addEventListener('mouseenter',function(){it.style.background='#f6f4ef';});
+    it.addEventListener('mouseleave',function(){it.style.background='none';});
+    it.addEventListener('click',function(ev){ev.stopPropagation();wrap.remove();fn();});
+    pop.appendChild(it);
+  }
+  item('✎  수정',null,function(){_openFragmentSheet(f);});
+  if(isCompare){
+    item('✕  비교에서 빼기','#a05a4a',function(){var ix=_idxCompareSel.indexOf(f.id);if(ix>=0)_idxCompareSel.splice(ix,1);var ta=document.getElementById('cmpInsight');if(ta)_idxCmpInsight=ta.value;rerenderIndexPage();});
+  }else{
+    item('🗑  삭제','#c0392b',function(){
+      if(!confirm('이 조각을 삭제할까요?'))return;
+      _idxData.fragments=_idxData.fragments.filter(function(x){return x.id!==f.id;});
+      if(window._saveState)window._saveState();rerenderIndexPage();
+    });
+  }
+  wrap.appendChild(pop);host.appendChild(wrap);
+}
+function _openFragmentSheet(f){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('fragSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='fragSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var selTopics=(f.topics||[]).slice();
+  function topicChipsHtml(){return _idxData.topics.map(function(t){
+    var on=selTopics.indexOf(t.id)>=0;
+    return '<button class="fs-topic" data-tid="'+t.id+'" style="font-size:11px;font-weight:600;padding:6px 12px;border-radius:14px;border:1px solid '+(on?t.color:'#e2dccf')+';background:'+(on?_idxTint(t.color):'#fff')+';color:'+(on?'#2d2920':'#8a8474')+';cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:'+t.color+';"></span>'+t.name+'</button>';
+  }).join(' ');}
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:12px;">조각</div>'
+    +'<textarea id="fsText" rows="3" style="width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:12px;font-size:13px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;">'+f.text+'</textarea>'
+    +'<div style="font-size:10px;color:#a89e8c;font-weight:600;margin:12px 0 7px;">주제</div>'
+    +'<div id="fsTopicRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'+topicChipsHtml()+'</div>'
+    +'<button id="fsSave" style="width:100%;border:none;background:#2d2920;color:#f4efe4;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">저장</button>'
+    +'<button id="fsDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">삭제</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  function paint(){sheet.querySelectorAll('.fs-topic').forEach(function(b){var tid=b.getAttribute('data-tid');var t=_idxTopicById(tid);var on=selTopics.indexOf(tid)>=0;b.style.border='1px solid '+(on?t.color:'#e2dccf');b.style.background=on?_idxTint(t.color):'#fff';b.style.color=on?'#2d2920':'#8a8474';});}
+  sheet.querySelectorAll('.fs-topic').forEach(function(b){b.addEventListener('click',function(){var tid=b.getAttribute('data-tid');var ix=selTopics.indexOf(tid);if(ix>=0)selTopics.splice(ix,1);else selTopics.push(tid);paint();});});
+  sheet.querySelector('#fsSave').addEventListener('click',function(){f.text=sheet.querySelector('#fsText').value.trim()||f.text;f.topics=selTopics.slice();if(window._saveState)window._saveState();wrap.remove();rerenderIndexPage();});
+  sheet.querySelector('#fsDel').addEventListener('click',function(){_idxData.fragments=_idxData.fragments.filter(function(x){return x.id!==f.id;});if(window._saveState)window._saveState();wrap.remove();rerenderIndexPage();});
+}
+// 주제 추가/수정
+function _openEditTopic(topic,onCreate){
+  var editing=!!topic;
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('topicSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='topicSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3700;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var curColor=editing?topic.color:_IDX_COLORS[_idxData.topics.length%_IDX_COLORS.length];
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:14px;">'+(editing?'주제 수정':'새 주제')+'</div>'
+    +'<input id="tpName" placeholder="주제 이름 (예: 물리학)" value="'+(editing?topic.name.replace(/"/g,"&quot;"):'')+'" style="width:100%;border:1px solid #e6e2d8;border-radius:10px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px;background:#fff;">'
+    +'<div style="font-size:10px;color:#a89e8c;font-weight:600;margin-bottom:7px;">색상</div>'
+    +'<div id="tpColorRow" style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px;">'+_IDX_COLORS.map(function(c){return '<button class="tp-color" data-c="'+c+'" style="width:28px;height:28px;border-radius:50%;background:'+c+';border:3px solid '+(c===curColor?'#2d2920':'transparent')+';cursor:pointer;"></button>';}).join('')+'</div>'
+    +'<button id="tpSave" style="width:100%;border:none;background:#2d2920;color:#f4efe4;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">'+(editing?'저장':'추가')+'</button>'
+    +(editing?'<button id="tpDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">주제 삭제 (조각은 미분류로)</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var selColor=curColor;
+  sheet.querySelectorAll('.tp-color').forEach(function(b){b.addEventListener('click',function(){selColor=b.getAttribute('data-c');sheet.querySelectorAll('.tp-color').forEach(function(x){x.style.border='3px solid transparent';});b.style.border='3px solid #2d2920';});});
+  setTimeout(function(){try{sheet.querySelector('#tpName').focus();}catch(e){}},60);
+  sheet.querySelector('#tpSave').addEventListener('click',function(){
+    var nm=sheet.querySelector('#tpName').value.trim();if(!nm){sheet.querySelector('#tpName').focus();return;}
+    if(editing){topic.name=nm;topic.color=selColor;}
+    else{var nt={id:'tp'+Date.now(),name:nm,color:selColor};_idxData.topics.push(nt);if(onCreate){onCreate(nt.id);}}
+    if(window._saveState)window._saveState();wrap.remove();rerenderIndexPage();
+  });
+  if(editing){sheet.querySelector('#tpDel').addEventListener('click',function(){
+    if(!confirm('주제를 삭제할까요? 조각은 미분류로 남아요.'))return;
+    _idxData.fragments.forEach(function(f){if(f.topics)f.topics=f.topics.filter(function(tid){return tid!==topic.id;});});
+    _idxData.topics=_idxData.topics.filter(function(t){return t.id!==topic.id;});
+    _idxTopicFilter=null;if(window._saveState)window._saveState();wrap.remove();rerenderIndexPage();
+  });}
+}
+// 연결 만들기 (조각 여러 개 골라 비교 + 통찰)
+function _openConnectSheet(preSel){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('connectSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='connectSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:88%;overflow-y:auto;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var sel=(preSel||[]).slice();
+  var listHtml=_idxData.fragments.slice().sort(function(a,b){return b.ts-a.ts;}).map(function(f){
+    var tdot=(f.topics||[]).slice(0,2).map(function(tid){return '<span style="width:7px;height:7px;border-radius:50%;background:'+_idxTopicColor(tid)+';display:inline-block;"></span>';}).join(' ');
+    var on=sel.indexOf(f.id)>=0;
+    return '<div class="cn-frag" data-fid="'+f.id+'" style="display:flex;align-items:center;gap:9px;padding:10px 11px;border-radius:11px;background:#fff;margin-bottom:6px;cursor:pointer;border:1.5px solid '+(on?'#e5a63a':'transparent')+';"><span class="cn-check" style="width:18px;height:18px;border-radius:5px;flex-shrink:0;box-sizing:border-box;'+(on?'background:#e5a63a;':'border:2px solid #d8d2c4;')+'display:flex;align-items:center;justify-content:center;">'+(on?'<span style="color:#fff;font-size:11px;line-height:14px;">✓</span>':'')+'</span><span style="flex:1;font-size:12px;color:#2d2920;">'+(f.text.length>34?f.text.slice(0,34)+'…':f.text)+'</span>'+tdot+'</div>';
+  }).join('');
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:4px;">연결 만들기</div>'
+    +'<div style="font-size:10px;color:#a89e8c;margin-bottom:12px;">이어지는 생각들을 골라 통찰을 남겨요</div>'
+    +'<div id="cnList" style="margin-bottom:14px;">'+(listHtml||'<div style="text-align:center;color:#b0a690;font-size:11px;padding:16px 0;">먼저 생각을 적어주세요</div>')+'</div>'
+    +'<div style="font-size:10px;color:#a89e8c;font-weight:600;margin-bottom:7px;">발견한 연결 (통찰)</div>'
+    +'<textarea id="cnInsight" rows="2" placeholder="예: 셋 다 관성 — 외력 없으면 유지" style="width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:11px;font-size:12px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;margin-bottom:12px;"></textarea>'
+    +'<button id="cnSave" style="width:100%;border:none;background:#e5a63a;color:#4a3a10;font-size:13px;font-weight:800;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">연결 저장</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.cn-frag').forEach(function(row){
+    row.addEventListener('click',function(){
+      var fid=row.getAttribute('data-fid');var ix=sel.indexOf(fid);
+      var chk=row.querySelector('.cn-check');
+      if(ix>=0){sel.splice(ix,1);row.style.border='1.5px solid transparent';chk.style.background='#fff';chk.style.borderColor='#d8d2c4';chk.innerHTML='';}
+      else{sel.push(fid);row.style.border='1.5px solid #e5a63a';chk.style.background='#e5a63a';chk.style.borderColor='#e5a63a';chk.innerHTML='<span style="color:#fff;font-size:11px;display:block;text-align:center;line-height:14px;">✓</span>';}
+    });
+  });
+  sheet.querySelector('#cnSave').addEventListener('click',function(){
+    if(sel.length<2){showToast('2개 이상 골라주세요','del','ti-x');return;}
+    var insight=sheet.querySelector('#cnInsight').value.trim();
+    _idxData.links.push({id:'ln'+Date.now(),fragIds:sel.slice(),insight:insight,ts:Date.now()});
+    if(window._saveState)window._saveState();wrap.remove();_idxView='index';rerenderIndexPage();
+    showToast('연결을 저장했어요 ✦','add','ti-check');
+  });
+}
+
 // ===== 뉴스 (지역 사건사고) =====
 function rerenderRegionNews(){var el=document.getElementById('regionNewsPage');if(el)renderRegionNewsPage(el);}
 // 구글 뉴스 검색 링크 (지역+카테고리)
@@ -6472,7 +7252,24 @@ function renderRoutinePage(container){
 // ===== 알림센터 + 제철음식 + 쇼핑 연계 =====
 const SEASONAL={1:['굴','한라봉','과메기'],2:['딸기','바지락','더덕'],3:['주꾸미','달래','냉이'],4:['도다리','두릅','키조개'],5:['멍게','참외','장어'],6:['감자','참다랑어','매실'],7:['복숭아','옥수수','장어','자두'],8:['포도','전복','수박'],9:['전어','무화과','대하'],10:['꽃게','밤','고등어'],11:['굴','유자','홍합'],12:['방어','귤','과메기']};
 let _seasonalAdded=false;
-function _notifCount(){return _dueBookmarks().length+(_seasonalAdded?0:1);}
+function _cycleNotifs(){
+  // 생리 예정 3/2/1/0일 전 알림 (켜진 경우만)
+  if(!_cycleEnabled)return [];
+  try{_cycleMigrate();}catch(e){return [];}
+  var today=new Date();today.setHours(0,0,0,0);
+  var out=[];
+  (_healthData.cyclePeople||[]).forEach(function(p){
+    var s=_cycleStats(p.periods);
+    if(!s.count||!s.next)return;
+    var nx=new Date(s.next);nx.setHours(0,0,0,0);
+    var diff=Math.round((nx-today)/(1000*60*60*24));
+    if(diff>=0&&diff<=3){
+      out.push({person:p,diff:diff,next:s.next});
+    }
+  });
+  return out;
+}
+function _notifCount(){return _dueBookmarks().length+(_seasonalAdded?0:1)+_cycleNotifs().length;}
 function updateNotifDot(){
   var dot=document.getElementById('notifDot');
   if(dot)dot.classList.toggle('show',_notifCount()>0);
@@ -6502,6 +7299,16 @@ function renderNotif(){
   var mo=new Date().getMonth()+1;
   var seasonal=SEASONAL[mo]||[];
   var html='';
+  // 생리 예정 알림 (3/2/1/0일 전)
+  var cnotifs=_cycleNotifs();
+  cnotifs.forEach(function(c){
+    var lbl=c.diff===0?'오늘이 예정일이에요':(c.diff+'일 후 예정이에요');
+    var nm=(_healthData.cyclePeople.length>1)?(c.person.name+'님 '):'';
+    var dstr=(c.next.getMonth()+1)+'월 '+c.next.getDate()+'일';
+    html+='<div style="background:linear-gradient(135deg,#fff0f4,#ffe4ee);border:1.5px solid #f5cddb;border-radius:13px;padding:11px 13px;margin-bottom:8px;">'
+      +'<div style="font-size:11px;font-weight:700;color:#c2185b;">🌸 '+nm+'생리 예정 '+(c.diff===0?'D-DAY':('D-'+c.diff))+'</div>'
+      +'<div style="font-size:9px;color:#a04060;margin-top:2px;">'+dstr+' · '+lbl+'</div></div>';
+  });
   if(!_seasonalAdded&&seasonal.length){
     // 기본: 전체 선택
     if(!window._seasonalSel){window._seasonalSel={};seasonal.forEach(function(s){window._seasonalSel[s]=true;});}
@@ -8179,6 +8986,7 @@ function setHomePage(p){
   if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
   if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
   if(p===12){try{renderRegionNewsPage(document.getElementById('regionNewsPage'));}catch(e){}}
+  if(p===13){try{renderIndexPage(document.getElementById('indexPage'));}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -8203,6 +9011,7 @@ function buildHomeSlider(){
     {id:'tab-vocab',    name:'단어장'},
     {id:'tab-travel',   name:'여행'},
     {id:'tab-news2',    name:'뉴스'},
+    {id:'tab-index',    name:'인덱스'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -8299,6 +9108,12 @@ function buildHomeSlider(){
   newsPage2.id='regionNewsPage';
   renderRegionNewsPage(newsPage2);
   slider.appendChild(newsPage2);
+
+  var indexPage=document.createElement('div');
+  indexPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  indexPage.id='indexPage';
+  renderIndexPage(indexPage);
+  slider.appendChild(indexPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -10563,6 +11378,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       vocab:_vocabData,
       travel:_travelData,
       news:_newsData,
+      index:_idxData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -10600,6 +11416,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.vocab&&typeof d.vocab==='object'){if(Array.isArray(d.vocab.langs)&&d.vocab.langs.length)_vocabData.langs=d.vocab.langs;_vocabData.words=d.vocab.words||{};}
       if(d.travel&&typeof d.travel==='object'&&Array.isArray(d.travel.trips)){_travelData.trips=d.travel.trips;}
       if(d.news&&typeof d.news==='object'&&Array.isArray(d.news.regions)){_newsData.regions=d.news.regions;}
+      if(d.index&&typeof d.index==='object'){_idxData.fragments=d.index.fragments||[];_idxData.topics=d.index.topics||[];_idxData.links=d.index.links||[];}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -10615,7 +11432,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
