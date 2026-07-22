@@ -3216,7 +3216,8 @@ function _tipTodayIndex(){
 var _tipIdx=null;
 var _tipIdxDay=null;
 // ===== 건강 탭 =====
-var _healthData={workouts:{},meals:{},water:{}};
+var _healthData={workouts:{},meals:{},water:{},wRoutines:[]};
+var _wAddRepeatDays=[]; // 운동 추가 시 선택한 반복 요일
 var _healthTab='workout'; // 'workout' | 'diet' | 'stats'
 var _healthStatsTab='workout'; // (deprecated)
 var _healthMode='today'; // 'today' | 'stats' (각 탭 내부 토글)
@@ -3310,7 +3311,29 @@ function renderHealthPage(container){
   }
   if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
 }
+function _injectWorkoutRoutines(k){
+  if(!_healthData.wRoutines||!_healthData.wRoutines.length)return;
+  var pp=k.split('-');var dt=new Date(+pp[0],+pp[1]-1,+pp[2]);
+  var dow=dt.getDay();
+  var todayStart=new Date();todayStart.setHours(0,0,0,0);
+  // 과거 날짜엔 소급 주입하지 않음 (오늘·미래만)
+  if(dt<todayStart)return;
+  if(!_healthData.workouts[k])_healthData.workouts[k]=[];
+  var list=_healthData.workouts[k];
+  _healthData.wRoutines.forEach(function(r){
+    if(r.days.indexOf(dow)<0)return;
+    // 이미 이 루틴 인스턴스가 있으면 스킵
+    if(list.some(function(w){return w.routineId===r.id;}))return;
+    if(r.target){
+      list.push({name:r.name,target:r.target,count:0,unit:r.unit||'회',done:false,routineId:r.id});
+    }else{
+      list.push({name:r.name,detail:r.detail||'',done:false,routineId:r.id});
+    }
+  });
+}
 function _healthRenderWorkout(body,k){
+  // 반복 운동 자동 주입: 오늘 요일에 해당하는 루틴을 그날 목록에 없으면 추가
+  try{_injectWorkoutRoutines(k);}catch(e){}
   var workouts=_healthData.workouts[k]||[];
   if(!workouts.length){
     var emptyW=document.createElement('div');
@@ -3332,7 +3355,7 @@ function _healthRenderWorkout(body,k){
       var isOver=over>0;
       var top=document.createElement('div');
       top.style.cssText='display:flex;align-items:center;justify-content:space-between;';
-      top.innerHTML='<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:'+(doneAll?'#1a7a4a':'#111')+';">'+(doneAll?'🥇 ':'')+w.name+'</div>'
+      top.innerHTML='<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:'+(doneAll?'#1a7a4a':'#111')+';">'+(doneAll?'🥇 ':'')+w.name+(w.routineId?' <span style="font-size:8px;color:#9a948a;font-weight:600;">🔁</span>':'')+'</div>'
         +'<div style="margin-top:3px;"><span class="wk-cnt" style="font-size:20px;font-weight:800;color:'+(isOver?'#e0653e':'#1a7a4a')+';line-height:1;">'+cnt+'</span> <span style="font-size:11px;color:#b5b1a8;font-weight:600;">/ '+w.target+(w.unit||'회')+'</span>'
         +(isOver?' <span style="background:#e0653e;color:#fff;border-radius:5px;padding:1px 6px;font-weight:700;font-size:9px;vertical-align:2px;">+'+over+'</span>':'')+'</div></div>';
       var btnGrp=document.createElement('div');
@@ -3538,25 +3561,52 @@ function _healthRenderWorkout(body,k){
   hwAdd.style.cssText='width:40px;border:none;border-radius:11px;background:#1a7a4a;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;';
   addWrap.appendChild(hwInp);addWrap.appendChild(hwAdd);
   body.appendChild(addWrap);
+  // 반복 요일 선택
+  var repRow=document.createElement('div');
+  repRow.style.cssText='display:flex;align-items:center;gap:4px;margin-top:8px;flex-wrap:wrap;';
+  var repLbl=document.createElement('span');
+  repLbl.textContent='🔁 매주';repLbl.style.cssText='font-size:10px;color:#8a867c;font-weight:700;margin-right:2px;';
+  repRow.appendChild(repLbl);
+  var DOW=['일','월','화','수','목','금','토'];
+  DOW.forEach(function(nm,di){
+    var b=document.createElement('button');
+    var on=_wAddRepeatDays.indexOf(di)>=0;
+    b.textContent=nm;
+    b.style.cssText='width:26px;height:26px;border-radius:50%;border:none;cursor:pointer;font-family:inherit;font-size:10px;font-weight:700;'+(on?'background:#1a7a4a;color:#fff;':'background:#f0eee8;color:#9a948a;');
+    b.addEventListener('click',function(){
+      var ix=_wAddRepeatDays.indexOf(di);
+      if(ix>=0)_wAddRepeatDays.splice(ix,1);else _wAddRepeatDays.push(di);
+      b.style.background=_wAddRepeatDays.indexOf(di)>=0?'#1a7a4a':'#f0eee8';
+      b.style.color=_wAddRepeatDays.indexOf(di)>=0?'#fff':'#9a948a';
+    });
+    repRow.appendChild(b);
+  });
+  body.appendChild(repRow);
   var hint=document.createElement('div');
   hint.style.cssText='font-size:8.5px;color:#b5b1a8;text-align:center;margin-top:6px;';
-  hint.textContent='"스쿼트 100회"처럼 목표를 정하면 하루 동안 채워가요';
+  hint.textContent='"스쿼트 100회"처럼 목표를 정하면 하루 동안 채워가요 · 요일 선택 시 매주 반복';
   body.appendChild(hint);
   function addW(){
     var v=(hwInp.value||'').trim();if(!v)return;
+    var repDays=_wAddRepeatDays.slice();
     // 목표치 파싱: "스쿼트 100회", "팔굽혀펴기 50개", "플랭크 3분"
     var tm=v.match(/^(.+?)\s*(\d+)\s*(회|개|번|분|초|세트|km|kcal)?\s*$/);
-    if(tm && tm[2]){
-      var nm=tm[1].trim();var tgt=parseInt(tm[2]);var unit=tm[3]||'회';
-      if(!_healthData.workouts[k])_healthData.workouts[k]=[];
-      _healthData.workouts[k].push({name:nm,target:tgt,count:0,unit:unit,done:false});
+    var isTarget=!!(tm&&tm[2]);
+    var nm,tgt,unit,detail='';
+    if(isTarget){nm=tm[1].trim();tgt=parseInt(tm[2]);unit=tm[3]||'회';}
+    else{nm=v;var m=v.match(/^(.+?)\s+(.*(?:kg|세트|x|×).*)$/);if(m){nm=m[1].trim();detail=m[2].trim();}}
+    if(repDays.length){
+      // 반복 루틴 등록
+      var rid='wr'+Date.now()+Math.floor(Math.random()*1000);
+      if(!_healthData.wRoutines)_healthData.wRoutines=[];
+      _healthData.wRoutines.push(isTarget?{id:rid,name:nm,target:tgt,unit:unit,days:repDays.sort()}:{id:rid,name:nm,detail:detail,days:repDays.sort()});
     }else{
-      var name=v,detail='';
-      var m=v.match(/^(.+?)\s+(.*(?:kg|세트|x|×).*)$/);
-      if(m){name=m[1].trim();detail=m[2].trim();}
+      // 오늘 1회성
       if(!_healthData.workouts[k])_healthData.workouts[k]=[];
-      _healthData.workouts[k].push({name:name,detail:detail,done:false});
+      if(isTarget)_healthData.workouts[k].push({name:nm,target:tgt,count:0,unit:unit,done:false});
+      else _healthData.workouts[k].push({name:nm,detail:detail,done:false});
     }
+    hwInp.value='';_wAddRepeatDays=[];
     if(window._saveState)window._saveState();
     renderHealthPage(document.getElementById('healthPage')||body.parentElement);
   }
@@ -4808,41 +4858,45 @@ function _vocabRenderReview(body,lang){
   hd.style.cssText='font-size:11px;color:#5a6577;font-weight:700;margin:4px 2px 10px;';
   hd.textContent='📚 외운 '+lang.name+' 단어 '+totalLearned+'개';
   body.appendChild(hd);
-  // 최근 8주 히트맵 (주=열, 요일=행 형태로 세로 배치)
+  // 시작일(가장 이른 외운 날)부터 오늘까지 순서대로 채우는 히트맵
   var today=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
   function vk(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
   var maxN=1;Object.keys(dayCount).forEach(function(k){if(dayCount[k]>maxN)maxN=dayCount[k];});
   function heatColor(n){
     if(!n)return '#f0eee8';
-    var t=Math.min(1,n/Math.max(4,maxN)); // 4개 이상이면 최고 근처
-    // 연한 남색 → 짙은 남색
+    var t=Math.min(1,n/Math.max(4,maxN));
     var stops=[[224,232,246],[150,178,220],[90,130,190],[45,80,150],[24,42,80]];
     var idx=Math.min(4,Math.floor(t*4+0.001));
     var c=stops[Math.max(1,idx)];
     return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
   }
+  // 가장 이른 외운 날짜 찾기
+  var firstDate=null;
+  Object.keys(dayCount).forEach(function(k){
+    var pp=k.split('-');var dt=new Date(+pp[0],+pp[1]-1,+pp[2]);
+    if(!firstDate||dt<firstDate)firstDate=dt;
+  });
   var grid=document.createElement('div');
   grid.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:13px;margin-bottom:10px;';
-  var WKH=['일','월','화','수','목','금','토'];
-  // 8주 전 일요일부터 시작
-  var startWeek=new Date(today);startWeek.setDate(today.getDate()-today.getDay()-7*7);
-  var cellsHtml='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
-  WKH.forEach(function(wn){cellsHtml+='<div style="font-size:7.5px;color:#b0aaa0;text-align:center;">'+wn+'</div>';});
-  for(var wk=0;wk<8;wk++){
-    for(var dd=0;dd<7;dd++){
-      var cd=new Date(startWeek);cd.setDate(startWeek.getDate()+wk*7+dd);
-      var ck=vk(cd);
-      var n=dayCount[ck]||0;
-      var isToday=ck===vk(today);
-      var isFuture=cd>today;
-      var isSel=_vocabReviewSel===ck;
-      var col=isFuture?'transparent':heatColor(n);
-      var txtCol=n>=(maxN>=4?3:2)?'#fff':(n>0?'#20304a':'#c9c5bd');
-      cellsHtml+='<div class="vhcell" data-k="'+ck+'" data-n="'+n+'" style="aspect-ratio:1;border-radius:5px;background:'+col+';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:'+txtCol+';cursor:'+(n>0?'pointer':'default')+';'+(isToday?'box-shadow:inset 0 0 0 1.5px #111;':'')+(isSel?'box-shadow:inset 0 0 0 2px #e0653e;':'')+(isFuture?'':'')+'">'+(n>0?n:'')+'</div>';
-    }
+  var cellsHtml='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;">';
+  var cur=new Date(firstDate);cur.setHours(0,0,0,0);
+  var endD=new Date(today);endD.setHours(0,0,0,0);
+  var guard=0;
+  while(cur<=endD && guard<400){
+    var ck=vk(cur);
+    var n=dayCount[ck]||0;
+    var isToday=ck===vk(today);
+    var isSel=_vocabReviewSel===ck;
+    var col=heatColor(n);
+    var txtCol=n>=(maxN>=4?3:2)?'#fff':(n>0?'#20304a':'#c9c5bd');
+    var md=(cur.getMonth()+1)+'/'+cur.getDate();
+    cellsHtml+='<div class="vhcell" data-k="'+ck+'" data-n="'+n+'" title="'+md+' · '+n+'개" style="aspect-ratio:1;border-radius:6px;background:'+col+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:'+(n>0?'pointer':'default')+';'+(isToday?'box-shadow:inset 0 0 0 1.5px #111;':'')+(isSel?'box-shadow:inset 0 0 0 2px #e0653e;':'')+'">'
+      +'<span style="font-size:10px;font-weight:800;color:'+txtCol+';line-height:1;">'+(n>0?n:'')+'</span>'
+      +'<span style="font-size:6px;color:'+(n>=(maxN>=4?3:2)?'rgba(255,255,255,0.7)':'#b0aaa0')+';margin-top:1px;">'+md+'</span>'
+      +'</div>';
+    cur.setDate(cur.getDate()+1);guard++;
   }
   cellsHtml+='</div>';
-  // 범례
   cellsHtml+='<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;margin-top:9px;"><span style="font-size:7px;color:#b0aaa0;">적음</span>'
     +'<span style="width:10px;height:10px;border-radius:2px;background:rgb(224,232,246);"></span>'
     +'<span style="width:10px;height:10px;border-radius:2px;background:rgb(150,178,220);"></span>'
@@ -10228,7 +10282,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.hiddenCats){_hiddenBaseCats.length=0;d.hiddenCats.forEach(function(c){_hiddenBaseCats.push(c);});}
       if(d.catRenames){Object.keys(_baseCatRenames).forEach(function(k){delete _baseCatRenames[k];});Object.assign(_baseCatRenames,d.catRenames);}
       if(d.shop&&Array.isArray(d.shop)){_shopItems.length=0;d.shop.forEach(function(s){_shopItems.push(s);});}
-      if(d.health&&typeof d.health==='object'){_healthData.workouts=d.health.workouts||{};_healthData.meals=d.health.meals||{};_healthData.water=d.health.water||{};}
+      if(d.health&&typeof d.health==='object'){_healthData.workouts=d.health.workouts||{};_healthData.meals=d.health.meals||{};_healthData.water=d.health.water||{};_healthData.wRoutines=d.health.wRoutines||[];}
       if(d.vocab&&typeof d.vocab==='object'){if(Array.isArray(d.vocab.langs)&&d.vocab.langs.length)_vocabData.langs=d.vocab.langs;_vocabData.words=d.vocab.words||{};}
       if(d.travel&&typeof d.travel==='object'&&Array.isArray(d.travel.trips)){_travelData.trips=d.travel.trips;}
       if(d.news&&typeof d.news==='object'&&Array.isArray(d.news.regions)){_newsData.regions=d.news.regions;}
