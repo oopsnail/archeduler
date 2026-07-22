@@ -5445,10 +5445,27 @@ function _mindRenderMood(body){
   // 한 줄 메모 (기분 골랐을 때)
   if(today&&today.mood){
     var noteWrap=document.createElement('div');noteWrap.style.cssText='margin-top:14px;';
-    var ta=document.createElement('textarea');ta.rows=2;ta.placeholder='한 줄 남기기 (선택)';ta.value=today.note||'';
+    var lbl=document.createElement('div');lbl.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;';
+    lbl.innerHTML='<span style="font-size:11px;color:#8a8474;font-weight:600;">오늘 한 줄</span>'+(today.note?'<span style="font-size:10px;color:#7ba05b;font-weight:600;">✓ 저장됨</span>':'');
+    noteWrap.appendChild(lbl);
+    var ta=document.createElement('textarea');ta.rows=2;ta.placeholder='오늘 마음을 한 줄로 남겨보세요 (선택)';ta.value=today.note||'';
     ta.style.cssText='width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:11px;font-size:12px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;';
-    ta.addEventListener('change',function(){_mindData.moods[todayKey].note=ta.value;if(window._saveState)window._saveState();});
     noteWrap.appendChild(ta);
+    var saveRow=document.createElement('div');saveRow.style.cssText='display:flex;gap:8px;margin-top:8px;';
+    var saveBtn=document.createElement('button');
+    saveBtn.textContent='기록하기';
+    saveBtn.style.cssText='flex:1;border:none;background:#2d2920;color:#f4efe4;font-size:12px;font-weight:700;padding:11px;border-radius:12px;cursor:pointer;font-family:inherit;';
+    function doSave(){
+      _mindData.moods[todayKey].note=ta.value.trim();
+      if(window._saveState)window._saveState();
+      try{showToast('오늘의 마음을 기록했어요 ✓','add','ti-check');}catch(e){}
+      rerenderMindPage();
+    }
+    saveBtn.addEventListener('click',doSave);
+    // 입력 중에도 자동 저장(놓치지 않게)
+    ta.addEventListener('input',function(){_mindData.moods[todayKey].note=ta.value.trim();if(window._saveState)window._saveState();});
+    saveRow.appendChild(saveBtn);
+    noteWrap.appendChild(saveRow);
     card.appendChild(noteWrap);
   }
   body.appendChild(card);
@@ -5472,21 +5489,89 @@ function _mindRenderMood(body){
   }
   body.appendChild(statCard);
   // 최근 기록
-  var recentKeys=Object.keys(_mindData.moods).filter(function(k){return _mindData.moods[k].mood;}).sort().reverse().slice(0,7);
+  var recentKeys=Object.keys(_mindData.moods).filter(function(k){return _mindData.moods[k].mood;}).sort().reverse().slice(0,14);
   if(recentKeys.length){
     var hd=document.createElement('div');hd.style.cssText='font-size:13px;color:#6b6455;font-weight:700;margin:4px 2px 10px;';hd.textContent='기록';
     body.appendChild(hd);
     recentKeys.forEach(function(k){
       var e=_mindData.moods[k];var m=_moodById(e.mood);if(!m)return;
       var pp=k.split('-');
+      var collapsed=e._collapsed;
       var r=document.createElement('div');
-      r.style.cssText='display:flex;align-items:center;gap:11px;background:#fbf9f4;border-radius:14px;padding:12px 14px;margin-bottom:7px;';
-      r.innerHTML='<span style="display:flex;">'+_moodFaceSVG(m.id,30)+'</span>'
-        +'<div style="flex:1;min-width:0;"><div style="font-size:12px;color:#2d2920;font-weight:600;">'+m.label+'</div>'+(e.note?'<div style="font-size:11px;color:#a89e8c;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.note+'</div>':'')+'</div>'
-        +'<span style="font-size:10px;color:#b0a690;">'+(pp[1])+'.'+(pp[2])+'</span>';
+      r.style.cssText='display:flex;align-items:center;gap:11px;background:#fbf9f4;border-radius:14px;padding:12px 14px;margin-bottom:7px;position:relative;cursor:pointer;';
+      var noteHTML=(e.note&&!collapsed)?'<div style="font-size:11px;color:#a89e8c;margin-top:2px;">'+e.note+'</div>':(e.note&&collapsed)?'<div style="font-size:11px;color:#a89e8c;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.note+'</div>':'';
+      r.innerHTML='<span style="display:flex;flex-shrink:0;">'+_moodFaceSVG(m.id,30)+'</span>'
+        +'<div style="flex:1;min-width:0;padding-right:20px;"><div style="font-size:12px;color:#2d2920;font-weight:600;">'+m.label+'</div>'+noteHTML+'</div>'
+        +'<span style="font-size:10px;color:#b0a690;flex-shrink:0;">'+(pp[1])+'.'+(pp[2])+'</span>';
+      // ⋮ 메뉴
+      var menu=document.createElement('span');menu.innerHTML='⋮';menu.style.cssText='position:absolute;top:10px;right:11px;font-size:15px;color:#c0b8a6;cursor:pointer;line-height:1;padding:2px 4px;';
+      menu.addEventListener('click',function(ev){ev.stopPropagation();_openMoodMenu(k,menu);});
+      r.appendChild(menu);
+      // 짧게 터치 → 펼침/접힘
+      r.addEventListener('click',function(){e._collapsed=!e._collapsed;if(window._saveState)window._saveState();rerenderMindPage();});
       body.appendChild(r);
     });
   }
+}
+// 기분 기록 메뉴 (수정/삭제)
+function _openMoodMenu(dateKey,anchor){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('moodRecMenu');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='moodRecMenu';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3900;';
+  wrap.addEventListener('click',function(){wrap.remove();});
+  var pop=document.createElement('div');
+  pop.style.cssText='position:absolute;background:#fff;border-radius:13px;box-shadow:0 8px 24px rgba(0,0,0,0.16);padding:5px;width:120px;animation:logoMenuIn 0.14s ease;';
+  var hr=host.getBoundingClientRect();var ar=anchor.getBoundingClientRect();
+  pop.style.top=((ar.bottom-hr.top)+4)+'px';pop.style.right=((hr.right-ar.right))+'px';
+  function item(label,color,fn){
+    var it=document.createElement('div');
+    it.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:9px;font-size:12.5px;color:'+(color||'#2d2920')+';cursor:pointer;';
+    it.textContent=label;
+    it.addEventListener('mouseenter',function(){it.style.background='#f6f4ef';});
+    it.addEventListener('mouseleave',function(){it.style.background='none';});
+    it.addEventListener('click',function(ev){ev.stopPropagation();wrap.remove();fn();});
+    pop.appendChild(it);
+  }
+  item('✎  수정',null,function(){_openEditMood(dateKey);});
+  item('🗑  삭제','#c0392b',function(){
+    if(!confirm('이 기록을 삭제할까요?'))return;
+    delete _mindData.moods[dateKey];
+    if(window._saveState)window._saveState();rerenderMindPage();
+  });
+  wrap.appendChild(pop);host.appendChild(wrap);
+}
+// 기분 기록 수정 (감정 변경 + 메모)
+function _openEditMood(dateKey){
+  var e=_mindData.moods[dateKey];if(!e)return;
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('moodEditSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='moodEditSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fbf9f4;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
+  var pp=dateKey.split('-');
+  var selMood=e.mood;
+  var facesHTML=_MOODS.map(function(m){
+    var on=selMood===m.id;
+    return '<button class="me-face" data-mid="'+m.id+'" style="border:none;background:'+(on?'#efe7d6':'none')+';border-radius:12px;padding:6px 2px;cursor:pointer;font-family:inherit;"><div style="display:flex;justify-content:center;">'+_moodFaceSVG(m.id,34)+'</div><div style="font-size:8px;color:'+(on?'#2d2920':'#8a8474')+';margin-top:3px;font-weight:'+(on?'700':'400')+';white-space:nowrap;">'+m.label+'</div></button>';
+  }).join('');
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#2d2920;margin-bottom:3px;">'+pp[1]+'월 '+pp[2]+'일 기록 수정</div>'
+    +'<div style="font-size:10px;color:#a89e8c;margin-bottom:12px;">감정과 메모를 바꿀 수 있어요</div>'
+    +'<div id="meFaces" style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:14px;max-height:180px;overflow-y:auto;">'+facesHTML+'</div>'
+    +'<textarea id="meNote" rows="2" placeholder="한 줄 메모 (선택)" style="width:100%;border:1px solid #e6e2d8;border-radius:12px;padding:11px;font-size:12px;line-height:1.5;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;margin-bottom:12px;">'+(e.note||'')+'</textarea>'
+    +'<button id="meSave" style="width:100%;border:none;background:#2d2920;color:#f4efe4;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">저장</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.me-face').forEach(function(b){b.addEventListener('click',function(){
+    selMood=b.getAttribute('data-mid');
+    sheet.querySelectorAll('.me-face').forEach(function(x){var mid=x.getAttribute('data-mid');var on=mid===selMood;x.style.background=on?'#efe7d6':'none';x.querySelector('div:last-child').style.color=on?'#2d2920':'#8a8474';x.querySelector('div:last-child').style.fontWeight=on?'700':'400';});
+  });});
+  sheet.querySelector('#meSave').addEventListener('click',function(){
+    e.mood=selMood;e.note=sheet.querySelector('#meNote').value.trim();
+    if(window._saveState)window._saveState();wrap.remove();rerenderMindPage();
+  });
 }
 // ---- 버킷리스트 ----
 function _mindRenderBucket(body){
