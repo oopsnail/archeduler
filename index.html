@@ -7614,7 +7614,17 @@ function _daySuccess(offset){
   });
   return any?ok:null;
 }
-function rerenderRoutinePage(){var el=document.getElementById('routinePage');if(el)renderRoutinePage(el);}
+function rerenderRoutinePage(){
+  var el=document.getElementById('routinePage');if(!el)return;
+  // 재렌더 시 스크롤이 맨 위로 튀지 않게 위치 보존
+  var oldList=el.querySelector('.routineList');
+  var sc=oldList?oldList.scrollTop:0;
+  renderRoutinePage(el);
+  if(sc){
+    var newList=el.querySelector('.routineList');
+    if(newList)newList.scrollTop=sc;
+  }
+}
 function renderRoutinePage(container){
   if(!container)return;
   if(typeof _planOf==='function'&&_planOf(_userPlan).id==='free'){
@@ -7642,6 +7652,7 @@ function renderRoutinePage(container){
   header.innerHTML='<div style="font-size:11px;color:#7d7d77;font-weight:600;">오늘의 루틴</div>'+(best>0?'<div style="font-size:10px;font-weight:700;color:#e58a3a;">🔥 최고 '+best+'일 연속</div>':'');
   container.appendChild(header);
   var list=document.createElement('div');
+  list.className='routineList';
   list.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px 40px;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;';
   if(!_routines.length){
     list.innerHTML='<div style="text-align:center;padding:40px 0;color:#9a9a93;font-size:12px;">루틴을 만들어보세요<br><span style="font-size:10px;">좋은 습관은 체크로, 나쁜 습관은 참기로</span></div>';
