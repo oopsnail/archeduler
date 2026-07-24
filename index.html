@@ -918,6 +918,7 @@
     <div id="indexFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f0ebe1;flex-direction:column;"></div>
     <div id="mindFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f0ebe1;flex-direction:column;"></div>
     <div id="sentFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f2efe8;flex-direction:column;"></div>
+    <div id="ttFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f5f4ef;flex-direction:column;"></div>
     <div class="dock-bar" id="dockBar">
       <button class="dock-btn" id="dockToday" aria-label="일정">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
@@ -5852,6 +5853,586 @@ function _openConnectSheet(preSel){
   });
 }
 
+// ===== 시간표 (원형 생활계획표 · 주간 · 흐름) =====
+var _ttData={blocks:{},actual:{},classes:[]};
+// blocks: {요일(0~6): [{id,s,e,name,cat}]}
+// actual: {dateKey: [{id,s,e,name,cat}]}
+// classes: [{id,day(0~4),s,e,name,room,color}]
+var _ttTab='circle';      // 'circle'|'week'|'flow'
+var _ttDay=null;          // 보고 있는 요일 (null=오늘)
+var _ttMode='plan';       // 'plan'|'actual'
+var _ttCompare=false;     // 계획 vs 실제 겹쳐보기
+var _TT_CATS=[
+  ['sleep','수면','#4a7ac0'],
+  ['class','수업','#5a9ac0'],
+  ['study','공부','#c98a3a'],
+  ['work','일','#7a6ac0'],
+  ['meal','식사','#e0a54a'],
+  ['exercise','운동','#5a9a6a'],
+  ['rest','휴식','#9a8ac0'],
+  ['move','이동','#b0a690'],
+  ['etc','기타','#8a9a9a']
+];
+var _TT_DOW=['일','월','화','수','목','금','토'];
+function _ttCat(id){return _TT_CATS.find(function(c){return c[0]===id;})||_TT_CATS[8];}
+function _ttCatColor(id){return _ttCat(id)[2];}
+function _ttTodayDow(){return new Date().getDay();}
+function _ttCurDay(){return _ttDay===null?_ttTodayDow():_ttDay;}
+function _ttKey(dt){var d=dt||new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function _ttPlanBlocks(dow){return (_ttData.blocks&&_ttData.blocks[dow])||[];}
+function _ttActualBlocks(dateKey){return (_ttData.actual&&_ttData.actual[dateKey])||[];}
+function _ttSpan(b){var s=(b.e-b.s+24)%24;return s===0?24:s;}
+function _ttFmtH(h){
+  var hh=Math.floor(h),mm=Math.round((h-hh)*60);
+  if(mm===60){hh+=1;mm=0;}
+  return ('0'+(hh%24)).slice(-2)+':'+('0'+mm).slice(-2);
+}
+function _ttToInput(h){return _ttFmtH(h);}
+function _ttFromInput(v){
+  var p=String(v||'').split(':');
+  if(p.length<2)return 0;
+  return (parseInt(p[0],10)||0)+(parseInt(p[1],10)||0)/60;
+}
+// ---- 컨테이너/오버레이 ----
+function _ttContainer(){
+  var f=document.getElementById('ttFull');
+  if(f&&f.style.display!=='none'){var i=document.getElementById('ttFullInner');if(i)return i;}
+  return document.getElementById('ttPage');
+}
+function rerenderTTPage(){var el=_ttContainer();if(el)_withScrollKept(el,renderTTPage);}
+function openTTFull(){
+  var f=document.getElementById('ttFull');if(!f)return;
+  f.style.display='flex';f.innerHTML='';
+  var inner=document.createElement('div');inner.id='ttFullInner';
+  inner.style.cssText='flex:1;min-height:0;display:flex;flex-direction:column;';
+  f.appendChild(inner);renderTTPage(inner);
+}
+function closeTTFull(){
+  var f=document.getElementById('ttFull');
+  if(f){f.style.display='none';f.innerHTML='';}
+  try{if(_homePage===16)setHomePage(0);}catch(e){}
+}
+// ---- 메인 렌더 ----
+function renderTTPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;background:#f5f4ef;';
+  var fullOpen=document.getElementById('ttFull')&&document.getElementById('ttFull').style.display!=='none';
+  var top=document.createElement('div');top.style.cssText='padding:18px 16px 0;flex-shrink:0;';
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:11px;margin-bottom:13px;';
+  if(fullOpen){
+    var cb=document.createElement('div');
+    cb.style.cssText='width:32px;height:32px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+    cb.innerHTML='<span style="font-size:17px;color:#6b6455;">‹</span>';
+    cb.addEventListener('click',function(){closeTTFull();});
+    head.appendChild(cb);
+  }
+  var now=new Date();
+  var ht=document.createElement('div');ht.style.cssText='flex:1;min-width:0;';
+  ht.innerHTML='<div style="font-size:20px;font-weight:800;color:#111;letter-spacing:-0.02em;">시간표</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-top:1px;">'+(now.getMonth()+1)+'월 '+now.getDate()+'일 '+_TT_DOW[now.getDay()]+'요일</div>';
+  head.appendChild(ht);
+  top.appendChild(head);
+  var seg=document.createElement('div');seg.style.cssText='display:flex;gap:5px;background:#e8e5dd;border-radius:12px;padding:4px;';
+  [['circle','원형'],['week','주간'],['flow','흐름']].forEach(function(t){
+    var on=_ttTab===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;text-align:center;font-size:11.5px;font-weight:700;padding:8px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fff;color:#111;box-shadow:0 1px 2px rgba(0,0,0,0.07);':'background:none;color:#8a8474;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_ttTab=t[0];renderTTPage(container);});
+    seg.appendChild(b);
+  });
+  top.appendChild(seg);
+  container.appendChild(top);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 16px 30px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  if(_ttTab==='circle')_ttRenderCircle(body);
+  else if(_ttTab==='week')_ttRenderWeek(body);
+  else _ttRenderFlow(body);
+}
+
+// ---- 원형(도넛) 계획표 ----
+function _ttPt(cx,cy,r,h){var a=(h/24)*2*Math.PI-Math.PI/2;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];}
+function _ttArc(cx,cy,r,ri,s,e){
+  var span=(e-s+24)%24;if(span===0)span=24;
+  var p1=_ttPt(cx,cy,r,s),p2=_ttPt(cx,cy,r,s+span);
+  var la=span>12?1:0;
+  if(span>=23.999){
+    return 'M'+(cx-r)+','+cy+' A'+r+','+r+' 0 1,1 '+(cx+r)+','+cy+' A'+r+','+r+' 0 1,1 '+(cx-r)+','+cy+' Z'
+      +'M'+(cx-ri)+','+cy+' A'+ri+','+ri+' 0 1,0 '+(cx+ri)+','+cy+' A'+ri+','+ri+' 0 1,0 '+(cx-ri)+','+cy+' Z';
+  }
+  var p3=_ttPt(cx,cy,ri,s+span),p4=_ttPt(cx,cy,ri,s);
+  return 'M'+p1[0].toFixed(2)+','+p1[1].toFixed(2)
+    +' A'+r+','+r+' 0 '+la+',1 '+p2[0].toFixed(2)+','+p2[1].toFixed(2)
+    +' L'+p3[0].toFixed(2)+','+p3[1].toFixed(2)
+    +' A'+ri+','+ri+' 0 '+la+',0 '+p4[0].toFixed(2)+','+p4[1].toFixed(2)+' Z';
+}
+function _ttRenderCircle(body){
+  var dow=_ttCurDay();
+  var todayKey=_ttKey();
+  var isToday=(dow===_ttTodayDow());
+  // 요일 선택
+  var dayRow=document.createElement('div');
+  dayRow.style.cssText='display:flex;gap:4px;margin-bottom:12px;';
+  for(var i=0;i<7;i++){(function(i){
+    var on=i===dow;
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;font-size:11px;font-weight:700;padding:8px 0;border-radius:9px;border:none;cursor:pointer;font-family:inherit;'
+      +(on?'background:#111;color:#fff;':'background:#fff;color:'+(i===_ttTodayDow()?'#e0653e':'#8a8474')+';border:0.5px solid #ececE4;');
+    b.textContent=_TT_DOW[i];
+    b.addEventListener('click',function(){_ttDay=i;rerenderTTPage();});
+    dayRow.appendChild(b);
+  })(i);}
+  body.appendChild(dayRow);
+  // 계획/실제 토글 (오늘만 실제 기록 가능)
+  var modeRow=document.createElement('div');
+  modeRow.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:12px;';
+  var segM=document.createElement('div');
+  segM.style.cssText='flex:1;display:flex;gap:4px;background:#e8e5dd;border-radius:10px;padding:3px;';
+  [['plan','계획'],['actual','실제']].forEach(function(t){
+    var on=_ttMode===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='flex:1;font-size:10.5px;font-weight:700;padding:6px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#fff;color:#111;':'background:none;color:#8a8474;');
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_ttMode=t[0];_ttCompare=false;rerenderTTPage();});
+    segM.appendChild(b);
+  });
+  modeRow.appendChild(segM);
+  var cmp=document.createElement('button');
+  cmp.style.cssText='flex-shrink:0;font-size:10.5px;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;font-family:inherit;border:0.5px solid '+(_ttCompare?'#e0653e':'#ececE4')+';background:'+(_ttCompare?'#fdf0ec':'#fff')+';color:'+(_ttCompare?'#e0653e':'#8a8474')+';';
+  cmp.textContent='겹쳐보기';
+  cmp.addEventListener('click',function(){_ttCompare=!_ttCompare;rerenderTTPage();});
+  modeRow.appendChild(cmp);
+  body.appendChild(modeRow);
+
+  var plan=_ttPlanBlocks(dow);
+  var actual=_ttActualBlocks(todayKey);
+  var showing=(_ttMode==='actual')?actual:plan;
+
+  // 도넛 SVG
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:16px;padding:14px;margin-bottom:12px;';
+  var cx=110,cy=110,R=88,RI=52;
+  var svg='<svg viewBox="0 0 220 220" style="width:100%;max-width:250px;display:block;margin:0 auto;">';
+  // 배경 링
+  svg+='<circle cx="110" cy="110" r="'+((R+RI)/2)+'" fill="none" stroke="#f2f0ea" stroke-width="'+(R-RI)+'"/>';
+  if(_ttCompare){
+    // 바깥=계획, 안쪽=실제
+    var oR=88,oRI=68,iR=64,iRI=46;
+    plan.forEach(function(b){
+      svg+='<path d="'+_ttArc(cx,cy,oR,oRI,b.s,b.e)+'" fill="'+_ttCatColor(b.cat)+'" stroke="#fff" stroke-width="1.2"/>';
+    });
+    if(!actual.length){
+      svg+='<circle cx="110" cy="110" r="'+((iR+iRI)/2)+'" fill="none" stroke="#f2f0ea" stroke-width="'+(iR-iRI)+'"/>';
+    }
+    actual.forEach(function(b){
+      svg+='<path d="'+_ttArc(cx,cy,iR,iRI,b.s,b.e)+'" fill="'+_ttCatColor(b.cat)+'" stroke="#fff" stroke-width="1.2" opacity="0.72"/>';
+    });
+  }else{
+    showing.forEach(function(b){
+      svg+='<path d="'+_ttArc(cx,cy,R,RI,b.s,b.e)+'" fill="'+_ttCatColor(b.cat)+'" stroke="#fff" stroke-width="1.5"/>';
+    });
+    // 라벨
+    showing.forEach(function(b){
+      var sp=_ttSpan(b);if(sp<2)return;
+      var mid=b.s+sp/2;
+      var p=_ttPt(cx,cy,(R+RI)/2,mid);
+      svg+='<text x="'+p[0].toFixed(1)+'" y="'+(p[1]+3.5).toFixed(1)+'" font-size="9.5" fill="#fff" font-weight="700" text-anchor="middle">'+_ttEsc(b.name||_ttCat(b.cat)[1])+'</text>';
+    });
+  }
+  // 시각 눈금
+  for(var h=0;h<24;h+=3){
+    var tp=_ttPt(cx,cy,R+11,h);
+    svg+='<text x="'+tp[0].toFixed(1)+'" y="'+(tp[1]+3).toFixed(1)+'" font-size="8" fill="#9a948a" text-anchor="middle">'+h+'</text>';
+  }
+  // 가운데: 현재 시각 + 지금 하는 일
+  var nowH=new Date().getHours()+new Date().getMinutes()/60;
+  var cur=null;
+  (isToday?showing:[]).forEach(function(b){
+    var sp=_ttSpan(b);var d=(nowH-b.s+24)%24;
+    if(d<sp)cur=b;
+  });
+  svg+='<text x="110" y="106" font-size="17" fill="#111" font-weight="800" text-anchor="middle">'+_ttFmtH(nowH)+'</text>';
+  svg+='<text x="110" y="122" font-size="9" fill="#9a948a" text-anchor="middle">'+(isToday?(cur?_ttEsc(cur.name||_ttCat(cur.cat)[1]):'비어 있음'):_TT_DOW[dow]+'요일)').replace('요일)','요일')+'</text>';
+  // 현재 시각 바늘 (오늘만)
+  if(isToday){
+    var np=_ttPt(cx,cy,R+4,nowH);
+    var ip=_ttPt(cx,cy,RI-6,nowH);
+    svg+='<line x1="'+ip[0].toFixed(1)+'" y1="'+ip[1].toFixed(1)+'" x2="'+np[0].toFixed(1)+'" y2="'+np[1].toFixed(1)+'" stroke="#e0653e" stroke-width="2" stroke-linecap="round"/>';
+  }
+  svg+='</svg>';
+  card.innerHTML=svg;
+  body.appendChild(card);
+
+  // 합계 요약
+  var sum={};
+  showing.forEach(function(b){sum[b.cat]=(sum[b.cat]||0)+_ttSpan(b);});
+  var tops=Object.keys(sum).sort(function(a,b){return sum[b]-sum[a];}).slice(0,3);
+  if(tops.length){
+    var sr=document.createElement('div');
+    sr.style.cssText='display:flex;gap:6px;margin-bottom:12px;';
+    tops.forEach(function(c){
+      var v=sum[c];
+      sr.innerHTML+='<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:11px;padding:9px 6px;text-align:center;">'
+        +'<div style="font-size:14px;font-weight:800;color:'+_ttCatColor(c)+';line-height:1;">'+(Math.round(v*10)/10)+'<span style="font-size:9px;">h</span></div>'
+        +'<div style="font-size:8px;color:#9a948a;margin-top:3px;">'+_ttCat(c)[1]+'</div></div>';
+    });
+    body.appendChild(sr);
+  }
+  // 비교 요약
+  if(_ttCompare){
+    var ps={},as={};
+    plan.forEach(function(b){ps[b.cat]=(ps[b.cat]||0)+_ttSpan(b);});
+    actual.forEach(function(b){as[b.cat]=(as[b.cat]||0)+_ttSpan(b);});
+    var cats=Object.keys(ps).concat(Object.keys(as)).filter(function(v,i,a){return a.indexOf(v)===i;});
+    if(cats.length){
+      var cc=document.createElement('div');
+      cc.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:13px;margin-bottom:12px;';
+      var rows=cats.map(function(c){
+        var p=ps[c]||0,a=as[c]||0,df=a-p;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">'
+          +'<span style="width:8px;height:8px;border-radius:2px;background:'+_ttCatColor(c)+';flex-shrink:0;"></span>'
+          +'<span style="flex:1;font-size:11px;color:#4a4a44;">'+_ttCat(c)[1]+'</span>'
+          +'<span style="font-size:10.5px;color:#9a948a;">계획 '+(Math.round(p*10)/10)+'h</span>'
+          +'<span style="font-size:10.5px;color:#111;font-weight:700;width:52px;text-align:right;">실제 '+(Math.round(a*10)/10)+'h</span>'
+          +'<span style="font-size:9.5px;font-weight:700;width:38px;text-align:right;color:'+(Math.abs(df)<0.05?'#b0aaa0':(df>0?'#5a9a6a':'#c17a7a'))+';">'+(Math.abs(df)<0.05?'–':((df>0?'+':'')+(Math.round(df*10)/10)))+'</span>'
+          +'</div>';
+      }).join('');
+      cc.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:7px;">계획 vs 실제</div>'+rows;
+      body.appendChild(cc);
+    }
+  }
+  // 블록 목록
+  var hd=document.createElement('div');
+  hd.style.cssText='display:flex;justify-content:space-between;align-items:center;margin:4px 2px 8px;';
+  hd.innerHTML='<span style="font-size:11px;font-weight:700;color:#6b6455;">'+(_ttMode==='actual'?'실제로 한 일':_TT_DOW[dow]+'요일 계획')+'</span>';
+  var mini=document.createElement('span');
+  mini.style.cssText='font-size:9.5px;color:#b0aaa0;';
+  mini.textContent=showing.length+'개';
+  hd.appendChild(mini);
+  body.appendChild(hd);
+  showing.slice().sort(function(a,b){return a.s-b.s;}).forEach(function(b){
+    var r=document.createElement('div');
+    r.style.cssText='display:flex;align-items:center;gap:10px;background:#fff;border:0.5px solid #ececE4;border-radius:11px;padding:11px 12px;margin-bottom:6px;cursor:pointer;';
+    r.innerHTML='<span style="width:4px;height:26px;border-radius:2px;background:'+_ttCatColor(b.cat)+';flex-shrink:0;"></span>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_ttEsc(b.name||_ttCat(b.cat)[1])+'</div>'
+      +'<div style="font-size:9.5px;color:#9a948a;margin-top:2px;">'+_ttFmtH(b.s)+' – '+_ttFmtH(b.e)+' · '+(Math.round(_ttSpan(b)*10)/10)+'시간</div></div>'
+      +'<span style="font-size:9px;color:#b0aaa0;background:#f7f6f1;border-radius:6px;padding:3px 7px;flex-shrink:0;">'+_ttCat(b.cat)[1]+'</span>';
+    r.addEventListener('click',function(){_openTTBlock(b,dow);});
+    body.appendChild(r);
+  });
+  var add=document.createElement('div');
+  add.style.cssText='background:#111;border-radius:12px;padding:13px;text-align:center;font-size:12px;color:#fff;font-weight:700;cursor:pointer;margin-top:6px;';
+  add.textContent='＋ 시간 블록 추가';
+  add.addEventListener('click',function(){_openTTBlock(null,dow);});
+  body.appendChild(add);
+  // 일정에서 가져오기
+  if(isToday){
+    var imp=document.createElement('div');
+    imp.style.cssText='background:#fff;border:1px dashed #ddd8ca;border-radius:12px;padding:12px;text-align:center;font-size:11.5px;color:#8a8474;cursor:pointer;margin-top:7px;';
+    imp.textContent='📅 오늘 일정에서 가져오기';
+    imp.addEventListener('click',function(){_ttImportEvents(dow);});
+    body.appendChild(imp);
+  }
+}
+function _ttEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ---- 블록 추가/수정 시트 ----
+function _openTTBlock(edit,dow){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('ttBlockSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='ttBlockSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:88%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  var selCat=edit?edit.cat:'study';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:3px;">'+(edit?'시간 블록 수정':'시간 블록 추가')+'</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-bottom:13px;">'+(_ttMode==='actual'?'오늘 실제로 한 일':_TT_DOW[dow]+'요일 계획')+'</div>'
+    +'<input id="tbName" placeholder="무엇을 하나요? (예: 자료구조 수업)" value="'+_ttEsc(edit?(edit.name||''):'')+'" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:11px;background:#faf9f5;">'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:13px;">'
+      +'<input id="tbS" type="time" value="'+_ttToInput(edit?edit.s:9)+'" style="flex:1;min-width:0;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;background:#faf9f5;text-align:center;">'
+      +'<span style="font-size:12px;color:#b0aaa0;flex-shrink:0;">–</span>'
+      +'<input id="tbE" type="time" value="'+_ttToInput(edit?edit.e:11)+'" style="flex:1;min-width:0;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;background:#faf9f5;text-align:center;">'
+    +'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">분류</div>'
+    +'<div id="tbCats" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:15px;">'
+      +_TT_CATS.map(function(c){var on=c[0]===selCat;
+        return '<button class="tb-cat" data-c="'+c[0]+'" style="border:1px solid '+(on?c[2]:'#e8e5dd')+';background:'+(on?c[2]+'1a':'#fff')+';color:'+(on?c[2]:'#8a8474')+';border-radius:10px;padding:7px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px;">'
+        +'<span style="width:7px;height:7px;border-radius:2px;background:'+c[2]+';"></span>'+c[1]+'</button>';}).join('')
+    +'</div>'
+    +'<button id="tbSave" style="width:100%;border:none;background:#111;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'추가')+'</button>'
+    +(edit?'<button id="tbDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.tb-cat').forEach(function(b){b.addEventListener('click',function(){
+    selCat=b.getAttribute('data-c');
+    sheet.querySelectorAll('.tb-cat').forEach(function(x){
+      var c=_ttCat(x.getAttribute('data-c'));var on=x.getAttribute('data-c')===selCat;
+      x.style.border='1px solid '+(on?c[2]:'#e8e5dd');
+      x.style.background=on?c[2]+'1a':'#fff';
+      x.style.color=on?c[2]:'#8a8474';
+    });});});
+  setTimeout(function(){try{sheet.querySelector('#tbName').focus();}catch(e){}},60);
+  function store(){
+    if(_ttMode==='actual'){
+      var k=_ttKey();
+      if(!_ttData.actual)_ttData.actual={};
+      if(!_ttData.actual[k])_ttData.actual[k]=[];
+      return _ttData.actual[k];
+    }
+    if(!_ttData.blocks)_ttData.blocks={};
+    if(!_ttData.blocks[dow])_ttData.blocks[dow]=[];
+    return _ttData.blocks[dow];
+  }
+  sheet.querySelector('#tbSave').addEventListener('click',function(){
+    var s=_ttFromInput(sheet.querySelector('#tbS').value);
+    var e=_ttFromInput(sheet.querySelector('#tbE').value);
+    if(s===e){try{showToast('시작과 끝이 같아요','del','ti-x');}catch(_){}return;}
+    var nm=sheet.querySelector('#tbName').value.trim();
+    var arr=store();
+    if(edit){edit.name=nm;edit.s=s;edit.e=e;edit.cat=selCat;}
+    else arr.push({id:'tb'+Date.now(),name:nm,s:s,e:e,cat:selCat});
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderTTPage();
+  });
+  var db=sheet.querySelector('#tbDel');
+  if(db)db.addEventListener('click',function(){
+    var arr=store();
+    var ix=arr.indexOf(edit);
+    if(ix<0){
+      // 다른 저장소에서 찾기
+      [_ttPlanBlocks(dow),_ttActualBlocks(_ttKey())].forEach(function(a){var j=a.indexOf(edit);if(j>=0)a.splice(j,1);});
+    }else arr.splice(ix,1);
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderTTPage();
+  });
+}
+// ---- 일정 탭에서 가져오기 ----
+function _ttParseTime(t){
+  if(!t)return null;
+  var m=String(t).match(/(오전|오후)?\s*(\d{1,2}):(\d{2})/);
+  if(!m)return null;
+  var h=parseInt(m[2],10),mm=parseInt(m[3],10);
+  if(m[1]==='오후'&&h<12)h+=12;
+  if(m[1]==='오전'&&h===12)h=0;
+  return h+mm/60;
+}
+function _ttImportEvents(dow){
+  var now=new Date();
+  var k=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
+  var list=(typeof events!=='undefined'&&events[k])?events[k]:[];
+  var added=0;
+  list.forEach(function(ev){
+    var s=_ttParseTime(ev.time);
+    if(s===null)return;
+    var dur=parseFloat(ev.duration)||1;
+    var e=(s+dur)%24;
+    var arr;
+    if(_ttMode==='actual'){
+      if(!_ttData.actual)_ttData.actual={};
+      if(!_ttData.actual[k])_ttData.actual[k]=[];
+      arr=_ttData.actual[k];
+    }else{
+      if(!_ttData.blocks)_ttData.blocks={};
+      if(!_ttData.blocks[dow])_ttData.blocks[dow]=[];
+      arr=_ttData.blocks[dow];
+    }
+    if(arr.some(function(b){return b.name===ev.name&&Math.abs(b.s-s)<0.01;}))return;
+    arr.push({id:'tb'+Date.now()+Math.random().toString(36).slice(2,6),name:ev.name,s:s,e:e,cat:'etc'});
+    added++;
+  });
+  if(window._saveState)window._saveState();
+  try{showToast(added?(added+'개를 가져왔어요'):'가져올 일정이 없어요',added?'add':'del',added?'ti-check':'ti-x');}catch(e){}
+  rerenderTTPage();
+}
+
+// ---- 주간 강의 시간표 ----
+function _ttRenderWeek(body){
+  var cls=_ttData.classes||[];
+  var DAYS=['월','화','수','목','금'];
+  var minH=9,maxH=18;
+  cls.forEach(function(c){minH=Math.min(minH,Math.floor(c.s));maxH=Math.max(maxH,Math.ceil(c.e));});
+  if(maxH<=minH)maxH=minH+9;
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:12px 8px;margin-bottom:12px;';
+  var hd=document.createElement('div');
+  hd.style.cssText='display:flex;justify-content:space-between;align-items:baseline;margin:0 5px 9px;';
+  hd.innerHTML='<span style="font-size:12px;font-weight:800;color:#111;">주간 시간표</span>'
+    +'<span style="font-size:9.5px;color:#9a948a;">'+cls.length+'개 강의</span>';
+  card.appendChild(hd);
+  var ROWH=17; // 30분당 픽셀
+  var grid=document.createElement('div');
+  grid.style.cssText='display:flex;gap:2px;';
+  // 시간 축
+  var axis=document.createElement('div');
+  axis.style.cssText='width:24px;flex-shrink:0;position:relative;padding-top:18px;';
+  for(var h=minH;h<maxH;h++){
+    var lab=document.createElement('div');
+    lab.style.cssText='height:'+(ROWH*2)+'px;font-size:8px;color:#b0aaa0;text-align:right;padding-right:3px;box-sizing:border-box;';
+    lab.textContent=h;
+    axis.appendChild(lab);
+  }
+  grid.appendChild(axis);
+  DAYS.forEach(function(dn,di){
+    var col=document.createElement('div');
+    col.style.cssText='flex:1;min-width:0;position:relative;';
+    var head=document.createElement('div');
+    head.style.cssText='height:18px;text-align:center;font-size:9px;font-weight:700;color:'+((new Date().getDay()-1)===di?'#e0653e':'#6b6455')+';';
+    head.textContent=dn;
+    col.appendChild(head);
+    var track=document.createElement('div');
+    track.style.cssText='position:relative;height:'+((maxH-minH)*ROWH*2)+'px;background:#faf9f5;border-radius:6px;overflow:hidden;';
+    // 시간선
+    for(var h2=minH+1;h2<maxH;h2++){
+      var ln=document.createElement('div');
+      ln.style.cssText='position:absolute;left:0;right:0;top:'+((h2-minH)*ROWH*2)+'px;height:0.5px;background:#eeece5;';
+      track.appendChild(ln);
+    }
+    cls.filter(function(c){return c.day===di;}).forEach(function(c){
+      var top=(c.s-minH)*ROWH*2;
+      var hgt=Math.max(20,(c.e-c.s)*ROWH*2-2);
+      var b=document.createElement('div');
+      b.style.cssText='position:absolute;left:1px;right:1px;top:'+top+'px;height:'+hgt+'px;background:'+c.color+'26;border-left:2.5px solid '+c.color+';border-radius:5px;padding:4px 3px;box-sizing:border-box;cursor:pointer;overflow:hidden;';
+      b.innerHTML='<div style="font-size:8.5px;font-weight:700;color:'+c.color+';line-height:1.25;word-break:keep-all;">'+_ttEsc(c.name)+'</div>'
+        +(hgt>38&&c.room?'<div style="font-size:7.5px;color:#9a948a;margin-top:2px;">'+_ttEsc(c.room)+'</div>':'');
+      b.addEventListener('click',function(){_openTTClass(c);});
+      track.appendChild(b);
+    });
+    col.appendChild(track);
+    grid.appendChild(col);
+  });
+  card.appendChild(grid);
+  body.appendChild(card);
+  var add=document.createElement('div');
+  add.style.cssText='background:#111;border-radius:12px;padding:13px;text-align:center;font-size:12px;color:#fff;font-weight:700;cursor:pointer;';
+  add.textContent='＋ 강의 추가';
+  add.addEventListener('click',function(){_openTTClass(null);});
+  body.appendChild(add);
+  if(!cls.length){
+    var e=document.createElement('div');
+    e.style.cssText='text-align:center;color:#b0aaa0;font-size:11.5px;padding:16px 0 0;line-height:1.7;';
+    e.innerHTML='아직 등록한 강의가 없어요<br><span style="font-size:10px;">학생이 아니어도 반복 일정으로 쓸 수 있어요</span>';
+    body.appendChild(e);
+  }
+}
+function _openTTClass(edit){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('ttClassSheet');if(old)old.remove();
+  var COLORS=['#4a7ac0','#c98a3a','#5a9a6a','#9a7ac0','#b07a8a','#5a9ac0','#7a6ac0','#8a9a9a'];
+  var wrap=document.createElement('div');wrap.id='ttClassSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:88%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  var selDay=edit?edit.day:0;
+  var selColor=edit?edit.color:COLORS[0];
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:13px;">'+(edit?'강의 수정':'강의 추가')+'</div>'
+    +'<input id="tcName" placeholder="과목명" value="'+_ttEsc(edit?edit.name:'')+'" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:9px;background:#faf9f5;">'
+    +'<input id="tcRoom" placeholder="강의실 (선택)" value="'+_ttEsc(edit?(edit.room||''):'')+'" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 12px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px;background:#faf9f5;">'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">요일</div>'
+    +'<div id="tcDays" style="display:flex;gap:5px;margin-bottom:12px;">'
+      +['월','화','수','목','금'].map(function(d,i){var on=i===selDay;
+        return '<button class="tc-day" data-d="'+i+'" style="flex:1;border:1px solid '+(on?'#111':'#e8e5dd')+';background:'+(on?'#111':'#fff')+';color:'+(on?'#fff':'#8a8474')+';border-radius:10px;padding:9px 0;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">'+d+'</button>';}).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">'
+      +'<input id="tcS" type="time" value="'+_ttToInput(edit?edit.s:9)+'" style="flex:1;min-width:0;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;background:#faf9f5;text-align:center;">'
+      +'<span style="font-size:12px;color:#b0aaa0;">–</span>'
+      +'<input id="tcE" type="time" value="'+_ttToInput(edit?edit.e:11)+'" style="flex:1;min-width:0;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;background:#faf9f5;text-align:center;">'
+    +'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">색</div>'
+    +'<div id="tcColors" style="display:flex;gap:7px;margin-bottom:15px;">'
+      +COLORS.map(function(c){var on=c===selColor;
+        return '<button class="tc-col" data-c="'+c+'" style="width:30px;height:30px;border-radius:50%;background:'+c+';border:'+(on?'2.5px solid #111':'1px solid #eee')+';cursor:pointer;padding:0;"></button>';}).join('')
+    +'</div>'
+    +'<button id="tcSave" style="width:100%;border:none;background:#111;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'추가')+'</button>'
+    +(edit?'<button id="tcDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.tc-day').forEach(function(b){b.addEventListener('click',function(){
+    selDay=parseInt(b.getAttribute('data-d'),10);
+    sheet.querySelectorAll('.tc-day').forEach(function(x){
+      var on=parseInt(x.getAttribute('data-d'),10)===selDay;
+      x.style.border='1px solid '+(on?'#111':'#e8e5dd');x.style.background=on?'#111':'#fff';x.style.color=on?'#fff':'#8a8474';
+    });});});
+  sheet.querySelectorAll('.tc-col').forEach(function(b){b.addEventListener('click',function(){
+    selColor=b.getAttribute('data-c');
+    sheet.querySelectorAll('.tc-col').forEach(function(x){
+      x.style.border=(x.getAttribute('data-c')===selColor)?'2.5px solid #111':'1px solid #eee';
+    });});});
+  setTimeout(function(){try{sheet.querySelector('#tcName').focus();}catch(e){}},60);
+  sheet.querySelector('#tcSave').addEventListener('click',function(){
+    var nm=sheet.querySelector('#tcName').value.trim();
+    if(!nm){sheet.querySelector('#tcName').focus();return;}
+    var s=_ttFromInput(sheet.querySelector('#tcS').value);
+    var e=_ttFromInput(sheet.querySelector('#tcE').value);
+    if(e<=s){try{showToast('끝나는 시간이 더 늦어야 해요','del','ti-x');}catch(_){}return;}
+    if(!_ttData.classes)_ttData.classes=[];
+    if(edit){edit.name=nm;edit.room=sheet.querySelector('#tcRoom').value.trim();edit.day=selDay;edit.s=s;edit.e=e;edit.color=selColor;}
+    else _ttData.classes.push({id:'tc'+Date.now(),name:nm,room:sheet.querySelector('#tcRoom').value.trim(),day:selDay,s:s,e:e,color:selColor});
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderTTPage();
+  });
+  var db=sheet.querySelector('#tcDel');
+  if(db)db.addEventListener('click',function(){
+    _ttData.classes=_ttData.classes.filter(function(x){return x.id!==edit.id;});
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderTTPage();
+  });
+}
+// ---- 흐름(세로 타임라인) ----
+function _ttRenderFlow(body){
+  var now=new Date();
+  var dow=now.getDay();
+  var k=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
+  var items=[];
+  // 강의 (월~금 = day 0~4)
+  if(dow>=1&&dow<=5){
+    (_ttData.classes||[]).filter(function(c){return c.day===dow-1;}).forEach(function(c){
+      items.push({s:c.s,e:c.e,name:c.name,sub:c.room||'강의',color:c.color,kind:'강의'});
+    });
+  }
+  // 계획 블록
+  _ttPlanBlocks(dow).forEach(function(b){
+    items.push({s:b.s,e:b.e,name:b.name||_ttCat(b.cat)[1],sub:_ttCat(b.cat)[1],color:_ttCatColor(b.cat),kind:'계획'});
+  });
+  // 일정
+  var evs=(typeof events!=='undefined'&&events[k])?events[k]:[];
+  evs.forEach(function(ev){
+    var s=_ttParseTime(ev.time);
+    if(s===null)return;
+    var dur=parseFloat(ev.duration)||1;
+    items.push({s:s,e:s+dur,name:ev.name,sub:'일정',color:ev.color||'#8a9a9a',kind:'일정',done:ev.done});
+  });
+  items.sort(function(a,b){return a.s-b.s;});
+  if(!items.length){
+    var e=document.createElement('div');
+    e.style.cssText='text-align:center;color:#b0aaa0;font-size:12px;padding:34px 10px;line-height:1.8;';
+    e.innerHTML='오늘 흐름이 비어 있어요<br><span style="font-size:10.5px;">원형 계획이나 강의를 추가하면<br>여기에 시간순으로 모여요</span>';
+    body.appendChild(e);
+    return;
+  }
+  var hd=document.createElement('div');
+  hd.style.cssText='font-size:11px;font-weight:700;color:#6b6455;margin:0 2px 10px;';
+  hd.textContent='오늘의 흐름 · '+items.length+'개';
+  body.appendChild(hd);
+  var nowH=now.getHours()+now.getMinutes()/60;
+  items.forEach(function(it){
+    var past=it.e<=nowH;
+    var live=(it.s<=nowH&&nowH<it.e);
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;gap:9px;align-items:stretch;';
+    row.innerHTML='<span style="font-size:9px;color:'+(live?'#e0653e':'#b0aaa0')+';width:30px;flex-shrink:0;padding-top:10px;font-weight:'+(live?'700':'400')+';">'+_ttFmtH(it.s)+'</span>'
+      +'<div style="width:2px;background:'+(live?'#e0653e':'#e8e5dd')+';flex-shrink:0;"></div>'
+      +'<div style="flex:1;min-width:0;background:'+it.color+'1a;border-left:3px solid '+it.color+';border-radius:0 9px 9px 0;padding:9px 11px;margin-bottom:5px;'+(past?'opacity:0.55;':'')+'">'
+        +'<div style="font-size:11.5px;font-weight:700;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_ttEsc(it.name)+(live?' <span style="font-size:8.5px;color:#e0653e;">지금</span>':'')+'</div>'
+        +'<div style="font-size:9px;color:#9a948a;margin-top:2px;">'+_ttEsc(it.sub)+' · '+_ttFmtH(it.s)+'–'+_ttFmtH(it.e)+' · '+it.kind+'</div>'
+      +'</div>';
+    body.appendChild(row);
+  });
+}
+
 // ===== 오늘의 문장 =====
 function _sentContainer(){
   var f=document.getElementById('sentFull');
@@ -10774,6 +11355,7 @@ function setHomePage(p){
   if(p===13){try{openIndexFull();}catch(e){}}
   if(p===14){try{openMindFull();}catch(e){}}
   if(p===15){try{openSentFull();}catch(e){}}
+  if(p===16){try{openTTFull();}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -10801,6 +11383,7 @@ function buildHomeSlider(){
     {id:'tab-index',    name:'인덱스'},
     {id:'tab-mind',     name:'마인드'},
     {id:'tab-sent',     name:'문장'},
+    {id:'tab-tt',       name:'시간표'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -10915,6 +11498,12 @@ function buildHomeSlider(){
   sentPage.id='sentPage';
   renderSentPage(sentPage);
   slider.appendChild(sentPage);
+
+  var ttPage=document.createElement('div');
+  ttPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  ttPage.id='ttPage';
+  renderTTPage(ttPage);
+  slider.appendChild(ttPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -13182,6 +13771,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       index:_idxData,
       mind:_mindData,
       sent:_sentData,
+      tt:_ttData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -13222,6 +13812,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.index&&typeof d.index==='object'){_idxData.fragments=d.index.fragments||[];_idxData.topics=d.index.topics||[];_idxData.links=d.index.links||[];}
       if(d.mind&&typeof d.mind==='object'){_mindData.moods=d.mind.moods||{};_mindData.bucket=d.mind.bucket||[];_mindData.meditations=d.mind.meditations||[];}
       if(d.sent&&typeof d.sent==='object'){_sentData.sentences=d.sent.sentences||[];_sentData.copied=d.sent.copied||{};}
+      if(d.tt&&typeof d.tt==='object'){_ttData.blocks=d.tt.blocks||{};_ttData.actual=d.tt.actual||{};_ttData.classes=d.tt.classes||[];}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -13237,7 +13828,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14,'문장':15};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14,'문장':15,'시간표':16};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
