@@ -4598,6 +4598,8 @@ function _healthRenderDiet(body,k,water,WATER_GOAL){
     }
     body.appendChild(card);
   });
+  // 제철 음식
+  try{_renderSeasonalCard(body);}catch(e){}
 }
 // 간단 음식 칼로리 어림 테이블 (참고용, 1인분 기준 kcal)
 var _calTable=[
@@ -5851,6 +5853,170 @@ function _openConnectSheet(preSel){
     if(window._saveState)window._saveState();wrap.remove();_idxView='index';rerenderIndexPage();
     showToast('연결을 저장했어요 ✦','add','ti-check');
   });
+}
+
+var _SEASONAL_DB={
+  kr:{1:{f:['한라봉','딸기','유자','사과'],v:['시금치','우엉','연근','배추'],s:['굴','과메기','방어','대구']},2:{f:['딸기','한라봉','천혜향'],v:['냉이','달래','봄동','시금치'],s:['바지락','굴','아귀','도루묵']},3:{f:['딸기','금귤','참외'],v:['달래','냉이','쑥','미나리','두릅'],s:['주꾸미','바지락','도다리','멍게']},4:{f:['딸기','참외','앵두'],v:['두릅','죽순','취나물','아스파라거스'],s:['도다리','키조개','멍게','갑오징어']},5:{f:['참외','매실','앵두','오디'],v:['마늘종','완두콩','죽순','상추'],s:['멍게','장어','병어','소라']},6:{f:['매실','자두','살구','수박'],v:['감자','오이','애호박','마늘'],s:['참다랑어','민어','갑오징어','성게']},7:{f:['복숭아','자두','수박','블루베리'],v:['옥수수','가지','애호박','열무'],s:['장어','민어','전복','오징어']},8:{f:['포도','복숭아','수박','무화과'],v:['옥수수','가지','고추','토마토'],s:['전복','오징어','갈치','민어']},9:{f:['포도','무화과','배','사과'],v:['고구마','토란','버섯','단호박'],s:['전어','대하','꽃게','갈치']},10:{f:['사과','배','감','대추','밤'],v:['고구마','무','버섯','배추'],s:['꽃게','고등어','대하','낙지']},11:{f:['감','유자','사과','석류'],v:['배추','무','시금치','연근'],s:['굴','홍합','삼치','대게']},12:{f:['귤','유자','사과','딸기'],v:['배추','무','우엉','시금치'],s:['방어','과메기','대게','굴']}},
+  jp:{1:{f:['귤','딸기','사과'],v:['무','배추','시금치','유자'],s:['방어','대구','굴','대게']},2:{f:['딸기','귤','금귤'],v:['유채꽃','순무','시금치'],s:['방어','대합','미역']},3:{f:['딸기','하귤'],v:['죽순','유채','두릅'],s:['도미','바지락','벚꽃새우']},4:{f:['딸기','비파'],v:['죽순','완두','아스파라거스'],s:['도미','가다랑어','대합']},5:{f:['매실','비파','체리'],v:['완두','마늘종','양배추'],s:['초가다랑어','전갱이','성게']},6:{f:['매실','체리','살구'],v:['오이','가지','양파'],s:['은어','갯장어','전갱이']},7:{f:['복숭아','수박','멜론'],v:['오이','토마토','옥수수'],s:['장어','은어','성게']},8:{f:['복숭아','포도','무화과'],v:['가지','옥수수','오크라'],s:['전갱이','문어','갯장어']},9:{f:['포도','배','무화과'],v:['고구마','버섯','토란'],s:['꽁치','고등어','연어']},10:{f:['감','밤','배'],v:['송이버섯','고구마','연근'],s:['꽁치','연어','고등어']},11:{f:['감','귤','사과'],v:['무','배추','연근'],s:['대게','방어','굴']},12:{f:['귤','사과','유자'],v:['무','배추','시금치'],s:['방어','복어','대게','굴']}},
+  us:{1:{f:['오렌지','자몽','키위'],v:['케일','방울양배추','비트','고구마'],s:['굴','대구','홍합']},2:{f:['오렌지','자몽','레몬'],v:['브로콜리','콜리플라워','근대'],s:['굴','가리비','넙치']},3:{f:['파인애플','망고','오렌지'],v:['아스파라거스','아티초크','완두'],s:['연어','게','홍합']},4:{f:['딸기','파인애플','살구'],v:['아스파라거스','상추','완두'],s:['연어','새우','가리비']},5:{f:['딸기','체리','살구'],v:['아스파라거스','시금치','루바브'],s:['연어','넙치','게']},6:{f:['체리','블루베리','복숭아'],v:['주키니','옥수수','오이'],s:['연어','새우','넙치']},7:{f:['블루베리','수박','복숭아','라즈베리'],v:['토마토','옥수수','피망'],s:['연어','게','오징어']},8:{f:['복숭아','수박','포도','자두'],v:['토마토','옥수수','가지','오크라'],s:['게','새우','참치']},9:{f:['사과','포도','무화과','배'],v:['단호박','고구마','버섯'],s:['굴','게','연어']},10:{f:['사과','배','크랜베리','석류'],v:['단호박','고구마','방울양배추'],s:['굴','가리비','홍합']},11:{f:['크랜베리','석류','감','사과'],v:['단호박','순무','케일'],s:['굴','가리비','대구']},12:{f:['감귤','석류','배','감'],v:['케일','방울양배추','파스닙'],s:['굴','대구','게']}},
+  eu:{1:{f:['오렌지','레몬','배','사과'],v:['케일','리크','방울양배추','엔다이브'],s:['굴','홍합','대구']},2:{f:['블러드오렌지','오렌지','키위'],v:['아티초크','시금치','리크'],s:['홍합','가리비','청어']},3:{f:['레몬','오렌지','루바브'],v:['아스파라거스','아티초크','봄양파'],s:['정어리','홍합','새우']},4:{f:['딸기','루바브'],v:['아스파라거스','완두','래디시'],s:['정어리','게','넙치']},5:{f:['딸기','체리','살구'],v:['아스파라거스','완두','애호박'],s:['정어리','오징어','새우']},6:{f:['체리','살구','복숭아','멜론'],v:['애호박','토마토','가지'],s:['정어리','오징어','문어']},7:{f:['복숭아','살구','멜론','자두'],v:['토마토','가지','피망','바질'],s:['정어리','문어','참치']},8:{f:['무화과','포도','복숭아','멜론'],v:['토마토','가지','피망'],s:['문어','참치','홍합']},9:{f:['포도','무화과','자두','배'],v:['단호박','버섯','근대'],s:['홍합','정어리','농어']},10:{f:['포도','배','사과','밤'],v:['단호박','버섯','케일'],s:['굴','홍합','가리비']},11:{f:['감귤','석류','배','밤'],v:['리크','케일','근대'],s:['굴','가리비','대구']},12:{f:['오렌지','석류','배'],v:['방울양배추','케일','리크'],s:['굴','가리비','홍합']}},
+  sea:{1:{f:['파인애플','파파야','포멜로'],v:['공심채','배추','무'],s:['새우','게','오징어']},2:{f:['수박','파인애플','잭프루트'],v:['공심채','가지','여주'],s:['새우','조개','고등어']},3:{f:['망고','수박','잭프루트'],v:['죽순','가지','여주'],s:['오징어','새우','게']},4:{f:['망고','두리안','리치'],v:['죽순','공심채','오크라'],s:['새우','참치','오징어']},5:{f:['망고','두리안','망고스틴','리치'],v:['오크라','여주','호박잎'],s:['게','새우','고등어']},6:{f:['망고스틴','두리안','람부탄'],v:['여주','가지','공심채'],s:['오징어','새우','조개']},7:{f:['람부탄','롱간','망고스틴'],v:['공심채','단호박','오크라'],s:['게','오징어','새우']},8:{f:['롱간','포멜로','용과'],v:['가지','여주','죽순'],s:['참치','새우','조개']},9:{f:['용과','포멜로','스타프루트'],v:['공심채','오크라','단호박'],s:['새우','게','고등어']},10:{f:['포멜로','감귤','용과'],v:['배추','무','공심채'],s:['오징어','새우','조개']},11:{f:['포멜로','감귤','파파야'],v:['배추','무','브로콜리'],s:['게','새우','고등어']},12:{f:['파파야','파인애플','감귤'],v:['배추','당근','무'],s:['새우','게','오징어']}},
+};
+// ===== 제철 음식 (지역/국가별) =====
+var _SEASON_REGIONS=[
+  {id:'kr',name:'한국',flag:'🇰🇷'},
+  {id:'jp',name:'일본',flag:'🇯🇵'},
+  {id:'us',name:'미국',flag:'🇺🇸'},
+  {id:'eu',name:'유럽',flag:'🇪🇺'},
+  {id:'sea',name:'동남아',flag:'🌴'}
+];
+var _seasonRegion='kr';
+var _seasonMonth=null;   // null = 이번 달
+var _SEASON_CATS=[['f','🍎','과일'],['v','🥬','채소'],['s','🐟','해산물']];
+function _seasonCurMonth(){return _seasonMonth||(new Date().getMonth()+1);}
+function _seasonRegionName(id){var r=_SEASON_REGIONS.find(function(x){return x.id===id;});return r?r.name:'한국';}
+function _seasonRegionFlag(id){var r=_SEASON_REGIONS.find(function(x){return x.id===id;});return r?r.flag:'🇰🇷';}
+function _seasonalFor(month,region){
+  var db=_SEASONAL_DB[region||_seasonRegion];
+  if(!db)db=_SEASONAL_DB.kr;
+  return db[month]||{f:[],v:[],s:[]};
+}
+function _seasonalFlat(month,region){
+  var d=_seasonalFor(month,region);
+  return (d.f||[]).concat(d.v||[],d.s||[]);
+}
+// 식단 탭에 들어가는 제철 카드
+function _renderSeasonalCard(body){
+  var mo=_seasonCurMonth();
+  var data=_seasonalFor(mo,_seasonRegion);
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff6ec;border:0.5px solid #f0dfc6;border-radius:14px;padding:13px;margin-bottom:12px;';
+  var head=document.createElement('div');
+  head.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;';
+  head.innerHTML='<span style="font-size:11.5px;font-weight:800;color:#9a5b12;">🍑 '+mo+'월 제철 음식</span>'
+    +'<span style="font-size:9.5px;color:#b08a50;">'+_seasonRegionFlag(_seasonRegion)+' '+_seasonRegionName(_seasonRegion)+'</span>';
+  card.appendChild(head);
+  var sub=document.createElement('div');
+  sub.style.cssText='font-size:9.5px;color:#b08a50;margin-bottom:10px;';
+  sub.textContent='지금이 가장 맛있고 값도 싼 것들';
+  card.appendChild(sub);
+  _SEASON_CATS.forEach(function(c){
+    var items=data[c[0]]||[];
+    if(!items.length)return;
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:flex-start;gap:7px;margin-bottom:7px;';
+    row.innerHTML='<span style="font-size:10px;flex-shrink:0;width:16px;padding-top:2px;">'+c[1]+'</span>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:4px;flex:1;">'
+      +items.slice(0,4).map(function(it){
+        return '<span style="font-size:10px;padding:4px 9px;border-radius:11px;background:#fff;border:0.5px solid #f0dfc6;color:#8a5a1a;">'+it+'</span>';
+      }).join('')
+      +(items.length>4?'<span style="font-size:10px;padding:4px 6px;color:#c0a070;">+'+(items.length-4)+'</span>':'')
+      +'</div>';
+    card.appendChild(row);
+  });
+  var btn=document.createElement('button');
+  btn.style.cssText='width:100%;border:none;background:#e58a3a;color:#fff;font-size:11.5px;font-weight:700;padding:10px;border-radius:10px;cursor:pointer;font-family:inherit;margin-top:6px;';
+  btn.textContent='제철 음식 전체 보기';
+  btn.addEventListener('click',function(){_openSeasonSheet();});
+  card.appendChild(btn);
+  body.appendChild(card);
+}
+// 전체 보기 시트 (지역 선택 + 월 이동 + 담기)
+function _openSeasonSheet(){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('seasonSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='seasonSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:90%;display:flex;flex-direction:column;background:#fff;border-radius:22px 22px 0 0;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;overflow:hidden;';
+  var sel={};
+  var topWrap=document.createElement('div');
+  topWrap.style.cssText='padding:18px 16px 0;flex-shrink:0;';
+  var bodyWrap=document.createElement('div');
+  bodyWrap.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:0 16px 8px;';
+  var footWrap=document.createElement('div');
+  footWrap.style.cssText='padding:10px 16px 24px;flex-shrink:0;border-top:0.5px solid #f0eee8;background:#fff;';
+  sheet.appendChild(topWrap);sheet.appendChild(bodyWrap);sheet.appendChild(footWrap);
+  function draw(){
+    var mo=_seasonCurMonth();
+    var data=_seasonalFor(mo,_seasonRegion);
+    // 헤더
+    topWrap.innerHTML='<div style="font-size:15px;font-weight:800;color:#111;margin-bottom:11px;">제철 음식</div>';
+    var reg=document.createElement('div');
+    reg.style.cssText='display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:11px;';
+    _SEASON_REGIONS.forEach(function(r){
+      var on=r.id===_seasonRegion;
+      var b=document.createElement('button');
+      b.style.cssText='flex-shrink:0;border:1px solid '+(on?'#e58a3a':'#ececE4')+';background:'+(on?'#fff3e6':'#fff')+';color:'+(on?'#9a5b12':'#8a8474')+';border-radius:11px;padding:8px 13px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;';
+      b.textContent=r.flag+' '+r.name;
+      b.addEventListener('click',function(){_seasonRegion=r.id;sel={};if(window._saveState)window._saveState();draw();});
+      reg.appendChild(b);
+    });
+    topWrap.appendChild(reg);
+    // 월 이동
+    var mrow=document.createElement('div');
+    mrow.style.cssText='display:flex;align-items:center;justify-content:space-between;background:#faf9f5;border-radius:11px;padding:8px 12px;margin-bottom:12px;';
+    var prev=document.createElement('span');prev.textContent='‹';
+    prev.style.cssText='font-size:17px;color:#8a8474;cursor:pointer;padding:0 8px;';
+    prev.addEventListener('click',function(){_seasonMonth=(mo===1?12:mo-1);sel={};draw();});
+    var lab=document.createElement('span');
+    lab.style.cssText='font-size:13px;font-weight:800;color:#111;';
+    lab.textContent=mo+'월';
+    var next=document.createElement('span');next.textContent='›';
+    next.style.cssText='font-size:17px;color:#8a8474;cursor:pointer;padding:0 8px;';
+    next.addEventListener('click',function(){_seasonMonth=(mo===12?1:mo+1);sel={};draw();});
+    mrow.appendChild(prev);mrow.appendChild(lab);mrow.appendChild(next);
+    topWrap.appendChild(mrow);
+    // 본문
+    bodyWrap.innerHTML='';
+    _SEASON_CATS.forEach(function(c){
+      var items=data[c[0]]||[];
+      if(!items.length)return;
+      var h=document.createElement('div');
+      h.style.cssText='font-size:10.5px;font-weight:700;color:#9a948a;margin:6px 2px 8px;';
+      h.textContent=c[1]+' '+c[2];
+      bodyWrap.appendChild(h);
+      var g=document.createElement('div');
+      g.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;';
+      items.forEach(function(it){
+        var on=!!sel[it];
+        var b=document.createElement('button');
+        b.style.cssText='border:1px solid '+(on?'#e58a3a':'#ececE4')+';background:'+(on?'#e58a3a':'#fff')+';color:'+(on?'#fff':'#6b6455')+';border-radius:12px;padding:8px 13px;font-size:12px;font-weight:'+(on?'700':'500')+';cursor:pointer;font-family:inherit;';
+        b.textContent=it;
+        b.addEventListener('click',function(){
+          if(sel[it])delete sel[it];else sel[it]=true;
+          draw();
+        });
+        g.appendChild(b);
+      });
+      bodyWrap.appendChild(g);
+    });
+    // 하단
+    var arr=Object.keys(sel);
+    footWrap.innerHTML='';
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;gap:6px;';
+    var addB=document.createElement('button');
+    addB.style.cssText='flex:1;border:none;font-size:12px;font-weight:700;padding:13px 0;border-radius:12px;background:'+(arr.length?'#e58a3a':'#f0e4d4')+';color:#fff;cursor:'+(arr.length?'pointer':'default')+';font-family:inherit;';
+    addB.textContent=arr.length?(arr.length+'개 장보기에 담기'):'품목을 골라주세요';
+    if(arr.length)addB.addEventListener('click',function(){
+      try{_addItemsToGrocery(arr);}catch(e){}
+      wrap.remove();
+    });
+    var shopB=document.createElement('button');
+    shopB.style.cssText='flex-shrink:0;border:0.5px solid #f0dfc6;background:#fff;font-size:11.5px;font-weight:700;padding:13px 14px;border-radius:12px;color:#9a5b12;cursor:pointer;font-family:inherit;';
+    shopB.textContent='🛒';
+    shopB.addEventListener('click',function(){
+      var q=arr.length?arr[0]:(_seasonalFlat(mo,_seasonRegion)[0]||'제철음식');
+      try{_shopOpen(q);}catch(e){}
+    });
+    row.appendChild(addB);row.appendChild(shopB);
+    footWrap.appendChild(row);
+  }
+  draw();
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
 }
 
 // ===== 시간표 (원형 생활계획표 · 주간 · 흐름) =====
@@ -9663,7 +9829,7 @@ function closeNotif(){document.getElementById('notifDim').classList.remove('show
 function renderNotif(){
   var body=document.getElementById('notifBody');
   var mo=new Date().getMonth()+1;
-  var seasonal=SEASONAL[mo]||[];
+  var seasonal=(typeof _seasonalFlat==='function')?_seasonalFlat(mo,_seasonRegion).slice(0,6):(SEASONAL[mo]||[]);
   var html='';
   // 생리 예정 알림 (3/2/1/0일 전)
   var cnotifs=_cycleNotifs();
@@ -9680,14 +9846,15 @@ function renderNotif(){
     if(!window._seasonalSel){window._seasonalSel={};seasonal.forEach(function(s){window._seasonalSel[s]=true;});}
     var selArr=seasonal.filter(function(s){return window._seasonalSel[s];});
     html+='<div style="background:#fff6ec;border:1.5px solid #f5dfc2;border-radius:13px;padding:11px 13px;margin-bottom:8px;">'
-      +'<div style="font-size:11px;font-weight:700;color:#9a5b12;">🍑 '+mo+'월 제철 음식</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-size:11px;font-weight:700;color:#9a5b12;">🍑 '+mo+'월 제철 음식</span><span style="font-size:9px;color:#b08a50;">'+_seasonRegionFlag(_seasonRegion)+' '+_seasonRegionName(_seasonRegion)+'</span></div>'
       +'<div style="font-size:9px;color:#7a5a30;margin-top:2px;margin-bottom:9px;">담을 품목을 골라보세요</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:5px 4px;">'
       +seasonal.map(function(s){var on=window._seasonalSel[s];return '<span class="nt-season-chip" data-s="'+s+'" style="display:inline-block;font-size:10px;padding:5px 11px;border-radius:13px;cursor:pointer;font-family:inherit;'+(on?'background:#e58a3a;color:#fff;border:1px solid #e58a3a;':'background:#fff;color:#9a5b12;border:1px solid #eecfa8;')+'">'+s+'</span>';}).join('')
       +'</div>'
       +'<div style="display:flex;gap:6px;margin-top:11px;">'
       +'<button id="ntSeasonAdd" '+(selArr.length?'':'disabled ')+'style="flex:1;border:none;font-size:10px;font-weight:700;padding:7px 0;border-radius:9px;background:'+(selArr.length?'#e58a3a':'#f0dabf')+';color:#fff;cursor:'+(selArr.length?'pointer':'default')+';font-family:inherit;">'+(selArr.length?selArr.length+'개 장보기에 추가':'품목을 선택하세요')+'</button>'
-      +'<button id="ntSeasonShop" style="border:1px solid #f5dfc2;background:none;font-size:10px;font-weight:600;padding:7px 11px;border-radius:9px;color:#9a5b12;cursor:pointer;font-family:inherit;">🛒 최저가</button>'
+      +'<button id="ntSeasonAll" style="border:1px solid #f5dfc2;background:none;font-size:10px;font-weight:600;padding:7px 11px;border-radius:9px;color:#9a5b12;cursor:pointer;font-family:inherit;">전체</button>'
+      +'<button id="ntSeasonShop" style="border:1px solid #f5dfc2;background:none;font-size:10px;font-weight:600;padding:7px 11px;border-radius:9px;color:#9a5b12;cursor:pointer;font-family:inherit;">🛒</button>'
       +'</div></div>';
   }
   var due=_dueBookmarks();
@@ -9719,6 +9886,8 @@ function renderNotif(){
   });
   var ss=document.getElementById('ntSeasonShop');
   if(ss)ss.addEventListener('click',function(){var sel=seasonal.filter(function(s){return window._seasonalSel&&window._seasonalSel[s];});_shopOpen(sel[0]||seasonal[0]);});
+  var sa=document.getElementById('ntSeasonAll');
+  if(sa)sa.addEventListener('click',function(){try{closeNotif();}catch(e){}_openSeasonSheet();});
   var da=document.getElementById('ntDueAdd');
   if(da)da.addEventListener('click',function(){Object.keys(_dueSelected).forEach(function(k){delete _dueSelected[k];});_addDueToCards();renderNotif();updateNotifDot();});
   var ds=document.getElementById('ntDueShop');
@@ -13772,6 +13941,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       mind:_mindData,
       sent:_sentData,
       tt:_ttData,
+      seasonRegion:_seasonRegion,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -13813,6 +13983,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.mind&&typeof d.mind==='object'){_mindData.moods=d.mind.moods||{};_mindData.bucket=d.mind.bucket||[];_mindData.meditations=d.mind.meditations||[];}
       if(d.sent&&typeof d.sent==='object'){_sentData.sentences=d.sent.sentences||[];_sentData.copied=d.sent.copied||{};}
       if(d.tt&&typeof d.tt==='object'){_ttData.blocks=d.tt.blocks||{};_ttData.actual=d.tt.actual||{};_ttData.classes=d.tt.classes||[];}
+      if(d.seasonRegion)_seasonRegion=d.seasonRegion;
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
