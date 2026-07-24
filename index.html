@@ -3926,14 +3926,14 @@ function _renderWeightPage(body){
   var head=document.createElement('div');
   head.style.cssText='display:flex;align-items:flex-end;justify-content:space-between;';
   var diffHTML='';
-  if(diff!==null&&Math.abs(diff)>=0.05){
+  if(diff!==null&&Math.abs(diff)>=0.005){
     var down=diff<0;
-    diffHTML='<div style="text-align:right;"><div style="font-size:11px;font-weight:800;color:'+(down?'#1a7a4a':'#c17a7a')+';">'+(down?'▼':'▲')+' '+Math.abs(diff).toFixed(1)+'kg</div><div style="font-size:8.5px;color:#b0aaa0;margin-top:2px;">직전 기록 대비</div></div>';
+    diffHTML='<div style="text-align:right;"><div style="font-size:11px;font-weight:800;color:'+(down?'#1a7a4a':'#c17a7a')+';">'+(down?'▼':'▲')+' '+Math.abs(diff).toFixed(2)+'kg</div><div style="font-size:8.5px;color:#b0aaa0;margin-top:2px;">직전 기록 대비</div></div>';
   }else if(diff!==null){
     diffHTML='<div style="text-align:right;"><div style="font-size:11px;font-weight:800;color:#9a948a;">– 유지</div><div style="font-size:8.5px;color:#b0aaa0;margin-top:2px;">직전 기록 대비</div></div>';
   }
   head.innerHTML='<div><div style="font-size:10px;color:#9a948a;margin-bottom:3px;">'+(todayW!==undefined?'오늘 몸무게':'최근 몸무게')+'</div>'
-    +'<div style="display:flex;align-items:baseline;gap:5px;"><span style="font-size:30px;font-weight:800;color:#111;line-height:1;">'+(curVal!==null&&curVal!==undefined?curVal.toFixed(1):'--')+'</span><span style="font-size:12px;color:#9a948a;">kg</span></div></div>'
+    +'<div style="display:flex;align-items:baseline;gap:5px;"><span style="font-size:30px;font-weight:800;color:#111;line-height:1;">'+(curVal!==null&&curVal!==undefined?curVal.toFixed(2):'--')+'</span><span style="font-size:12px;color:#9a948a;">kg</span></div></div>'
     +diffHTML;
   card.appendChild(head);
 
@@ -3980,7 +3980,7 @@ function _renderWeightPage(body){
   var btnRow=document.createElement('div');btnRow.style.cssText='margin-top:11px;';
   var addBtn=document.createElement('button');
   addBtn.style.cssText='width:100%;font-size:11.5px;font-weight:700;color:#fff;background:#1a7a4a;border:none;border-radius:10px;padding:11px;cursor:pointer;font-family:inherit;';
-  addBtn.textContent=todayW!==undefined?'오늘 기록 수정 ('+todayW.toFixed(1)+'kg)':'＋ 오늘 몸무게 기록';
+  addBtn.textContent=todayW!==undefined?'오늘 기록 수정 ('+todayW.toFixed(2)+'kg)':'＋ 오늘 몸무게 기록';
   addBtn.addEventListener('click',function(){_openWeightSheet(todayK);});
   btnRow.appendChild(addBtn);
   card.appendChild(btnRow);
@@ -4007,14 +4007,14 @@ function _renderWeightPage(body){
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:center;gap:9px;background:#faf9f5;border-radius:9px;padding:9px 10px;margin-bottom:5px;cursor:pointer;';
       var dvHTML='';
-      if(dv!==null&&Math.abs(dv)>=0.05){
-        dvHTML='<span style="font-size:9px;color:'+(dv<0?'#1a7a4a':'#c17a7a')+';width:32px;text-align:right;flex-shrink:0;font-weight:700;">'+(dv<0?'▼':'▲')+Math.abs(dv).toFixed(1)+'</span>';
+      if(dv!==null&&Math.abs(dv)>=0.005){
+        dvHTML='<span style="font-size:9px;color:'+(dv<0?'#1a7a4a':'#c17a7a')+';width:32px;text-align:right;flex-shrink:0;font-weight:700;">'+(dv<0?'▼':'▲')+Math.abs(dv).toFixed(2)+'</span>';
       }else{
         dvHTML='<span style="font-size:9px;color:#c0bcb2;width:32px;text-align:right;flex-shrink:0;">–</span>';
       }
       row.innerHTML='<span style="font-size:10px;color:#9a948a;width:46px;flex-shrink:0;">'+(dt.getMonth()+1)+'.'+dt.getDate()+' '+W[dt.getDay()]+'</span>'
         +'<div style="flex:1;min-width:0;height:5px;background:#eceae3;border-radius:3px;"><div style="width:'+pct.toFixed(0)+'%;height:100%;background:'+(i===0?'#1a7a4a':'#88ce9f')+';border-radius:3px;"></div></div>'
-        +'<span style="font-size:11.5px;font-weight:800;color:#111;flex-shrink:0;">'+v.toFixed(1)+'</span>'
+        +'<span style="font-size:11.5px;font-weight:800;color:#111;flex-shrink:0;">'+v.toFixed(2)+'</span>'
         +dvHTML;
       row.addEventListener('click',function(){_openWeightSheet(k);});
       body.appendChild(row);
@@ -4034,11 +4034,11 @@ function _openWeightSheet(dateKey){
   var sheet=document.createElement('div');
   sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
   sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:3px;">'+p[1]+'월 '+p[2]+'일 몸무게</div>'
-    +'<div style="font-size:10px;color:#9a948a;margin-bottom:14px;">소수점 첫째 자리까지 적어요</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-bottom:14px;">소수점 둘째 자리까지 적어요</div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'
       +'<button id="wMinus" style="width:42px;height:42px;border-radius:12px;border:0.5px solid #e8e5dd;background:#f7f6f1;font-size:18px;color:#6b6455;cursor:pointer;font-family:inherit;flex-shrink:0;">−</button>'
       +'<div style="flex:1;display:flex;align-items:baseline;justify-content:center;gap:4px;background:#f7f6f1;border-radius:12px;padding:9px;">'
-        +'<input id="wVal" type="number" step="0.1" inputmode="decimal" value="'+(cur!==undefined?cur:'')+'" placeholder="0.0" style="width:88px;border:none;background:none;font-size:26px;font-weight:800;color:#111;text-align:center;outline:none;font-family:inherit;">'
+        +'<input id="wVal" type="number" step="0.01" inputmode="decimal" value="'+(cur!==undefined?cur.toFixed(2):'')+'" placeholder="0.00" style="width:112px;border:none;background:none;font-size:26px;font-weight:800;color:#111;text-align:center;outline:none;font-family:inherit;">'
         +'<span style="font-size:12px;color:#9a948a;">kg</span></div>'
       +'<button id="wPlus" style="width:42px;height:42px;border-radius:12px;border:0.5px solid #e8e5dd;background:#f7f6f1;font-size:18px;color:#6b6455;cursor:pointer;font-family:inherit;flex-shrink:0;">＋</button>'
     +'</div>'
@@ -4053,7 +4053,7 @@ function _openWeightSheet(dateKey){
       var ks=_wSortedKeys();
       v=ks.length?_healthData.weights[ks[ks.length-1]]:60;
     }
-    inp.value=(Math.round((v+d)*10)/10).toFixed(1);
+    inp.value=(Math.round((v+d)*100)/100).toFixed(2);
   }
   sheet.querySelector('#wMinus').addEventListener('click',function(){step(-0.1);});
   sheet.querySelector('#wPlus').addEventListener('click',function(){step(0.1);});
@@ -4061,7 +4061,7 @@ function _openWeightSheet(dateKey){
     var v=parseFloat(inp.value);
     if(isNaN(v)||v<=0||v>400){inp.focus();return;}
     if(!_healthData.weights)_healthData.weights={};
-    _healthData.weights[dateKey]=Math.round(v*10)/10;
+    _healthData.weights[dateKey]=Math.round(v*100)/100;
     if(window._saveState)window._saveState();
     wrap.remove();
     try{showToast('몸무게를 기록했어요','add','ti-check');}catch(e){}
