@@ -920,6 +920,8 @@
     <div id="sentFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f2efe8;flex-direction:column;"></div>
     <div id="ttFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f5f4ef;flex-direction:column;"></div>
     <div id="stgFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f5f4ef;flex-direction:column;"></div>
+    <div id="scrapFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f4f3ef;flex-direction:column;"></div>
+    <div id="vocabFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#faf9f6;flex-direction:column;"></div>
     <div class="dock-bar" id="dockBar">
       <button class="dock-btn" id="dockToday" aria-label="일정">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
@@ -6600,6 +6602,380 @@ function _ttRenderFlow(body){
   });
 }
 
+// ===== 스크랩 (웹 스크랩 모으기) =====
+var _scrapData={items:[],cats:[]};
+// items: [{id,url,title,cat,memo,fav,read,ts}]
+// cats: 사용자 정의 카테고리 [{id,emoji,name,color}]
+var _scrapView='list';   // 'list'|'card'
+var _scrapCatSel='all';  // 'all'|'fav'|카테고리 id
+var _SCRAP_DEFAULT_CATS=[
+  {id:'news',   emoji:'📰', name:'뉴스',   color:'#3a5a8a'},
+  {id:'recipe', emoji:'🍳', name:'레시피', color:'#c98a3a'},
+  {id:'shop',   emoji:'🛍', name:'쇼핑',   color:'#8a6ac0'},
+  {id:'video',  emoji:'📺', name:'영상',   color:'#5a8a6a'},
+  {id:'blog',   emoji:'📝', name:'블로그', color:'#c05a7a'},
+  {id:'etc',    emoji:'🔖', name:'기타',   color:'#8a9a9a'}
+];
+function _scrapAllCats(){return _SCRAP_DEFAULT_CATS.concat(_scrapData.cats||[]);}
+function _scrapCat(id){return _scrapAllCats().find(function(c){return c.id===id;})||_SCRAP_DEFAULT_CATS[5];}
+function _scrapCatColor(id){return _scrapCat(id).color;}
+function _scrapCount(catId){
+  var items=_scrapData.items||[];
+  if(catId==='all')return items.length;
+  if(catId==='fav')return items.filter(function(x){return x.fav;}).length;
+  return items.filter(function(x){return x.cat===catId;}).length;
+}
+function _scrapDomain(url){
+  try{
+    var m=String(url).match(/^https?:\/\/([^\/]+)/i);
+    if(!m)return '';
+    return m[1].replace(/^www\./,'');
+  }catch(e){return '';}
+}
+function _scrapAgo(ts){
+  var m=Math.floor((Date.now()-ts)/60000);
+  if(m<1)return '방금';
+  if(m<60)return m+'분 전';
+  var h=Math.floor(m/60);
+  if(h<24)return h+'시간 전';
+  var d=Math.floor(h/24);
+  if(d<30)return d+'일 전';
+  return Math.floor(d/30)+'개월 전';
+}
+function _scrapEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// 컨테이너/오버레이
+function _scrapContainer(){
+  var f=document.getElementById('scrapFull');
+  if(f&&f.style.display!=='none'){var i=document.getElementById('scrapFullInner');if(i)return i;}
+  return document.getElementById('scrapPage');
+}
+function rerenderScrapPage(){var el=_scrapContainer();if(el)_withScrollKept(el,renderScrapPage);}
+function openScrapFull(){
+  var f=document.getElementById('scrapFull');if(!f)return;
+  f.style.display='flex';f.innerHTML='';
+  var inner=document.createElement('div');inner.id='scrapFullInner';
+  inner.style.cssText='flex:1;min-height:0;display:flex;flex-direction:column;';
+  f.appendChild(inner);renderScrapPage(inner);
+}
+function closeScrapFull(){
+  var f=document.getElementById('scrapFull');
+  if(f){f.style.display='none';f.innerHTML='';}
+  try{if(_homePage===18)setHomePage(0);}catch(e){}
+}
+function renderScrapPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;background:#f4f3ef;';
+  var fullOpen=document.getElementById('scrapFull')&&document.getElementById('scrapFull').style.display!=='none';
+  var top=document.createElement('div');top.style.cssText='padding:18px 16px 0;flex-shrink:0;';
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:11px;margin-bottom:12px;';
+  if(fullOpen){
+    var cb=document.createElement('div');
+    cb.style.cssText='width:32px;height:32px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+    cb.innerHTML='<span style="font-size:17px;color:#6b6455;">‹</span>';
+    cb.addEventListener('click',function(){closeScrapFull();});
+    head.appendChild(cb);
+  }
+  var ht=document.createElement('div');ht.style.cssText='flex:1;min-width:0;';
+  ht.innerHTML='<div style="font-size:20px;font-weight:800;color:#111;letter-spacing:-0.02em;">스크랩</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-top:1px;">모은 글 '+(_scrapData.items||[]).length+'개</div>';
+  head.appendChild(ht);
+  // 보기 전환 (리스트/카드)
+  var vtoggle=document.createElement('div');
+  vtoggle.style.cssText='display:flex;gap:2px;background:#e8e5dd;border-radius:9px;padding:3px;flex-shrink:0;';
+  [['list','☰'],['card','▦']].forEach(function(t){
+    var on=_scrapView===t[0];
+    var b=document.createElement('button');
+    b.style.cssText='border:none;background:'+(on?'#fff':'none')+';color:'+(on?'#111':'#a89e8c')+';border-radius:7px;padding:5px 9px;font-size:12px;cursor:pointer;font-family:inherit;';
+    b.textContent=t[1];
+    b.addEventListener('click',function(){_scrapView=t[0];if(window._saveState)window._saveState();rerenderScrapPage();});
+    vtoggle.appendChild(b);
+  });
+  head.appendChild(vtoggle);
+  top.appendChild(head);
+  // 붙여넣기 담기
+  var paste=document.createElement('div');
+  paste.style.cssText='display:flex;gap:8px;background:#fff;border:0.5px solid #e6e2d8;border-radius:11px;padding:8px 10px;align-items:center;margin-bottom:11px;';
+  paste.innerHTML='<span style="font-size:13px;flex-shrink:0;">🔗</span>';
+  var pInp=document.createElement('input');
+  pInp.placeholder='링크를 붙여넣고 담기';
+  pInp.style.cssText='flex:1;min-width:0;border:none;background:none;font-size:11.5px;color:#4a4a44;outline:none;font-family:inherit;';
+  var pBtn=document.createElement('button');
+  pBtn.textContent='담기';
+  pBtn.style.cssText='flex-shrink:0;border:none;background:#3a5a8a;color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:6px 13px;cursor:pointer;font-family:inherit;';
+  function doPaste(){
+    var v=pInp.value.trim();
+    if(!v)return;
+    _openScrapAdd(null,v);
+    pInp.value='';
+  }
+  pBtn.addEventListener('click',doPaste);
+  pInp.addEventListener('keydown',function(e){if(e.key==='Enter')doPaste();});
+  paste.appendChild(pInp);paste.appendChild(pBtn);
+  top.appendChild(paste);
+  // 카테고리 필터
+  var filt=document.createElement('div');
+  filt.style.cssText='display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;';
+  function chip(id,label,color){
+    var on=_scrapCatSel===id;
+    var cnt=_scrapCount(id);
+    var b=document.createElement('button');
+    b.style.cssText='flex-shrink:0;border:1px solid '+(on?(color||'#20304a'):'#e6e2d8')+';background:'+(on?(color||'#20304a'):'#fff')+';color:'+(on?'#fff':'#8a8474')+';border-radius:11px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;';
+    b.textContent=label+(cnt?(' '+cnt):'');
+    b.addEventListener('click',function(){_scrapCatSel=id;rerenderScrapPage();});
+    return b;
+  }
+  filt.appendChild(chip('all','전체'));
+  filt.appendChild(chip('fav','★'));
+  _scrapAllCats().forEach(function(c){
+    if(_scrapCount(c.id)>0||( _scrapData.cats||[]).some(function(x){return x.id===c.id;}))
+      filt.appendChild(chip(c.id,c.emoji+' '+c.name,c.color));
+  });
+  var addCat=document.createElement('button');
+  addCat.textContent='＋';
+  addCat.style.cssText='flex-shrink:0;border:1px dashed #ddd8ca;background:#fff;color:#b0aaa0;border-radius:11px;padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit;';
+  addCat.addEventListener('click',function(){_openScrapCat();});
+  filt.appendChild(addCat);
+  top.appendChild(filt);
+  container.appendChild(top);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px 16px 30px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  _scrapRenderList(body);
+}
+
+function _scrapRenderList(body){
+  var items=(_scrapData.items||[]).slice();
+  if(_scrapCatSel==='fav')items=items.filter(function(x){return x.fav;});
+  else if(_scrapCatSel!=='all')items=items.filter(function(x){return x.cat===_scrapCatSel;});
+  items.sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+  if(!items.length){
+    var e=document.createElement('div');
+    e.style.cssText='text-align:center;color:#b0aaa0;font-size:12px;padding:40px 10px;line-height:1.9;';
+    if((_scrapData.items||[]).length===0){
+      e.innerHTML='아직 스크랩이 없어요<br><span style="font-size:10.5px;">위에 링크를 붙여넣어 담아보세요<br>뉴스·레시피·쇼핑·영상 무엇이든</span>';
+    }else{
+      e.innerHTML='이 카테고리엔 아직 없어요';
+    }
+    body.appendChild(e);
+    return;
+  }
+  if(_scrapView==='card')_scrapRenderCards(body,items);
+  else _scrapRenderRows(body,items);
+}
+// 리스트형
+function _scrapRenderRows(body,items){
+  items.forEach(function(it){
+    var cat=_scrapCat(it.cat);
+    var wrap=document.createElement('div');
+    wrap.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:11px 12px;margin-bottom:8px;cursor:pointer;';
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:flex-start;gap:10px;';
+    var unread=!it.read;
+    row.innerHTML='<div style="width:44px;height:44px;border-radius:10px;background:'+cat.color+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:19px;">'+cat.emoji+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+        +'<div style="display:flex;align-items:center;gap:5px;">'
+          +(unread?'<span style="width:6px;height:6px;border-radius:50%;background:#e0653e;flex-shrink:0;"></span>':'')
+          +'<span style="font-size:12px;font-weight:700;color:'+(unread?'#111':'#7a756c')+';line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">'+_scrapEsc(it.title||_scrapDomain(it.url)||'제목 없음')+'</span>'
+        +'</div>'
+        +'<div style="font-size:9px;color:#9a948a;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+cat.emoji+' '+cat.name+' · '+_scrapEsc(_scrapDomain(it.url)||'—')+' · '+_scrapAgo(it.ts)+'</div>'
+      +'</div>'
+      +'<span class="scrap-fav" style="font-size:14px;color:'+(it.fav?'#e5a63a':'#d8d4c8')+';flex-shrink:0;cursor:pointer;padding:0 2px;">'+(it.fav?'★':'☆')+'</span>';
+    wrap.appendChild(row);
+    if(it.memo){
+      var memo=document.createElement('div');
+      memo.style.cssText='font-size:10.5px;color:#6b6455;background:#faf8f2;border-left:2px solid #e5c98a;border-radius:0 6px 6px 0;padding:6px 9px;margin-top:8px;line-height:1.5;';
+      memo.innerHTML='✎ '+_scrapEsc(it.memo);
+      wrap.appendChild(memo);
+    }
+    wrap.querySelector('.scrap-fav').addEventListener('click',function(ev){
+      ev.stopPropagation();it.fav=!it.fav;if(window._saveState)window._saveState();rerenderScrapPage();
+    });
+    wrap.addEventListener('click',function(){_openScrapSheet(it);});
+    body.appendChild(wrap);
+  });
+}
+// 매거진 카드형
+function _scrapRenderCards(body,items){
+  items.forEach(function(it){
+    var cat=_scrapCat(it.cat);
+    var wrap=document.createElement('div');
+    wrap.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:14px;overflow:hidden;margin-bottom:9px;cursor:pointer;';
+    var unread=!it.read;
+    wrap.innerHTML='<div style="height:74px;background:linear-gradient(135deg,'+cat.color+','+cat.color+'bb);display:flex;align-items:flex-end;justify-content:space-between;padding:9px 11px;">'
+        +'<span style="font-size:8.5px;color:#fff;background:rgba(0,0,0,0.28);border-radius:6px;padding:3px 8px;font-weight:700;">'+cat.emoji+' '+cat.name+'</span>'
+        +'<span class="scrap-fav" style="font-size:15px;color:'+(it.fav?'#ffd98a':'rgba(255,255,255,0.7)')+';cursor:pointer;">'+(it.fav?'★':'☆')+'</span>'
+      +'</div>'
+      +'<div style="padding:11px 12px;">'
+        +'<div style="display:flex;align-items:flex-start;gap:5px;">'
+          +(unread?'<span style="width:6px;height:6px;border-radius:50%;background:#e0653e;flex-shrink:0;margin-top:5px;"></span>':'')
+          +'<span style="font-size:12.5px;font-weight:700;color:'+(unread?'#111':'#7a756c')+';line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">'+_scrapEsc(it.title||_scrapDomain(it.url)||'제목 없음')+'</span>'
+        +'</div>'
+        +'<div style="font-size:9px;color:#9a948a;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_scrapEsc(_scrapDomain(it.url)||'—')+' · '+_scrapAgo(it.ts)+'</div>'
+        +(it.memo?'<div style="font-size:10px;color:#6b6455;background:#faf8f2;border-left:2px solid #e5c98a;border-radius:0 6px 6px 0;padding:6px 9px;margin-top:8px;line-height:1.5;">✎ '+_scrapEsc(it.memo)+'</div>':'')
+      +'</div>';
+    wrap.querySelector('.scrap-fav').addEventListener('click',function(ev){
+      ev.stopPropagation();it.fav=!it.fav;if(window._saveState)window._saveState();rerenderScrapPage();
+    });
+    wrap.addEventListener('click',function(){_openScrapSheet(it);});
+    body.appendChild(wrap);
+  });
+}
+
+// 담기/수정 시트
+function _openScrapAdd(edit,preUrl){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('scrapAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='scrapAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:88%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  var selCat=edit?edit.cat:'news';
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:13px;">'+(edit?'스크랩 수정':'스크랩 담기')+'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:6px;">링크</div>'
+    +'<input id="spUrl" placeholder="https://..." value="'+_scrapEsc(edit?edit.url:(preUrl||''))+'" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 12px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:11px;background:#faf9f5;">'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:6px;">제목</div>'
+    +'<input id="spTitle" placeholder="어떤 글인가요?" value="'+_scrapEsc(edit?(edit.title||''):'')+'" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:11px;background:#faf9f5;">'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">종류</div>'
+    +'<div id="spCats" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px;">'
+      +_scrapAllCats().map(function(c){var on=c.id===selCat;
+        return '<button class="sp-cat" data-c="'+c.id+'" style="border:1px solid '+(on?c.color:'#e8e5dd')+';background:'+(on?c.color+'1a':'#fff')+';color:'+(on?c.color:'#8a8474')+';border-radius:10px;padding:7px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;">'
+        +'<span>'+c.emoji+'</span>'+c.name+'</button>';}).join('')
+    +'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:6px;">메모 <span style="font-weight:400;color:#c0b8a2;">· 왜 담았는지, 뭘 볼지</span></div>'
+    +'<textarea id="spMemo" rows="2" placeholder="이 글에 대한 내 생각이나 메모" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:11px 12px;font-size:12px;line-height:1.6;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#faf9f5;margin-bottom:15px;">'+_scrapEsc(edit?(edit.memo||''):'')+'</textarea>'
+    +'<button id="spSave" style="width:100%;border:none;background:#20304a;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'담기')+'</button>'
+    +(edit?'<button id="spDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.sp-cat').forEach(function(b){b.addEventListener('click',function(){
+    selCat=b.getAttribute('data-c');
+    sheet.querySelectorAll('.sp-cat').forEach(function(x){
+      var c=_scrapCat(x.getAttribute('data-c'));var on=x.getAttribute('data-c')===selCat;
+      x.style.border='1px solid '+(on?c.color:'#e8e5dd');
+      x.style.background=on?c.color+'1a':'#fff';
+      x.style.color=on?c.color:'#8a8474';
+    });});});
+  setTimeout(function(){try{sheet.querySelector((edit||preUrl)?'#spTitle':'#spUrl').focus();}catch(e){}},60);
+  sheet.querySelector('#spSave').addEventListener('click',function(){
+    var url=sheet.querySelector('#spUrl').value.trim();
+    var title=sheet.querySelector('#spTitle').value.trim();
+    var memo=sheet.querySelector('#spMemo').value.trim();
+    if(!url&&!title){sheet.querySelector('#spUrl').focus();return;}
+    if(url&&!/^https?:\/\//i.test(url))url='https://'+url;
+    if(edit){edit.url=url;edit.title=title;edit.cat=selCat;edit.memo=memo;}
+    else{
+      if(!_scrapData.items)_scrapData.items=[];
+      _scrapData.items.push({id:'sc'+Date.now(),url:url,title:title,cat:selCat,memo:memo,fav:false,read:false,ts:Date.now()});
+    }
+    if(window._saveState)window._saveState();
+    wrap.remove();
+    try{showToast(edit?'스크랩을 수정했어요':'스크랩을 담았어요','add','ti-check');}catch(e){}
+    rerenderScrapPage();
+  });
+  var db=sheet.querySelector('#spDel');
+  if(db)db.addEventListener('click',function(){
+    _scrapData.items=_scrapData.items.filter(function(x){return x.id!==edit.id;});
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderScrapPage();
+  });
+}
+// 상세 시트 (열기/읽음/수정/메모)
+function _openScrapSheet(it){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('scrapSheet');if(old)old.remove();
+  var cat=_scrapCat(it.cat);
+  var wrap=document.createElement('div');wrap.id='scrapSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  sheet.innerHTML='<div style="display:flex;align-items:flex-start;gap:11px;margin-bottom:13px;">'
+      +'<div style="width:44px;height:44px;border-radius:10px;background:'+cat.color+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:19px;">'+cat.emoji+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:800;color:#111;line-height:1.4;">'+_scrapEsc(it.title||'제목 없음')+'</div>'
+      +'<div style="font-size:9.5px;color:#9a948a;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+cat.name+' · '+_scrapEsc(_scrapDomain(it.url)||'—')+'</div></div>'
+    +'</div>'
+    +(it.memo?'<div style="font-size:11.5px;color:#5a5346;background:#faf8f2;border-left:2.5px solid #e5c98a;border-radius:0 8px 8px 0;padding:9px 11px;margin-bottom:13px;line-height:1.6;">✎ '+_scrapEsc(it.memo)+'</div>':'')
+    +(it.url?'<button id="ssOpen" style="width:100%;border:none;background:#20304a;color:#fff;font-size:13px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;margin-bottom:8px;">링크 열기 ↗</button>':'')
+    +'<div style="display:flex;gap:6px;">'
+      +'<button id="ssRead" style="flex:1;border:0.5px solid #e6e2d8;background:#fff;color:#6b6455;font-size:11.5px;font-weight:700;padding:11px 4px;border-radius:11px;cursor:pointer;font-family:inherit;">'+(it.read?'✓ 읽음':'읽음 표시')+'</button>'
+      +'<button id="ssFav" style="flex:1;border:0.5px solid '+(it.fav?'#f0dcae':'#e6e2d8')+';background:'+(it.fav?'#fdf6e6':'#fff')+';color:'+(it.fav?'#c99a2a':'#6b6455')+';font-size:11.5px;font-weight:700;padding:11px 4px;border-radius:11px;cursor:pointer;font-family:inherit;">'+(it.fav?'★ 즐겨찾기':'☆ 즐겨찾기')+'</button>'
+      +'<button id="ssEdit" style="flex:1;border:0.5px solid #e6e2d8;background:#fff;color:#6b6455;font-size:11.5px;font-weight:700;padding:11px 4px;border-radius:11px;cursor:pointer;font-family:inherit;">수정</button>'
+    +'</div>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var op=sheet.querySelector('#ssOpen');
+  if(op)op.addEventListener('click',function(){
+    it.read=true;if(window._saveState)window._saveState();
+    try{window.open(it.url,'_blank');}catch(e){}
+    wrap.remove();rerenderScrapPage();
+  });
+  sheet.querySelector('#ssRead').addEventListener('click',function(){it.read=!it.read;if(window._saveState)window._saveState();wrap.remove();rerenderScrapPage();});
+  sheet.querySelector('#ssFav').addEventListener('click',function(){it.fav=!it.fav;if(window._saveState)window._saveState();wrap.remove();rerenderScrapPage();});
+  sheet.querySelector('#ssEdit').addEventListener('click',function(){wrap.remove();_openScrapAdd(it);});
+}
+// 카테고리 만들기
+function _openScrapCat(){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('scrapCatSheet');if(old)old.remove();
+  var EMOJIS=['🔖','🎬','🎵','✈️','🏠','💼','📚','🎨','⚽','💡','🧪','🌱','🐾','💰','🍽','🧵'];
+  var COLORS=['#3a5a8a','#c98a3a','#8a6ac0','#5a8a6a','#c05a7a','#5a8a9a','#9a7a5a','#7a7a8a'];
+  var wrap=document.createElement('div');wrap.id='scrapCatSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:86%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  var selE=EMOJIS[0],selC=COLORS[0];
+  // 기존 커스텀 카테고리 관리 목록
+  var customList='';
+  (_scrapData.cats||[]).forEach(function(c){
+    customList+='<div style="display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:0.5px solid #f4f2ec;">'
+      +'<span style="width:24px;height:24px;border-radius:7px;background:'+c.color+';display:flex;align-items:center;justify-content:center;font-size:12px;">'+c.emoji+'</span>'
+      +'<span style="flex:1;font-size:12px;color:#111;">'+_scrapEsc(c.name)+'</span>'
+      +'<span class="scat-del" data-id="'+c.id+'" style="font-size:11px;color:#ddd8ca;cursor:pointer;">✕</span></div>';
+  });
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:13px;">카테고리 만들기</div>'
+    +'<input id="scatName" placeholder="이름 (예: 여행, 영감)" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:13px;background:#faf9f5;">'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">아이콘</div>'
+    +'<div id="scatE" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:13px;">'
+      +EMOJIS.map(function(e,i){return '<button class="scat-e" data-e="'+e+'" style="width:34px;height:34px;border-radius:9px;border:'+(i===0?'2px solid #20304a':'1px solid #e8e5dd')+';background:#fff;font-size:15px;cursor:pointer;">'+e+'</button>';}).join('')
+    +'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">색</div>'
+    +'<div id="scatC" style="display:flex;gap:7px;margin-bottom:15px;">'
+      +COLORS.map(function(c,i){return '<button class="scat-c" data-c="'+c+'" style="width:30px;height:30px;border-radius:50%;background:'+c+';border:'+(i===0?'2.5px solid #111':'1px solid #eee')+';cursor:pointer;padding:0;"></button>';}).join('')
+    +'</div>'
+    +'<button id="scatSave" style="width:100%;border:none;background:#20304a;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">만들기</button>'
+    +(customList?('<div style="font-size:10px;color:#9a948a;font-weight:700;margin:16px 0 4px;">내 카테고리</div>'+customList):'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.scat-e').forEach(function(b){b.addEventListener('click',function(){
+    selE=b.getAttribute('data-e');
+    sheet.querySelectorAll('.scat-e').forEach(function(x){x.style.border=(x.getAttribute('data-e')===selE)?'2px solid #20304a':'1px solid #e8e5dd';});});});
+  sheet.querySelectorAll('.scat-c').forEach(function(b){b.addEventListener('click',function(){
+    selC=b.getAttribute('data-c');
+    sheet.querySelectorAll('.scat-c').forEach(function(x){x.style.border=(x.getAttribute('data-c')===selC)?'2.5px solid #111':'1px solid #eee';});});});
+  sheet.querySelectorAll('.scat-del').forEach(function(b){b.addEventListener('click',function(){
+    var id=b.getAttribute('data-id');
+    _scrapData.cats=(_scrapData.cats||[]).filter(function(x){return x.id!==id;});
+    (_scrapData.items||[]).forEach(function(it){if(it.cat===id)it.cat='etc';});
+    if(_scrapCatSel===id)_scrapCatSel='all';
+    if(window._saveState)window._saveState();
+    wrap.remove();_openScrapCat();
+  });});
+  setTimeout(function(){try{sheet.querySelector('#scatName').focus();}catch(e){}},60);
+  sheet.querySelector('#scatSave').addEventListener('click',function(){
+    var nm=sheet.querySelector('#scatName').value.trim();
+    if(!nm){sheet.querySelector('#scatName').focus();return;}
+    if(!_scrapData.cats)_scrapData.cats=[];
+    var id='cc'+Date.now();
+    _scrapData.cats.push({id:id,emoji:selE,name:nm,color:selC});
+    _scrapCatSel=id;
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderScrapPage();
+  });
+}
+
 // ===== 저장고 (코너별 사진 보관) =====
 var _stgData={corners:[]};
 var _stgSel=null;      // 열어본 코너 id
@@ -6608,6 +6984,257 @@ var _STG_PRESETS=[
   ['💊','약'],['📚','책'],['🔌','전자기기'],['🧺','세탁'],
   ['🍚','식료품'],['🧸','아이물건'],['🛠','공구'],['📦','창고']
 ];
+var _STG_EMOJI=[
+  ['🍪','간식 쿠키 과자'],
+  ['🍫','초콜릿 간식'],
+  ['🍬','사탕 캔디 간식'],
+  ['🍿','팝콘 간식'],
+  ['🥨','프레첼 간식 빵'],
+  ['🍩','도넛 간식'],
+  ['🍰','케이크 디저트'],
+  ['🧁','컵케이크 디저트'],
+  ['🍞','빵 베이커리'],
+  ['🥐','크루아상 빵'],
+  ['🥖','바게트 빵'],
+  ['🥯','베이글 빵'],
+  ['🍚','밥 식료품 쌀'],
+  ['🍜','라면 면 식료품'],
+  ['🍝','파스타 면'],
+  ['🌾','곡물 쌀 식료품'],
+  ['🥫','통조림 캔 식료품'],
+  ['🧂','소금 조미료 양념'],
+  ['🍯','꿀 잼'],
+  ['🥜','견과류 땅콩 간식'],
+  ['🫙','저장 병 잼 통'],
+  ['🧈','버터 유제품'],
+  ['🥛','우유 유제품'],
+  ['🧀','치즈 유제품'],
+  ['🥚','계란 달걀'],
+  ['🍳','요리 계란'],
+  ['🥩','고기 정육'],
+  ['🍗','닭고기 정육'],
+  ['🥓','베이컨 고기'],
+  ['🐟','생선 수산 해산물'],
+  ['🦐','새우 해산물'],
+  ['🦀','게 해산물'],
+  ['🍎','사과 과일'],
+  ['🍌','바나나 과일'],
+  ['🍊','귤 오렌지 과일'],
+  ['🍇','포도 과일'],
+  ['🍓','딸기 과일'],
+  ['🍉','수박 과일'],
+  ['🍑','복숭아 과일'],
+  ['🥝','키위 과일'],
+  ['🥬','채소 야채 상추'],
+  ['🥕','당근 채소'],
+  ['🥔','감자 채소'],
+  ['🧅','양파 채소'],
+  ['🧄','마늘 채소'],
+  ['🍄','버섯 채소'],
+  ['🌽','옥수수 채소'],
+  ['🥦','브로콜리 채소'],
+  ['☕','커피 음료 카페'],
+  ['🍵','차 티 음료'],
+  ['🧃','주스 음료'],
+  ['🥤','음료 컵'],
+  ['🍷','와인 술 주류'],
+  ['🍺','맥주 술 주류'],
+  ['🥂','샴페인 술 파티'],
+  ['🧊','냉장 얼음 냉동'],
+  ['👕','의류 옷 티셔츠 상의'],
+  ['👔','셔츠 의류 정장'],
+  ['👗','원피스 드레스 의류'],
+  ['👖','바지 청바지 의류 하의'],
+  ['🧥','외투 코트 자켓 의류'],
+  ['🧦','양말 의류'],
+  ['🧤','장갑 의류'],
+  ['🧣','목도리 스카프 의류'],
+  ['👚','블라우스 여성 의류'],
+  ['👘','한복 기모노 의류'],
+  ['🩳','반바지 의류 하의'],
+  ['🩲','속옷 의류'],
+  ['👠','구두 신발 하이힐'],
+  ['👟','운동화 신발'],
+  ['👞','구두 신발'],
+  ['🥿','플랫슈즈 신발'],
+  ['🥾','부츠 등산화 신발'],
+  ['🩴','슬리퍼 신발'],
+  ['👒','모자 액세서리'],
+  ['🧢','모자 캡'],
+  ['🎩','모자 액세서리'],
+  ['👜','가방 핸드백'],
+  ['👛','지갑 파우치'],
+  ['🎒','백팩 가방'],
+  ['💍','반지 액세서리 보석'],
+  ['👓','안경 액세서리'],
+  ['🕶','선글라스 액세서리'],
+  ['⌚','시계 액세서리'],
+  ['💄','화장품 립스틱 뷰티'],
+  ['💅','네일 뷰티'],
+  ['🧴','화장품 로션 생활용품'],
+  ['👑','왕관 액세서리'],
+  ['🧴','생활용품 로션 세제'],
+  ['🧼','비누 세정 생활용품'],
+  ['🧽','수세미 청소'],
+  ['🧹','빗자루 청소'],
+  ['🧺','세탁 빨래 바구니'],
+  ['🪣','양동이 청소'],
+  ['🧻','휴지 화장지 생활용품'],
+  ['🪥','칫솔 위생'],
+  ['🧷','옷핀 생활용품'],
+  ['🪒','면도기 위생'],
+  ['🧯','소화기 안전'],
+  ['🔋','배터리 건전지'],
+  ['💡','전구 조명'],
+  ['🕯','양초 초'],
+  ['🪫','배터리 방전'],
+  ['🔌','전자기기 플러그 콘센트'],
+  ['🛏','침구 침대 침실'],
+  ['🛋','소파 가구 거실'],
+  ['🪑','의자 가구'],
+  ['🚪','문 현관'],
+  ['🪞','거울 생활용품'],
+  ['🖼','액자 그림 인테리어'],
+  ['🧸','인형 아이물건 장난감'],
+  ['🎈','풍선 파티'],
+  ['🧵','실 바느질 재봉'],
+  ['🧶','털실 뜨개 재봉'],
+  ['📦','창고 상자 택배'],
+  ['🗄','서랍 정리 보관'],
+  ['🗃','보관함 정리 파일'],
+  ['📁','서류 파일 문서'],
+  ['🔑','열쇠 키'],
+  ['🗝','열쇠 키'],
+  ['💻','노트북 전자기기 컴퓨터'],
+  ['🖥','모니터 컴퓨터 전자기기'],
+  ['⌨','키보드 전자기기'],
+  ['🖱','마우스 전자기기'],
+  ['📱','휴대폰 스마트폰 전자기기'],
+  ['📷','카메라 전자기기'],
+  ['🎧','헤드폰 이어폰 전자기기'],
+  ['🔊','스피커 전자기기'],
+  ['🖨','프린터 전자기기'],
+  ['📺','티비 tv 전자기기'],
+  ['🎮','게임기 전자기기'],
+  ['💾','저장장치 디스크'],
+  ['🔦','손전등 전자기기'],
+  ['🪛','드라이버 공구'],
+  ['🔧','공구 렌치 수리'],
+  ['🔨','망치 공구'],
+  ['🛠','공구 수리 도구'],
+  ['⚙','부품 기계 공구'],
+  ['🧰','공구함 도구상자'],
+  ['🪝','고리 공구'],
+  ['💊','약 알약 상비약'],
+  ['💉','주사 의료 병원'],
+  ['🩹','반창고 밴드 구급'],
+  ['🩺','의료 건강 병원'],
+  ['🌡','체온계 건강'],
+  ['🧬','건강 유전자'],
+  ['🦷','치아 치과 위생'],
+  ['🧫','실험 의료'],
+  ['🩼','목발 의료'],
+  ['🚑','응급 구급'],
+  ['🫀','심장 건강'],
+  ['🧠','뇌 건강'],
+  ['📚','책 도서 서적'],
+  ['📖','책 독서'],
+  ['📕','책 빨간책'],
+  ['📗','책 초록책'],
+  ['📘','책 파란책'],
+  ['📙','책 노란책'],
+  ['📔','노트 다이어리 문구'],
+  ['📒','노트 문구'],
+  ['✏','연필 문구'],
+  ['🖊','펜 볼펜 문구'],
+  ['🖍','크레용 색연필 문구'],
+  ['🖌','붓 미술'],
+  ['🎨','미술 물감 취미'],
+  ['🧩','퍼즐 취미'],
+  ['🎲','주사위 보드게임 취미'],
+  ['🎯','다트 취미'],
+  ['🎸','기타 악기 음악'],
+  ['🎹','피아노 건반 악기'],
+  ['🎺','트럼펫 악기'],
+  ['🥁','드럼 악기'],
+  ['🎤','마이크 노래 음악'],
+  ['🎬','영화 영상 취미'],
+  ['📸','사진 카메라 취미'],
+  ['🎳','볼링 취미'],
+  ['⚽','축구 스포츠 공'],
+  ['🏀','농구 스포츠 공'],
+  ['⚾','야구 스포츠'],
+  ['🎾','테니스 스포츠'],
+  ['🏐','배구 스포츠'],
+  ['🏓','탁구 스포츠'],
+  ['🏸','배드민턴 스포츠'],
+  ['🥊','복싱 운동'],
+  ['🏋','헬스 운동 웨이트'],
+  ['🚴','자전거 운동'],
+  ['🧘','요가 명상 운동'],
+  ['⛺','캠핑 텐트 야외'],
+  ['🎣','낚시 취미 야외'],
+  ['🏕','캠핑 야외'],
+  ['🛼','롤러 스케이트 운동'],
+  ['🛹','스케이트보드 운동'],
+  ['⛷','스키 겨울 스포츠'],
+  ['🏂','스노보드 겨울'],
+  ['🏊','수영 운동'],
+  ['🥋','태권도 유도 운동'],
+  ['🧸','장난감 인형 아이물건'],
+  ['🍼','젖병 육아 아기'],
+  ['🚼','아기 육아'],
+  ['🧷','기저귀핀 육아'],
+  ['🎠','회전목마 아이 놀이'],
+  ['🪀','요요 장난감'],
+  ['🪁','연 장난감 놀이'],
+  ['🎪','서커스 놀이'],
+  ['🧩','퍼즐 아이 장난감'],
+  ['🖍','크레용 아이 문구'],
+  ['🎈','풍선 아이 파티'],
+  ['🧮','주판 학습'],
+  ['🐾','반려동물 발자국'],
+  ['🐕','강아지 반려견'],
+  ['🐈','고양이 반려묘'],
+  ['🐠','물고기 어항 반려'],
+  ['🐹','햄스터 반려동물'],
+  ['🦜','앵무새 반려동물'],
+  ['🦴','뼈다귀 강아지 간식'],
+  ['🐦','새 반려동물'],
+  ['🌱','식물 새싹 화분'],
+  ['🪴','화분 식물 인테리어'],
+  ['🌵','선인장 식물'],
+  ['🌷','튤립 꽃 식물'],
+  ['🌹','장미 꽃'],
+  ['🌻','해바라기 꽃'],
+  ['🍀','클로버 식물 행운'],
+  ['🎍','대나무 식물'],
+  ['❄','겨울 눈 계절'],
+  ['☀','여름 태양 계절'],
+  ['🍂','가을 낙엽 계절'],
+  ['🌸','봄 벚꽃 계절'],
+  ['🎁','선물 상자'],
+  ['🎀','리본 선물 장식'],
+  ['🎄','크리스마스 트리 시즌'],
+  ['🎃','호박 할로윈 시즌'],
+  ['🧳','여행 캐리어 짐'],
+  ['🗺','지도 여행'],
+  ['🧭','나침반 여행'],
+  ['⛱','파라솔 여행 해변'],
+  ['💰','돈 저금 재정'],
+  ['💳','카드 결제'],
+  ['🪙','동전 돈'],
+  ['💵','현금 돈'],
+  ['📋','목록 클립보드'],
+  ['📌','핀 압정 메모'],
+  ['📎','클립 문구'],
+  ['🗂','정리 분류 파일'],
+  ['🔖','책갈피 북마크 기타'],
+  ['🏷','태그 라벨'],
+  ['📐','자 문구 도구'],
+  ['✂','가위 문구']
+];
+
 function _stgInit(){
   if(!_stgData.corners)_stgData.corners=[];
   if(_stgData.corners.length)return;
@@ -6881,28 +7508,87 @@ function _openStgCorner(edit){
   var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
   dim.addEventListener('click',function(){wrap.remove();});
   var sheet=document.createElement('div');
-  sheet.style.cssText='position:relative;width:100%;max-height:86%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  sheet.style.cssText='position:relative;width:100%;height:82%;display:flex;flex-direction:column;background:#fff;border-radius:22px 22px 0 0;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;overflow:hidden;';
   var selEmoji=edit?edit.emoji:'📦';
-  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:13px;">'+(edit?'코너 수정':'코너 만들기')+'</div>'
-    +'<input id="scName" placeholder="코너 이름 (예: 간식)" value="'+_stgEsc(edit?edit.name:'')+'" style="width:100%;border:0.5px solid #e8e5dd;border-radius:11px;padding:12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:13px;background:#faf9f5;">'
-    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:8px;">아이콘 · 자주 쓰는 코너</div>'
-    +'<div id="scPresets" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:15px;">'
+  // 고정 상단 영역
+  var topPart=document.createElement('div');
+  topPart.style.cssText='padding:18px 16px 8px;flex-shrink:0;';
+  topPart.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:13px;">'+(edit?'코너 수정':'코너 만들기')+'</div>'
+    +'<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">'
+      +'<div id="scPreview" style="width:48px;height:48px;border-radius:12px;background:#f4f2ec;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">'+selEmoji+'</div>'
+      +'<input id="scName" placeholder="코너 이름 (예: 간식)" value="'+_stgEsc(edit?edit.name:'')+'" style="flex:1;min-width:0;border:0.5px solid #e8e5dd;border-radius:11px;padding:12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;background:#faf9f5;">'
+    +'</div>'
+    +'<div style="font-size:10px;color:#9a948a;font-weight:700;margin-bottom:7px;">자주 쓰는 코너</div>'
+    +'<div id="scPresets" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:11px;">'
       +_STG_PRESETS.map(function(p){var on=p[0]===selEmoji;
-        return '<button class="sc-p" data-e="'+p[0]+'" data-n="'+p[1]+'" style="border:1px solid '+(on?'#111':'#e8e5dd')+';background:'+(on?'#f4f2ec':'#fff')+';border-radius:11px;padding:8px 10px;font-size:11px;cursor:pointer;font-family:inherit;color:#4a4a44;display:flex;align-items:center;gap:4px;">'
+        return '<button class="sc-p" data-e="'+p[0]+'" data-n="'+p[1]+'" style="flex-shrink:0;border:1px solid '+(on?'#111':'#e8e5dd')+';background:'+(on?'#f4f2ec':'#fff')+';border-radius:11px;padding:8px 10px;font-size:11px;cursor:pointer;font-family:inherit;color:#4a4a44;display:flex;align-items:center;gap:4px;white-space:nowrap;">'
         +'<span style="font-size:14px;">'+p[0]+'</span>'+p[1]+'</button>';}).join('')
     +'</div>'
-    +'<button id="scSave" style="width:100%;border:none;background:#111;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'만들기')+'</button>'
-    +(edit?'<button id="scDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">코너 삭제 (사진도 함께)</button>':'');
+    +'<div style="display:flex;gap:8px;background:#f4f3ee;border-radius:11px;padding:9px 11px;align-items:center;">'
+      +'<span style="font-size:13px;flex-shrink:0;">🔍</span>'
+      +'<input id="scSearch" placeholder="이모지 검색 (예: 옷, 약, 커피)" style="flex:1;min-width:0;border:none;background:none;font-size:12px;color:#4a4a44;outline:none;font-family:inherit;">'
+    +'</div>';
+  sheet.appendChild(topPart);
+  // 스크롤되는 이모지 격자
+  var gridWrap=document.createElement('div');
+  gridWrap.style.cssText='flex:1;min-height:0;overflow-y:auto;padding:10px 16px 8px;-webkit-overflow-scrolling:touch;';
+  sheet.appendChild(gridWrap);
+  // 고정 하단 버튼
+  var footPart=document.createElement('div');
+  footPart.style.cssText='padding:10px 16px 24px;flex-shrink:0;border-top:0.5px solid #f2f0ea;background:#fff;';
+  footPart.innerHTML='<button id="scSave" style="width:100%;border:none;background:#111;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'만들기')+'</button>'
+    +(edit?'<button id="scDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:9px;cursor:pointer;font-family:inherit;">코너 삭제 (사진도 함께)</button>':'');
+  sheet.appendChild(footPart);
   wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
-  var nameInp=sheet.querySelector('#scName');
-  sheet.querySelectorAll('.sc-p').forEach(function(b){b.addEventListener('click',function(){
-    selEmoji=b.getAttribute('data-e');
-    if(!nameInp.value.trim())nameInp.value=b.getAttribute('data-n');
-    sheet.querySelectorAll('.sc-p').forEach(function(x){
+  var nameInp=topPart.querySelector('#scName');
+  var preview=topPart.querySelector('#scPreview');
+  function setEmoji(e,name){
+    selEmoji=e;
+    preview.textContent=e;
+    if(name&&!nameInp.value.trim())nameInp.value=name;
+    topPart.querySelectorAll('.sc-p').forEach(function(x){
       var on=x.getAttribute('data-e')===selEmoji;
       x.style.border='1px solid '+(on?'#111':'#e8e5dd');
       x.style.background=on?'#f4f2ec':'#fff';
-    });});});
+    });
+    gridWrap.querySelectorAll('.sc-e').forEach(function(x){
+      var on=x.getAttribute('data-e')===selEmoji;
+      x.style.border=on?'2px solid #111':'1px solid #f0eee8';
+      x.style.background=on?'#f4f2ec':'#fff';
+    });
+  }
+  topPart.querySelectorAll('.sc-p').forEach(function(b){
+    b.addEventListener('click',function(){setEmoji(b.getAttribute('data-e'),b.getAttribute('data-n'));});
+  });
+  function drawGrid(q){
+    q=(q||'').trim().toLowerCase();
+    var seen={};
+    var list=_STG_EMOJI.filter(function(pair){
+      if(seen[pair[0]])return false;
+      if(q&&pair[1].toLowerCase().indexOf(q)<0&&pair[0].indexOf(q)<0)return false;
+      seen[pair[0]]=1;return true;
+    });
+    if(!list.length){
+      gridWrap.innerHTML='<div style="text-align:center;color:#b0aaa0;font-size:11.5px;padding:26px 0;">검색 결과가 없어요<br><span style="font-size:10px;">다른 단어로 찾아보세요</span></div>';
+      return;
+    }
+    var grid=document.createElement('div');
+    grid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:6px;';
+    list.forEach(function(pair){
+      var on=pair[0]===selEmoji;
+      var b=document.createElement('button');
+      b.className='sc-e';
+      b.setAttribute('data-e',pair[0]);
+      b.style.cssText='aspect-ratio:1;border-radius:10px;border:'+(on?'2px solid #111':'1px solid #f0eee8')+';background:'+(on?'#f4f2ec':'#fff')+';font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;';
+      b.textContent=pair[0];
+      b.addEventListener('click',function(){setEmoji(pair[0],null);});
+      grid.appendChild(b);
+    });
+    gridWrap.innerHTML='';gridWrap.appendChild(grid);
+  }
+  drawGrid('');
+  var searchInp=topPart.querySelector('#scSearch');
+  searchInp.addEventListener('input',function(){drawGrid(searchInp.value);});
   setTimeout(function(){try{nameInp.focus();}catch(e){}},60);
   sheet.querySelector('#scSave').addEventListener('click',function(){
     var nm=nameInp.value.trim();
@@ -8614,15 +9300,33 @@ function _speak(text,voiceLang){
   }catch(e){}
 }
 function _curLang(){return _vocabData.langs.find(function(l){return l.id===_vocabLang;})||_vocabData.langs[0];}
-function rerenderVocabPage(){var el=document.getElementById('vocabPage');if(el)_withScrollKept(el,renderVocabPage);}
+function _vocabContainer(){
+  var f=document.getElementById('vocabFull');
+  if(f&&f.style.display!=='none'){var i=document.getElementById('vocabFullInner');if(i)return i;}
+  return document.getElementById('vocabPage');
+}
+function rerenderVocabPage(){var el=_vocabContainer();if(el)_withScrollKept(el,renderVocabPage);}
+function openVocabFull(){
+  var f=document.getElementById('vocabFull');if(!f)return;
+  f.style.display='flex';f.innerHTML='';
+  var inner=document.createElement('div');inner.id='vocabFullInner';
+  inner.style.cssText='flex:1;min-height:0;display:flex;flex-direction:column;';
+  f.appendChild(inner);renderVocabPage(inner);
+}
+function closeVocabFull(){
+  var f=document.getElementById('vocabFull');
+  if(f){f.style.display='none';f.innerHTML='';}
+  try{if(_homePage===10)setHomePage(0);}catch(e){}
+}
 function renderVocabPage(container){
   if(!container)return;
   var _prevBody=container.querySelector('.vocab-body');
   var _prevScroll=_prevBody?_prevBody.scrollTop:0;
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
+  var fullOpen=document.getElementById('vocabFull')&&document.getElementById('vocabFull').style.display!=='none';
   if(!_vocabLangSel||!_vocabData.langs.some(function(l){return l.id===_vocabLangSel;})){
-    _vocabRenderLangPicker(container);
+    _vocabRenderLangPicker(container,fullOpen);
     return;
   }
   _vocabLang=_vocabLangSel;
@@ -8660,11 +9364,20 @@ function renderVocabPage(container){
   if(_prevScroll){try{body.scrollTop=_prevScroll;}catch(e){}}
 }
 // 언어 선택 화면
-function _vocabRenderLangPicker(container){
+function _vocabRenderLangPicker(container,fullOpen){
   var head=document.createElement('div');
-  head.style.cssText='padding:16px 16px 10px;flex-shrink:0;';
-  head.innerHTML='<div style="font-size:19px;font-weight:800;color:#111;">📖 단어장</div>'
+  head.style.cssText='padding:16px 16px 10px;flex-shrink:0;display:flex;align-items:center;gap:11px;';
+  if(fullOpen){
+    var cb=document.createElement('div');
+    cb.style.cssText='width:32px;height:32px;border-radius:50%;background:#f0eee8;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+    cb.innerHTML='<span style="font-size:17px;color:#5a5346;">‹</span>';
+    cb.addEventListener('click',function(){closeVocabFull();});
+    head.appendChild(cb);
+  }
+  var htx=document.createElement('div');htx.style.cssText='flex:1;min-width:0;';
+  htx.innerHTML='<div style="font-size:19px;font-weight:800;color:#111;">📖 단어장</div>'
     +'<div style="font-size:10px;color:#9a948a;margin-top:2px;">언어를 선택하세요</div>';
+  head.appendChild(htx);
   container.appendChild(head);
   var body=document.createElement('div');
   body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px 24px;-webkit-overflow-scrolling:touch;';
@@ -12091,7 +12804,7 @@ function setHomePage(p){
   if(p===7){try{renderGoalPage(document.getElementById('goalPage'));}catch(e){}}
   if(p===8){try{renderInsightPage(document.getElementById('insightPage'));}catch(e){}}
   if(p===9){try{openHealthFull();}catch(e){}}
-  if(p===10){try{renderVocabPage(document.getElementById('vocabPage'));}catch(e){}}
+  if(p===10){try{openVocabFull();}catch(e){}}
   if(p===11){try{renderTravelPage(document.getElementById('travelPage'));}catch(e){}}
   if(p===12){try{renderRegionNewsPage(document.getElementById('regionNewsPage'));}catch(e){}}
   if(p===13){try{openIndexFull();}catch(e){}}
@@ -12099,6 +12812,7 @@ function setHomePage(p){
   if(p===15){try{openSentFull();}catch(e){}}
   if(p===16){try{openTTFull();}catch(e){}}
   if(p===17){try{openStgFull();}catch(e){}}
+  if(p===18){try{openScrapFull();}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -12128,6 +12842,7 @@ function buildHomeSlider(){
     {id:'tab-sent',     name:'문장'},
     {id:'tab-tt',       name:'시간표'},
     {id:'tab-stg',      name:'저장고'},
+    {id:'tab-scrap',    name:'스크랩'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -12254,6 +12969,12 @@ function buildHomeSlider(){
   stgPage.id='stgPage';
   renderStgPage(stgPage);
   slider.appendChild(stgPage);
+
+  var scrapPage=document.createElement('div');
+  scrapPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  scrapPage.id='scrapPage';
+  renderScrapPage(scrapPage);
+  slider.appendChild(scrapPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -14527,6 +15248,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       freqPinned:_freqPinned,
       storePhotos:_storePhotos,
       stg:_stgData,
+      scrap:_scrapData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -14573,6 +15295,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.freqPinned&&typeof d.freqPinned==='object')_freqPinned=d.freqPinned;
       if(Array.isArray(d.storePhotos))_storePhotos=d.storePhotos;
       if(d.stg&&typeof d.stg==='object'&&Array.isArray(d.stg.corners))_stgData.corners=d.stg.corners;
+      if(d.scrap&&typeof d.scrap==='object'){_scrapData.items=Array.isArray(d.scrap.items)?d.scrap.items:[];_scrapData.cats=Array.isArray(d.scrap.cats)?d.scrap.cats:[];}
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -14588,7 +15311,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14,'문장':15,'시간표':16,'저장고':17};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14,'문장':15,'시간표':16,'저장고':17,'스크랩':18};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
