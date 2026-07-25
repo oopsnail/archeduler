@@ -630,6 +630,8 @@
   @keyframes logoMenuIn{from{opacity:0;transform:translateY(-6px) scale(0.97);}to{opacity:1;transform:none;}}
   @keyframes chipSheetDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:none;}}
   @keyframes goalSheetUp{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:none;}}
+  @keyframes meadowSway{0%,100%{transform:rotate(-4deg);}50%{transform:rotate(4deg);}}
+  @keyframes meadowGrow{from{transform:scale(0) translateY(10px);opacity:0;}to{transform:scale(1) translateY(0);opacity:1;}}
   /* 달릴 때: 몸을 앞뒤로 기울이며 통통 튀어 두 다리가 교차하는 느낌 */
   @keyframes runBounce{
     0%{transform:translateY(-50%) scaleX(-1) translateY(0) rotate(-10deg) scaleY(1);}
@@ -922,6 +924,7 @@
     <div id="stgFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f5f4ef;flex-direction:column;"></div>
     <div id="scrapFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#f4f3ef;flex-direction:column;"></div>
     <div id="wildFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#12100e;flex-direction:column;"></div>
+    <div id="meadowFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#eef3e6;flex-direction:column;"></div>
     <div id="vocabFull" style="display:none;position:absolute;inset:0;z-index:2500;background:#faf9f6;flex-direction:column;"></div>
     <div class="dock-bar" id="dockBar">
       <button class="dock-btn" id="dockToday" aria-label="일정">
@@ -7035,6 +7038,302 @@ function _openScrapCat(){
     if(window._saveState)window._saveState();
     wrap.remove();rerenderScrapPage();
   });
+}
+
+// ===== 초원 (좋았던 순간을 심는 곳) =====
+var _meadowData={moments:[]};
+// moments: [{id,text,emotion,photo(dataURL|null),ts}]
+var _meadowRecall=null; // 힘들 때 꺼낸 순간
+var _MEADOW_EMOTIONS=[
+  ['joy','☺️','기쁨','#5aa63e'],
+  ['thanks','🙏','감사','#e0a54a'],
+  ['proud','😌','뿌듯','#c078a8'],
+  ['flutter','🥰','설렘','#e07a8a'],
+  ['excited','😆','신남','#e0913e'],
+  ['calm','🍃','평온','#5a9a9a']
+];
+var _MEADOW_FLOWERS=['🌼','🌷','🌸','🌻','🌺','🌱','🍀','🌹','💐','🌾'];
+function _meadowEmo(id){return _MEADOW_EMOTIONS.find(function(e){return e[0]===id;})||_MEADOW_EMOTIONS[0];}
+function _meadowContainer(){
+  var f=document.getElementById('meadowFull');
+  if(f&&f.style.display!=='none'){var i=document.getElementById('meadowFullInner');if(i)return i;}
+  return document.getElementById('meadowPage');
+}
+function rerenderMeadowPage(){var el=_meadowContainer();if(el)_withScrollKept(el,renderMeadowPage);}
+function openMeadowFull(){
+  var f=document.getElementById('meadowFull');if(!f)return;
+  f.style.display='flex';f.innerHTML='';
+  var inner=document.createElement('div');inner.id='meadowFullInner';
+  inner.style.cssText='flex:1;min-height:0;display:flex;flex-direction:column;';
+  f.appendChild(inner);renderMeadowPage(inner);
+}
+function closeMeadowFull(){
+  var f=document.getElementById('meadowFull');
+  if(f){f.style.display='none';f.innerHTML='';}
+  try{if(_homePage===20)setHomePage(0);}catch(e){}
+}
+function _meadowEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _meadowAgo(ts){
+  var d=new Date(ts);var now=new Date();
+  var t0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  var d0=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  var diff=Math.round((t0-d0)/86400000);
+  if(diff<=0)return '오늘';
+  if(diff===1)return '어제';
+  if(diff===2)return '그저께';
+  if(diff<7)return diff+'일 전';
+  if(diff<14)return '지난주';
+  if(diff<30)return Math.floor(diff/7)+'주 전';
+  return Math.floor(diff/30)+'개월 전';
+}
+// 안정적으로 꽃 종류를 정하기 위해 id 해시
+function _meadowFlowerFor(m){
+  var s=String(m.id||m.ts||'');
+  var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))&0xffffffff;
+  return _MEADOW_FLOWERS[Math.abs(h)%_MEADOW_FLOWERS.length];
+}
+function renderMeadowPage(container){
+  if(!container)return;
+  container.innerHTML='';
+  container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;background:#eef3e6;';
+  var fullOpen=document.getElementById('meadowFull')&&document.getElementById('meadowFull').style.display!=='none';
+  var top=document.createElement('div');top.style.cssText='padding:18px 16px 10px;flex-shrink:0;';
+  var head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:11px;';
+  if(fullOpen){
+    var cb=document.createElement('div');
+    cb.style.cssText='width:32px;height:32px;border-radius:50%;background:#f7faf1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;';
+    cb.innerHTML='<span style="font-size:17px;color:#7a8568;">‹</span>';
+    cb.addEventListener('click',function(){closeMeadowFull();});
+    head.appendChild(cb);
+  }
+  var ht=document.createElement('div');ht.style.cssText='flex:1;min-width:0;';
+  ht.innerHTML='<div style="font-size:20px;font-weight:800;color:#3a4030;letter-spacing:-0.01em;">초원</div>'
+    +'<div style="font-size:10px;color:#8a9578;margin-top:1px;">좋았던 순간을 하나씩 심는 곳</div>';
+  head.appendChild(ht);
+  top.appendChild(head);
+  container.appendChild(top);
+  var body=document.createElement('div');
+  body.className='meadow-body';
+  body.style.cssText='flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:6px 16px 30px;-webkit-overflow-scrolling:touch;';
+  container.appendChild(body);
+  _meadowRenderField(body);
+}
+function _meadowRenderField(body){
+  var moments=(_meadowData.moments||[]);
+  // 초원 무대
+  var field=document.createElement('div');
+  field.style.cssText='position:relative;height:210px;border-radius:16px;overflow:hidden;border:0.5px solid #dde6d0;background:linear-gradient(180deg,#eaf4f8 0%,#eef6e4 42%,#e2efd2 100%);margin-bottom:12px;';
+  // 해
+  var sun=document.createElement('div');
+  sun.style.cssText='position:absolute;top:16px;right:20px;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle,#ffe9a8,#ffd76e);box-shadow:0 0 20px rgba(255,214,110,0.5);';
+  field.appendChild(sun);
+  // 카운트 배지
+  var weekCount=moments.filter(function(m){return (Date.now()-m.ts)<7*86400000;}).length;
+  var badge=document.createElement('div');
+  badge.style.cssText='position:absolute;top:14px;left:16px;background:rgba(255,255,255,0.72);border-radius:9px;padding:5px 11px;font-size:10px;color:#5a7048;font-weight:700;z-index:2;';
+  badge.textContent='🌸 '+moments.length+'송이'+(weekCount?(' · 이번 주 '+weekCount):'');
+  field.appendChild(badge);
+  // 땅
+  var ground=document.createElement('div');
+  ground.style.cssText='position:absolute;left:0;right:0;bottom:0;height:52px;background:linear-gradient(180deg,#a9d68a,#8bc470);border-radius:50% 50% 0 0/24px 24px 0 0;';
+  field.appendChild(ground);
+  // 꽃들 (최근 것 위주로 최대 14송이 배치)
+  var recent=moments.slice(-14);
+  if(recent.length){
+    recent.forEach(function(m,idx){
+      var n=recent.length;
+      var leftPct=n===1?50:(8+idx*(84/(n-1)));
+      var fl=document.createElement('div');
+      fl.textContent=_meadowFlowerFor(m);
+      var sz=15+(Math.abs((m.ts||0)%5));
+      fl.style.cssText='position:absolute;bottom:'+(30+((idx%3)*3))+'px;left:'+leftPct+'%;font-size:'+sz+'px;transform-origin:bottom center;animation:meadowSway '+(3+(idx%4)*0.4)+'s ease-in-out infinite;animation-delay:'+((idx%5)*0.2)+'s;cursor:pointer;z-index:1;';
+      fl.addEventListener('click',function(){_openMeadowView(m);});
+      field.appendChild(fl);
+    });
+  }else{
+    var empty=document.createElement('div');
+    empty.style.cssText='position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:10.5px;color:#7a9068;';
+    empty.innerHTML='아직 비어 있는 초원이에요<br><span style="font-size:9px;">좋았던 순간을 심으면 꽃이 피어나요</span>';
+    field.appendChild(empty);
+  }
+  body.appendChild(field);
+  // 심기 버튼
+  var plant=document.createElement('button');
+  plant.style.cssText='width:100%;border:none;background:linear-gradient(135deg,#7cc45e,#5aa63e);color:#fff;font-size:14px;font-weight:800;padding:15px;border-radius:13px;cursor:pointer;letter-spacing:0.3px;margin-bottom:10px;';
+  plant.textContent='🌱 오늘 좋았던 순간 심기';
+  plant.addEventListener('click',function(){_openMeadowAdd(null);});
+  body.appendChild(plant);
+  // 힘들 때 꺼내보기
+  if(moments.length>=3){
+    var recall=document.createElement('button');
+    recall.style.cssText='width:100%;border:0.5px solid #dde6d0;background:#f7faf1;color:#6a8850;font-size:11.5px;font-weight:700;padding:12px;border-radius:12px;cursor:pointer;margin-bottom:16px;';
+    recall.textContent='🍃 지치는 날 · 예전 순간 꺼내보기';
+    recall.addEventListener('click',function(){
+      var m=moments[Math.floor(Math.random()*moments.length)];
+      _openMeadowView(m,true);
+    });
+    body.appendChild(recall);
+  }
+  // 쌓인 순간 목록
+  if(moments.length){
+    var hd=document.createElement('div');
+    hd.style.cssText='font-size:11px;font-weight:700;color:#7a8568;margin:6px 2px 9px;';
+    hd.textContent='심은 순간들 · '+moments.length+'개';
+    body.appendChild(hd);
+    moments.slice().sort(function(a,b){return b.ts-a.ts;}).forEach(function(m){
+      body.appendChild(_meadowCard(m));
+    });
+  }
+}
+function _meadowCard(m){
+  var emo=_meadowEmo(m.emotion);
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff;border:0.5px solid #e2e8d6;border-left:3px solid '+emo[3]+';border-radius:14px;padding:13px 14px;margin-bottom:9px;cursor:pointer;';
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">'
+    +'<span style="font-size:11px;color:'+emo[3]+';font-weight:700;">'+emo[1]+' '+emo[2]+'</span>'
+    +'<span style="font-size:9px;color:#a8b298;">'+_meadowAgo(m.ts)+'</span></div>'
+    +'<div style="font-size:12.5px;color:#3a4030;line-height:1.6;white-space:pre-wrap;word-break:break-word;">'+_meadowEsc(m.text||'')+'</div>';
+  if(m.photo){
+    html+='<div style="width:100%;height:120px;border-radius:9px;margin-top:9px;background-image:url('+m.photo+');background-size:cover;background-position:center;"></div>';
+  }
+  card.innerHTML=html;
+  card.addEventListener('click',function(){_openMeadowView(m);});
+  return card;
+}
+
+// 심기/수정 시트
+function _openMeadowAdd(edit){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('meadowAddSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='meadowAddSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3700;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(40,50,30,0.32);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:90%;overflow-y:auto;background:#f7faf1;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  var selEmo=edit?edit.emotion:'joy';
+  var photo=edit?(edit.photo||null):null;
+  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#3a4030;margin-bottom:3px;">'+(edit?'순간 다듬기':'오늘 좋았던 순간')+'</div>'
+    +'<div style="font-size:10px;color:#8a9578;margin-bottom:13px;">작은 것도 괜찮아요 — 날씨, 커피 한 잔, 누군가의 말…</div>'
+    +'<textarea id="mdText" rows="3" placeholder="오늘 뭐가 좋았나요?" style="width:100%;border:0.5px solid #e2e8d6;border-radius:12px;padding:13px;font-size:13px;line-height:1.7;color:#3a4030;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;background:#fff;margin-bottom:13px;">'+_meadowEsc(edit?(edit.text||''):'')+'</textarea>'
+    +'<div style="font-size:10px;color:#8a9578;font-weight:700;margin-bottom:7px;">어떤 기분이었나요</div>'
+    +'<div id="mdEmos" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">'
+      +_MEADOW_EMOTIONS.map(function(e){var on=e[0]===selEmo;
+        return '<button class="md-emo" data-e="'+e[0]+'" style="font-size:11.5px;padding:8px 13px;border-radius:12px;background:'+(on?'#eaf5e0':'#fff')+';color:'+(on?e[3]:'#7a8568')+';border:0.5px solid '+(on?e[3]:'#dde6d0')+';font-weight:'+(on?'700':'500')+';cursor:pointer;font-family:inherit;">'+e[1]+' '+e[2]+'</button>';}).join('')
+    +'</div>'
+    +'<div id="mdPhotoWrap" style="margin-bottom:15px;"></div>'
+    +'<button id="mdSave" style="width:100%;border:none;background:linear-gradient(135deg,#7cc45e,#5aa63e);color:#fff;font-size:13px;font-weight:800;padding:14px;border-radius:13px;cursor:pointer;font-family:inherit;">'+(edit?'저장':'초원에 심기 🌱')+'</button>'
+    +(edit?'<button id="mdDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">삭제</button>':'');
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.md-emo').forEach(function(b){b.addEventListener('click',function(){
+    selEmo=b.getAttribute('data-e');
+    sheet.querySelectorAll('.md-emo').forEach(function(x){
+      var e=_meadowEmo(x.getAttribute('data-e'));var on=x.getAttribute('data-e')===selEmo;
+      x.style.background=on?'#eaf5e0':'#fff';x.style.color=on?e[3]:'#7a8568';
+      x.style.border='0.5px solid '+(on?e[3]:'#dde6d0');x.style.fontWeight=on?'700':'500';
+    });});});
+  // 사진 영역
+  var pw=sheet.querySelector('#mdPhotoWrap');
+  function drawPhoto(){
+    pw.innerHTML='';
+    if(photo){
+      var box=document.createElement('div');
+      box.style.cssText='position:relative;width:100%;height:150px;border-radius:12px;background-image:url('+photo+');background-size:cover;background-position:center;';
+      var rm=document.createElement('div');
+      rm.textContent='✕';
+      rm.style.cssText='position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,0.5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;';
+      rm.addEventListener('click',function(){photo=null;drawPhoto();});
+      box.appendChild(rm);pw.appendChild(box);
+    }else{
+      var lb=document.createElement('label');
+      lb.style.cssText='display:flex;align-items:center;gap:9px;background:#fff;border:1px dashed #cdd8bc;border-radius:11px;padding:12px 13px;font-size:12px;color:#8a9578;cursor:pointer;';
+      lb.innerHTML='<span style="font-size:15px;">📷</span> 사진 더하기 (선택)';
+      var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.style.cssText='display:none;';
+      inp.addEventListener('change',function(){
+        var f=inp.files&&inp.files[0];inp.value='';
+        if(!f)return;
+        _meadowResize(f,function(url){if(url){photo=url;drawPhoto();}});
+      });
+      lb.appendChild(inp);pw.appendChild(lb);
+    }
+  }
+  drawPhoto();
+  setTimeout(function(){try{sheet.querySelector('#mdText').focus();}catch(e){}},60);
+  sheet.querySelector('#mdSave').addEventListener('click',function(){
+    var text=sheet.querySelector('#mdText').value.trim();
+    if(!text&&!photo){sheet.querySelector('#mdText').focus();return;}
+    if(edit){edit.text=text;edit.emotion=selEmo;edit.photo=photo;}
+    else{
+      if(!_meadowData.moments)_meadowData.moments=[];
+      _meadowData.moments.push({id:'md'+Date.now(),text:text,emotion:selEmo,photo:photo,ts:Date.now()});
+    }
+    if(window._saveState)window._saveState();
+    wrap.remove();
+    try{showToast(edit?'다듬었어요':'초원에 심었어요 🌸','add','ti-check');}catch(e){}
+    rerenderMeadowPage();
+  });
+  var db=sheet.querySelector('#mdDel');
+  if(db)db.addEventListener('click',function(){
+    _meadowData.moments=_meadowData.moments.filter(function(x){return x.id!==edit.id;});
+    if(window._saveState)window._saveState();
+    wrap.remove();rerenderMeadowPage();
+  });
+}
+function _meadowResize(file,cb){
+  try{
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var MAX=1000,w=img.width,h=img.height;
+        if(w>h&&w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        else if(h>=w&&h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+        var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        try{cb(cv.toDataURL('image/jpeg',0.75));}catch(err){cb(null);}
+      };
+      img.onerror=function(){cb(null);};
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){cb(null);};
+    reader.readAsDataURL(file);
+  }catch(err){cb(null);}
+}
+// 순간 자세히 보기 (일반 / 힘들 때 꺼내보기)
+function _openMeadowView(m,recall){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('meadowViewSheet');if(old)old.remove();
+  var emo=_meadowEmo(m.emotion);
+  var wrap=document.createElement('div');wrap.id='meadowViewSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3700;display:flex;align-items:'+(recall?'center':'flex-end')+';justify-content:center;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(40,50,30,0.4);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  if(recall){
+    sheet.style.cssText='position:relative;width:calc(100% - 40px);max-width:340px;background:#f7faf1;border-radius:20px;padding:22px 18px;z-index:1;animation:goalSheetUp 0.3s ease;box-sizing:border-box;text-align:center;';
+    sheet.innerHTML='<div style="font-size:10px;color:#8a9578;margin-bottom:14px;">🍃 예전에 이런 순간이 있었어요</div>'
+      +(m.photo?'<div style="width:100%;height:150px;border-radius:13px;background-image:url('+m.photo+');background-size:cover;background-position:center;margin-bottom:14px;"></div>':'<div style="font-size:34px;margin-bottom:10px;">'+_meadowFlowerFor(m)+'</div>')
+      +'<div style="font-size:14px;color:#3a4030;line-height:1.65;white-space:pre-wrap;word-break:break-word;">'+_meadowEsc(m.text||'')+'</div>'
+      +'<div style="font-size:9.5px;color:#a8b298;margin-top:12px;">'+_meadowAgo(m.ts)+' · '+emo[1]+' '+emo[2]+'</div>'
+      +'<button id="mvAnother" style="width:100%;border:0.5px solid #dde6d0;background:#fff;color:#6a8850;font-size:12px;font-weight:700;padding:12px;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:18px;">다른 순간 보기</button>';
+  }else{
+    sheet.style.cssText='position:relative;width:100%;background:#f7faf1;border-radius:22px 22px 0 0;padding:20px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+    sheet.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">'
+        +'<span style="font-size:12px;font-weight:700;color:'+emo[3]+';">'+emo[1]+' '+emo[2]+'</span>'
+        +'<span style="font-size:10px;color:#a8b298;">'+_meadowAgo(m.ts)+'</span></div>'
+      +(m.photo?'<div style="width:100%;height:180px;border-radius:13px;background-image:url('+m.photo+');background-size:cover;background-position:center;margin-bottom:13px;"></div>':'')
+      +'<div style="font-size:14px;color:#3a4030;line-height:1.7;white-space:pre-wrap;word-break:break-word;margin-bottom:16px;">'+_meadowEsc(m.text||'')+'</div>'
+      +'<button id="mvEdit" style="width:100%;border:0.5px solid #dde6d0;background:#fff;color:#6a8850;font-size:12.5px;font-weight:700;padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;">다듬기</button>';
+  }
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var an=sheet.querySelector('#mvAnother');
+  if(an)an.addEventListener('click',function(){
+    wrap.remove();
+    var ms=_meadowData.moments||[];
+    if(ms.length){var m2=ms[Math.floor(Math.random()*ms.length)];_openMeadowView(m2,true);}
+  });
+  var ed=sheet.querySelector('#mvEdit');
+  if(ed)ed.addEventListener('click',function(){wrap.remove();_openMeadowAdd(m);});
 }
 
 // ===== 광야 (감정을 쏟아내고 흩어보내기) =====
@@ -13363,6 +13662,7 @@ function setHomePage(p){
   if(p===17){try{openStgFull();}catch(e){}}
   if(p===18){try{openScrapFull();}catch(e){}}
   if(p===19){try{openWildFull();}catch(e){}}
+  if(p===20){try{openMeadowFull();}catch(e){}}
   var sbar=document.getElementById('schedBar');
   if(sbar){sbar.style.display=p===0?'flex':'none';}
 }
@@ -13394,6 +13694,7 @@ function buildHomeSlider(){
     {id:'tab-stg',      name:'저장고'},
     {id:'tab-scrap',    name:'스크랩'},
     {id:'tab-wild',     name:'광야'},
+    {id:'tab-meadow',   name:'초원'},
   ];
   window._homeTabNames=tabs.map(function(t){return t.name;});
   var total=tabs.length;
@@ -13532,6 +13833,12 @@ function buildHomeSlider(){
   wildPage.id='wildPage';
   renderWildPage(wildPage);
   slider.appendChild(wildPage);
+
+  var meadowPage=document.createElement('div');
+  meadowPage.style.cssText='flex:0 0 '+slideW+'%;width:'+slideW+'%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;';
+  meadowPage.id='meadowPage';
+  renderMeadowPage(meadowPage);
+  slider.appendChild(meadowPage);
 
   // 인디케이터 (드로어 도입으로 숨김)
   dots.style.cssText='display:none;';
@@ -15807,6 +16114,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       stg:_stgData,
       scrap:_scrapData,
       wild:{burns:_wildData.burns,emotions:_wildData.emotions},
+      meadow:_meadowData,
       tipSaved:window._tipSaved||[],
       tipSavedDates:window._tipSavedDates||{}
     });
@@ -15855,6 +16163,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.stg&&typeof d.stg==='object'&&Array.isArray(d.stg.corners))_stgData.corners=d.stg.corners;
       if(d.scrap&&typeof d.scrap==='object'){_scrapData.items=Array.isArray(d.scrap.items)?d.scrap.items:[];_scrapData.cats=Array.isArray(d.scrap.cats)?d.scrap.cats:[];}
       if(d.wild&&typeof d.wild==='object'){_wildData.burns=d.wild.burns||0;_wildData.emotions=d.wild.emotions||{};}
+      if(d.meadow&&typeof d.meadow==='object'&&Array.isArray(d.meadow.moments))_meadowData.moments=d.meadow.moments;
       if(d.tipSaved&&Array.isArray(d.tipSaved))window._tipSaved=d.tipSaved;
       if(d.tipSavedDates&&typeof d.tipSavedDates==='object')window._tipSavedDates=d.tipSavedDates;
       try{buildHomeSlider();}catch(e){}
@@ -15870,7 +16179,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
 })();
 // ===== 상단 칩 + 하단 독 =====
 var _chipTabs=null; // [{name,on}] 순서 보존
-function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14,'문장':15,'시간표':16,'저장고':17,'스크랩':18,'광야':19};}
+function _chipPageIdx(){return {'일정':0,'브리핑':1,'기록':2,'체크':3,'루틴':4,'가계부':5,'메모':6,'목표':7,'인사이트':8,'건강':9,'단어장':10,'여행':11,'뉴스':12,'인덱스':13,'마인드':14,'문장':15,'시간표':16,'저장고':17,'스크랩':18,'광야':19,'초원':20};}
 function _initChipTabs(){
   if(_chipTabs&&_chipTabs.length){
     // 새로 추가된 탭(예: 인사이트) 백필
