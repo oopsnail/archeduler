@@ -7493,12 +7493,19 @@ function _wildRunAnim(stage,ta,text,body){
     _wildShowDone(stage,body);
   };
   var W=stage.clientWidth||300,H=stage.clientHeight||220;
-  // textarea 숨기고 무대 위에 연출 레이어
+  // 실제로 보이던 글을 그대로 두고 그 위에서 연출 (textarea 값을 레이어로 복제)
   ta.style.visibility='hidden';
-  if(_wildMode==='fire')_wildAnimFire(stage,text,W,H,done);
-  else if(_wildMode==='shred')_wildAnimShred(stage,text,W,H,done);
-  else if(_wildMode==='wind')_wildAnimWind(stage,text,W,H,done);
-  else _wildAnimErase(stage,text,W,H,done);
+  // 잠깐 원문을 보여준 뒤 태우기 시작 (불이 붙는 뜸)
+  var preview=_wildTextLayer(text);
+  preview.style.opacity='1';
+  stage.appendChild(preview);
+  setTimeout(function(){
+    if(preview.parentNode)preview.parentNode.removeChild(preview);
+    if(_wildMode==='fire')_wildAnimFire(stage,text,W,H,done);
+    else if(_wildMode==='shred')_wildAnimShred(stage,text,W,H,done);
+    else if(_wildMode==='wind')_wildAnimWind(stage,text,W,H,done);
+    else _wildAnimErase(stage,text,W,H,done);
+  },500);
 }
 function _wildTextLayer(text){
   var d=document.createElement('div');
@@ -7507,23 +7514,39 @@ function _wildTextLayer(text){
   return d;
 }
 function _wildAnimFire(stage,text,W,H,cb){
-  var layer=_wildTextLayer(text);stage.appendChild(layer);
+  var layer=_wildTextLayer(text);layer.style.opacity='1';stage.appendChild(layer);
   var cv=document.createElement('canvas');cv.width=W;cv.height=H;
   cv.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
   stage.appendChild(cv);var ctx=cv.getContext('2d');
   var sparks=[],ash=[];
-  for(var i=0;i<110;i++)sparks.push({x:Math.random()*W,y:H*0.5+Math.random()*H*0.5,vx:(Math.random()-0.5)*1.3,vy:-1-Math.random()*2.6,r:1+Math.random()*3,life:1,c:['#e0653e','#e8a060','#c74a2a','#f0c060'][Math.floor(Math.random()*4)]});
-  for(var j=0;j<50;j++)ash.push({x:Math.random()*W,y:H*0.35+Math.random()*H*0.55,vx:(Math.random()-0.5)*0.9,vy:-0.4-Math.random()*1.1,r:1+Math.random()*2,life:1});
-  var t=0;
+  var t=0,TOTAL=90;
   (function anim(){
     t++;
+    var prog=t/TOTAL;              // 0→1, 아래에서 위로 타들어감
+    var burnY=H*(1-prog);          // 불이 붙은 경계선 (아래→위)
     ctx.clearRect(0,0,W,H);
-    layer.style.background='linear-gradient(0deg, rgba(20,16,12,'+Math.min(1,t/26)+') '+Math.min(100,t*4)+'%, transparent)';
-    layer.style.opacity=Math.max(0,1-t/30);
-    sparks.forEach(function(p){p.x+=p.vx;p.y+=p.vy;p.vy-=0.02;p.life-=0.017;if(p.life>0){ctx.globalAlpha=p.life;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();}});
-    ash.forEach(function(a){a.x+=a.vx+Math.sin(t/9)*0.3;a.y+=a.vy;a.life-=0.008;if(a.life>0){ctx.globalAlpha=a.life*0.55;ctx.fillStyle='#9a8a7a';ctx.fillRect(a.x,a.y,a.r,a.r);}});
+    // 타버린 아래쪽을 어둡게 덮음 (글자가 재가 된 부분)
+    layer.style.clipPath='inset('+((1-prog)*0+0)+'px 0 0 0)';
+    // 경계 아래는 사라지도록 마스크: 위에서부터 burnY까지만 글자 보이게
+    layer.style.webkitMaskImage='linear-gradient(to bottom, #000 '+(burnY-14)+'px, transparent '+(burnY+2)+'px)';
+    layer.style.maskImage='linear-gradient(to bottom, #000 '+(burnY-14)+'px, transparent '+(burnY+2)+'px)';
+    // 불붙은 경계선에서 불씨 생성
+    if(t<TOTAL-6){
+      for(var s=0;s<6;s++)sparks.push({x:Math.random()*W,y:burnY+ (Math.random()*8-4),
+        vx:(Math.random()-0.5)*1.6,vy:-1.2-Math.random()*2.8,r:1+Math.random()*2.6,life:1,
+        c:['#e0653e','#e8a060','#c74a2a','#f0c060','#ffd88a'][Math.floor(Math.random()*5)]});
+      for(var a=0;a<2;a++)ash.push({x:Math.random()*W,y:burnY,vx:(Math.random()-0.5)*1,vy:-0.5-Math.random()*1.3,r:1+Math.random()*2,life:1});
+    }
+    // 경계선 글로우
+    var grd=ctx.createLinearGradient(0,burnY-16,0,burnY+4);
+    grd.addColorStop(0,'rgba(224,101,62,0)');
+    grd.addColorStop(0.7,'rgba(240,140,60,0.5)');
+    grd.addColorStop(1,'rgba(255,200,100,0.85)');
+    ctx.fillStyle=grd;ctx.fillRect(0,burnY-16,W,20);
+    sparks.forEach(function(p){p.x+=p.vx;p.y+=p.vy;p.vy-=0.02;p.life-=0.02;if(p.life>0){ctx.globalAlpha=p.life;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();}});
+    ash.forEach(function(x){x.x+=x.vx+Math.sin(t/9)*0.3;x.y+=x.vy;x.life-=0.008;if(x.life>0){ctx.globalAlpha=x.life*0.5;ctx.fillStyle='#9a8a7a';ctx.fillRect(x.x,x.y,x.r,x.r);}});
     ctx.globalAlpha=1;
-    if(t<64)requestAnimationFrame(anim);else cb();
+    if(t<TOTAL||sparks.some(function(p){return p.life>0;}))requestAnimationFrame(anim);else cb();
   })();
 }
 function _wildAnimShred(stage,text,W,H,cb){
