@@ -13377,6 +13377,26 @@ var _goalFolders=[];
 var _goalDrill=[]; // 드릴다운 경로 (목표 id 스택)
 function _goalNewId(){return 'g'+Date.now()+Math.random().toString(36).slice(2,6);}
 // ===== 문장 → 청사진/설계/작업 자동 분해 =====
+// "작업 30개", "30개 만들어", "설계 5개 각 10번" 등 개수 명령 감지
+// defaultTier: 현재 계층 이름(설계/작업 등). 이름 안 쓰면 이걸 사용.
+function _goalBulkCount(text,defaultTier){
+  var t=text.trim();
+  function num(x){var n=parseInt(String(x).replace(/,/g,''));return isNaN(n)?null:n;}
+  // 계층 이름 + 개수
+  var m=t.match(/(설계|작업|단계|항목|칸|세부|하위)\s*(\d+)\s*개?/);
+  var n=null,name=null;
+  if(m){n=num(m[2]);name=/작업/.test(m[1])?'작업':/설계/.test(m[1])?'설계':/단계/.test(m[1])?'단계':/세부|하위/.test(m[1])?'세부':'항목';}
+  else{
+    // 이름 없이 "N개 (만들어)" 또는 그냥 "N개"
+    var m2=t.match(/(\d+)\s*개\s*(?:만들|생성|추가|만든|짜리)?/);
+    if(m2){n=num(m2[1]);name=defaultTier||'항목';}
+  }
+  if(!n||n<1||n>200)return null;
+  // 각각 K번/개 → target
+  var perM=t.match(/각(?:각|자)?\s*(\d+)\s*(?:번|회|개|쪽|페이지|문제)/)||t.match(/(\d+)\s*(?:번|회)\s*씩/);
+  var target=perM?num(perM[1]):null;
+  return {n:n,name:name,target:target};
+}
 // 반환: {title, sub:[{title, target, sub:[...]}]} 또는 null(분해 불가)
 function _goalAutoDecompose(text){
   var t=text.trim();
@@ -13386,7 +13406,29 @@ function _goalAutoDecompose(text){
   var perM=t.match(/각(?:각|자)?\s*(\d+)\s*(?:번|회|개|쪽|페이지|문제)/)||t.match(/(\d+)\s*(?:번|회)\s*씩/);
   var perTarget=perM?num(perM[1]):null;
 
-  // 패턴 1: "N강|장|챕터|과|편|권|문제 ... M회독|회|바퀴"
+  // 패턴 0: "설계|작업|단계|항목|칸 N개 (만들어)" 같은 직접 개수 명령
+  //  → 청사진 하나 + 그 계층 빈 항목 N개
+  var cntM=t.match(/(설계|작업|단계|항목|칸|개수|하위|세부)\s*(\d+)\s*개?/)||t.match(/(\d+)\s*개\s*(?:만들|생성|추가|만든|각|씩|짜리)/);
+  if(cntM){
+    var cntN=cntM[2]?num(cntM[2]):num(cntM[1]);
+    var cntTierName=cntM[2]?cntM[1]:'항목';
+    if(cntN>0&&cntN<=200){
+      var items=[];
+      // 계층 이름에 맞는 번호 (설계1, 작업1...)
+      var baseName=/작업/.test(cntTierName)?'작업':/설계/.test(cntTierName)?'설계':/단계/.test(cntTierName)?'단계':/세부|하위/.test(cntTierName)?'세부':'항목';
+      for(var ci=1;ci<=cntN;ci++)items.push(mk(baseName+' '+ci,perTarget?{target:perTarget,cur:0}:null));
+      // 청사진 제목: 명령어/개수 부분 제거하고 남은 목표명, 없으면 기본
+      var titleClean=t
+        .replace(/(설계|작업|단계|항목|칸|개수|하위|세부)\s*\d+\s*개?/g,'')
+        .replace(/\d+\s*개/g,'')
+        .replace(/각(?:각|자)?\s*\d+\s*(?:번|회|개|쪽|페이지|문제)/g,'')
+        .replace(/\d+\s*(?:번|회)\s*씩/g,'')
+        .replace(/(만들어\s*줘|만들어|만들기|생성해?줘?|추가해?줘?|만든다)/g,'')
+        .replace(/\s{2,}/g,' ').trim();
+      return {title:titleClean||('새 목표 ('+cntN+'개)'), sub:items};
+    }
+  }
+
   var unitM=t.match(/(\d+)\s*(강|장|챕터|과|편|권|课|문제|페이지|쪽|일)/);
   var roundM=t.match(/(\d+)\s*(회독|회|바퀴|번|차)/);
   if(unitM&&roundM&&unitM.index!==roundM.index){
@@ -14807,8 +14849,21 @@ function _goalRenderDrill(container,list){
   btn.innerHTML='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
   function commitSub(){
     var t=inp.value.trim();if(!t)return;
-    var target=_goalParse(t);
     if(!node.sub)node.sub=[];
+    // "작업 30개", "30개 만들어", "설계 5개" 등 개수 명령 → 그 수만큼 일괄 생성
+    var bulk=_goalBulkCount(t,_addTier);
+    if(bulk){
+      var start=node.sub.length;
+      for(var bi=1;bi<=bulk.n;bi++){
+        node.sub.push({id:_goalNewId(),title:bulk.name+' '+(start+bi),done:false,target:bulk.target||null,cur:0,unit:'',sub:[]});
+      }
+      node._distDismiss=false;
+      if(window._saveState)window._saveState();
+      rerenderGoalPage();
+      var ni0=container.querySelector('input');if(ni0)ni0.focus();
+      return;
+    }
+    var target=_goalParse(t);
     node.sub.push({id:_goalNewId(),title:t,done:false,target:target,cur:0,unit:'',sub:[]});
     node._distDismiss=false;
     if(window._saveState)window._saveState();
