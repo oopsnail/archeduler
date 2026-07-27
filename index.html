@@ -13385,32 +13385,18 @@ function _goalTierLabel(depth,num){
   return _goalTierName(depth)+' '+num;
 }
 // 노드의 "무게": 잎이면 목표수(없으면 1), 부모면 하위 무게의 합
-// → 큰 목표 진행률이 실제 분량에 비례해서 계산됨 (예: 30강×3회독×10번 = 900 단위)
-// 노드의 "무게": max(자기 목표량, 자식 무게 합)
-// → 설계 "책100" 아래 작업 "책10" 하나만 있어도, 설계 무게는 100으로 잡혀
-//    청사진(1000) 기준 진행률이 실제 분량대로 작게 나옴
-function _goalWeight(g){
-  var childSum=0;
-  if(_goalHasSub(g))g.sub.forEach(function(s){childSum+=_goalWeight(s);});
-  var own=(g.target&&g.target>0)?g.target:0;
-  var w=Math.max(own,childSum);
-  return w||1;
-}
-// 노드까지 채워진 "실량" (잎들의 실제 진행량 합)
-function _goalFilled(g){
+// 진행률 0~1 — 각 층은 하위 "개수"로 균등 분배 (설계 3개면 하나당 1/3)
+function _goalProgress(g){
   if(_goalHasSub(g)){
-    var f=0;g.sub.forEach(function(s){f+=_goalFilled(s);});
-    return f;
+    var sum=0;g.sub.forEach(function(s){sum+=_goalProgress(s);});
+    return g.sub.length?sum/g.sub.length:0;
   }
-  if(g.target&&g.target>0)return Math.min(g.target,(g.cur||0));
+  if(g.target&&g.target>0)return Math.min(1,(g.cur||0)/g.target);
   return g.done?1:0;
 }
-// 진행률 0~1 (잎의 실제 양까지 가중 반영)
-function _goalProgress(g){
-  var wt=_goalWeight(g);
-  if(!wt)return 0;
-  return Math.min(1,_goalFilled(g)/wt);
-}
+// (호환용) 무게·채움 — 개수 균등 기준
+function _goalWeight(g){return 1;}
+function _goalFilled(g){return _goalProgress(g);}
 function _goalPct(g){return Math.round(_goalProgress(g)*100);}
 // 아주 작은 진행률도 0%로 안 보이게: 1자리 소수까지
 function _goalPctFine(g){
@@ -14296,6 +14282,15 @@ function _goalBindLongPress(row,g,container){
   row.addEventListener('mouseleave',function(){clearTimeout(mdt);});
   row.addEventListener('contextmenu',function(e){e.preventDefault();_goalActionSheet(g,container);});
 }
+// 목표 깊은 복제 (새 id 부여, 진행 유지)
+function _goalClone(g){
+  var c={};
+  Object.keys(g).forEach(function(k){if(k!=='sub'&&k!=='id'&&k!=='kw')c[k]=g[k];});
+  c.id=_goalNewId();
+  if(g.kw)c.kw=g.kw.slice();
+  c.sub=(g.sub||[]).map(function(s){return _goalClone(s);});
+  return c;
+}
 function _goalActionSheet(g,container){
   var host=document.querySelector('.phone')||document.body;
   var old=document.getElementById('goalActionSheet');if(old)old.remove();
@@ -14311,6 +14306,7 @@ function _goalActionSheet(g,container){
     +itemHtml('ga-star',g.star?'★':'☆',g.star?'북마크 해제':'북마크',null)
     +itemHtml('ga-fold','📁',g.folder?('폴더: '+g.folder+' (변경)'):'폴더에 넣기',null)
     +itemHtml('ga-detail','⚙️','상세 설정',null)
+    +itemHtml('ga-dup','📄','복제하기',null)
     +'<div style="height:0.5px;background:#f0ede6;margin:4px 8px;"></div>'
     +itemHtml('ga-del','🗑','삭제','#c0392b');
   wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
@@ -14320,6 +14316,12 @@ function _goalActionSheet(g,container){
     _goalFolderPopover(null,g.folder||null,function(v){g.folder=v;if(window._saveState)window._saveState();rerenderGoalPage();});
   });
   sheet.querySelector('.ga-detail').addEventListener('click',function(){wrap.remove();_goalDetailSheet(g,function(){rerenderGoalPage();});});
+  sheet.querySelector('.ga-dup').addEventListener('click',function(){
+    wrap.remove();
+    var lst=_goalCurrentList();var idx=lst.indexOf(g);
+    if(idx>=0){var copy=_goalClone(g);copy.title=g.title+' (복사본)';lst.splice(idx+1,0,copy);}
+    if(window._saveState)window._saveState();rerenderGoalPage();
+  });
   sheet.querySelector('.ga-del').addEventListener('click',function(){
     wrap.remove();
     var lst=_goalCurrentList();var idx=lst.indexOf(g);if(idx>=0)lst.splice(idx,1);
@@ -14500,6 +14502,8 @@ function _goalSubCard(s,idx,container,childDepth){
     var lst=_goalCurrentList();var ix=lst.indexOf(s);if(ix>=0)lst.splice(ix,1);
     if(window._saveState)window._saveState();rerenderGoalPage();
   });
+  // 꾹 누르면 액션(복제/삭제 등)
+  _goalBindLongPress(wrap,s,container);
   return wrap;
 }
 // ── 드릴다운 화면: 목표 안으로 들어간 상태 ──
@@ -14553,8 +14557,8 @@ function _goalRenderDrill(container,list){
   var barCol=_goalIsDone(node)?'#1a7a4a':(dd!==null&&dd<0)?'#c0392b':(dd!==null&&dd<=3)?'#e0653e':'#c2410c';
   var head=document.createElement('div');
   var subDoneN=_goalSubDone(node);
-  var wt=_goalWeight(node),fl=Math.round(_goalFilled(node)*10)/10;
-  var amountTxt=node.sub.length?('총 '+wt+' 중 '+fl):(node.target?((node.cur||0)+' / '+node.target+(node.unit||'')):'');
+  var _childTierAmt=_goalTierName(_goalDrill.length);
+  var amountTxt=node.sub.length?(_childTierAmt+' '+subDoneN+'/'+node.sub.length+' 완료'):(node.target?((node.cur||0)+' / '+node.target+(node.unit||'')):'');
   var pctBarPct=Math.max(_goalProgress(node)*100,_goalProgress(node)>0?1.5:0);
   var _childTier=_goalTierName(_goalDrill.length); // 하위들의 계층 이름
   var _doneLabel=node.sub.length?(subDoneN+'/'+node.sub.length+' '+_childTier+' 완료'):'';
