@@ -3510,6 +3510,52 @@ var _MOODS=[
   {id:'ill',label:'아픔'},
   {id:'hard',label:'힘듦'}
 ];
+// 커스텀 감정 단어 → 가장 가까운 표정 id 추정
+// 각 표정에 연상 키워드를 달아, 입력 단어가 키워드를 포함하면 매칭
+var _MOOD_KEYWORDS={
+  happy:['기쁨','기뻐','행복','좋아','좋다','즐거운','해피','만족','웃'],
+  excited:['신남','신나','들뜸','흥분','텐션','두근','열정','짜릿','설레는'],
+  wonderful:['설렘','설레','두근','기대','떨림','간질','로맨틱','풋풋'],
+  joyful:['즐거','유쾌','명랑','발랄','재밌','재미','흥겨','유머','장난'],
+  love:['사랑','애정','좋아해','반함','포근','따뜻','다정','애틋','연애'],
+  calm:['평온','평화','고요','잔잔','차분','안정','편안','느긋','릴랙','여유로'],
+  blessed:['감사','고마','축복','충만','벅참','뭉클','은혜'],
+  confident:['뿌듯','자신','당당','성취','해냈','보람','자랑','자부'],
+  cool:['여유','쿨','시크','태연','담담','무던','대범'],
+  refreshed:['상쾌','개운','산뜻','신선','청량','리프레','새로'],
+  wonder:['궁금','호기심','신기','의문','어리둥절','아리송'],
+  inspired:['영감','아이디어','깨달','통찰','번뜩','창의','뮤즈'],
+  meh:['그저','무난','그냥','심심','무덤덤','밍밍','애매','별로','시큰'],
+  bored:['지루','따분','재미없','권태','노잼','무료','심드렁'],
+  tired:['피곤','지침','피로','노곤','나른','기진','축','방전','번아웃'],
+  sleepy:['졸림','졸려','졸리','잠','나른','몽롱','비몽','하품'],
+  worried:['걱정','근심','불편','조마','노심','염려','신경쓰'],
+  anxious:['불안','초조','긴장','두려','겁','떨려','안절','조급','예민','melan','멜랑','우울한느낌'],
+  down:['지침','우울','다운','침울','울적','쳐짐','무기력','가라앉','시무룩','멜랑꼴리','멜랑콜리','melancholy','센치','쓸쓸','허무','공허','외로'],
+  sad:['슬픔','슬퍼','슬프','눈물','서글','비참','서러','속상','안타까','아쉬'],
+  hurt:['상처','서운','섭섭','배신','아픈','마음아','상심','실망','좌절'],
+  angry:['화남','화나','분노','짜증','열받','빡','성남','격분','억울','불만','신경질'],
+  ill:['아픔','아파','아프','몸살','감기','메스','울렁','토할','두통','통증','병'],
+  hard:['힘듦','힘들','벅참','버거','고통','괴로','막막','답답','지겨','한계','죽겠']
+};
+function _moodFaceFor(word){
+  var w=String(word||'').toLowerCase().replace(/\s/g,'');
+  if(!w)return 'meh';
+  // 1) 정확히 프리셋 라벨과 일치
+  var exact=_MOODS.find(function(m){return m.label===word;});
+  if(exact)return exact.id;
+  // 2) 키워드 포함 매칭 (더 긴 키워드 우선)
+  var best=null,bestLen=0;
+  Object.keys(_MOOD_KEYWORDS).forEach(function(id){
+    _MOOD_KEYWORDS[id].forEach(function(kw){
+      var kl=kw.toLowerCase();
+      if(w.indexOf(kl)>=0&&kl.length>bestLen){best=id;bestLen=kl.length;}
+    });
+  });
+  if(best)return best;
+  // 3) 못 찾으면 중립
+  return 'meh';
+}
 // 라인 아이콘 감정 표정 (색 없음, 원 테두리 + 표정선)
 function _moodFaceSVG(id,size){
   var s=size||46;var INK='#3a352c';
@@ -11343,17 +11389,17 @@ function _bindMoodChip(chip,k,m,container){
     var bub=document.createElement('div');
     bub.id='moodBubble';
     var hasMemo=m.note&&m.note.trim();
-    bub.style.cssText='position:absolute;z-index:3500;max-width:180px;background:'+(hasMemo?'#2b2926':'#fff')+';color:'+(hasMemo?'#f0ece2':'#b0966a')+';border-radius:12px;padding:'+(hasMemo?'9px 12px':'0')+';font-size:11px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.18);word-break:break-word;'+(hasMemo?'border:none;':'border:1.5px dashed #e0c89a;');
+    // 감정 이름: 커스텀 라벨 우선, 없으면 프리셋 라벨
+    var emoName=(m.label&&m.label.trim())?m.label.trim():((_MOODS.find(function(x){return x.id===m.mood;})||{}).label||'');
+    bub.style.cssText='position:absolute;z-index:3500;max-width:190px;background:#2b2926;color:#f0ece2;border-radius:12px;padding:9px 12px;font-size:11px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.18);word-break:break-word;';
+    var inner='<span style="font-size:12px;font-weight:800;color:#f4d9a8;">'+_escMoodNote(emoName)+'</span>';
     if(hasMemo){
-      bub.innerHTML=_escMoodNote(m.note);
+      inner+='<div style="margin-top:3px;color:#e6ded0;">'+_escMoodNote(m.note)+'</div>';
+      bub.innerHTML=inner;
     }else{
-      // ＋ 메모 추가 버튼
-      bub.style.padding='0';
-      var plus=document.createElement('div');
-      plus.style.cssText='display:flex;align-items:center;gap:5px;padding:8px 13px;cursor:pointer;font-weight:700;';
-      plus.innerHTML='<span style="font-size:14px;">＋</span><span>메모 추가</span>';
-      plus.addEventListener('click',function(ev){ev.stopPropagation();clearBubbles();_openRecMoodNote(k,m,container);});
-      bub.appendChild(plus);
+      inner+='<div id="rmAddMemo" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;color:#c9a86a;font-weight:700;cursor:pointer;font-size:10.5px;"><span style="font-size:13px;">＋</span>메모 추가</div>';
+      bub.innerHTML=inner;
+      setTimeout(function(){var am=bub.querySelector('#rmAddMemo');if(am)am.addEventListener('click',function(ev){ev.stopPropagation();clearBubbles();_openRecMoodNote(k,m,container);});},0);
     }
     host.appendChild(bub);
     // 위치: 칩 위 중앙
@@ -11368,7 +11414,7 @@ function _bindMoodChip(chip,k,m,container){
     bub.style.top=(top-bh-8)+'px';
     // 꼬리 (말풍선 하단 중앙, 아래를 가리킴)
     var tail=document.createElement('div');
-    tail.style.cssText='position:absolute;bottom:-6px;left:'+(cx-left-5)+'px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid '+(hasMemo?'#2b2926':'#fff')+';';
+    tail.style.cssText='position:absolute;bottom:-6px;left:'+(cx-left-5)+'px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #2b2926;';
     bub.appendChild(tail);
     // 바깥 탭하면 닫기
     setTimeout(function(){
@@ -11422,7 +11468,7 @@ function _openRecMoodNote(k,m,container){
   sheet.innerHTML='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>'
     +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:13px;">'
       +'<span style="width:34px;height:34px;border-radius:50%;border:1px solid #f0e9dd;background:#fbfaf7;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,24)+'</span>'
-      +'<div><div style="font-size:13px;font-weight:800;color:#2b2925;">'+(_MOODS.find(function(x){return x.id===m.mood;})||{label:''}).label+'</div>'
+      +'<div><div style="font-size:13px;font-weight:800;color:#2b2925;">'+_escMoodNote((m.label&&m.label.trim())?m.label.trim():((_MOODS.find(function(x){return x.id===m.mood;})||{label:''}).label))+'</div>'
       +'<div style="font-size:10px;color:#a89e8c;">'+(m.time||'')+'</div></div></div>'
     +'<input id="rmnNote" placeholder="이 순간의 메모" value="'+(m.note?_escMoodNote(m.note).replace(/"/g,'&quot;'):'')+'" style="width:100%;border:none;background:#f7f6f1;border-radius:12px;padding:12px 14px;font-size:12px;color:#2b2925;outline:none;box-sizing:border-box;font-family:inherit;">'
     +'<button id="rmnSave" style="width:100%;border:none;background:#e0a54a;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;margin-top:11px;">저장</button>';
@@ -11444,15 +11490,23 @@ function _openRecMoodPick(k,editMood,container){
   var sheet=document.createElement('div');
   sheet.style.cssText='position:relative;width:100%;max-height:82%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;scrollbar-width:none;';
   var sel=editMood?editMood.mood:null;
+  var customLabel=(editMood&&editMood.label)?editMood.label:''; // 직접 쓴 감정 이름
   function nowTime(){var d=new Date();var h=d.getHours(),mm=d.getMinutes();return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm;}
   var curTime=editMood?editMood.time:nowTime();
   function draw(){
     var h='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>';
     h+='<div style="font-size:14px;font-weight:800;color:#2b2925;margin-bottom:2px;">'+(editMood?'기분 수정':'지금 기분은 어때요?')+'</div>';
     h+='<div style="font-size:10px;color:#a89e8c;margin-bottom:14px;">'+curTime+'에 기록돼요</div>';
+    // 직접 쓰기 입력 + 미리보기 표정
+    var previewId=customLabel?_moodFaceFor(customLabel):(sel||'meh');
+    h+='<div style="display:flex;align-items:center;gap:10px;background:#f7f6f1;border-radius:14px;padding:9px 11px;margin-bottom:13px;">'
+      +'<span id="rmPrevFace" style="width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:50%;border:1px solid #ece4d4;">'+_moodFaceSVG(previewId,28)+'</span>'
+      +'<input id="rmCustom" placeholder="감정을 직접 써도 돼요 (예: 멜랑꼴리)" value="'+(customLabel?String(customLabel).replace(/"/g,'&quot;'):'')+'" style="flex:1;min-width:0;border:none;background:none;font-size:13px;font-weight:600;color:#2b2925;outline:none;font-family:inherit;">'
+      +'</div>';
+    h+='<div style="font-size:9px;color:#b0a690;font-weight:700;letter-spacing:0.5px;margin-bottom:8px;">또는 골라보세요</div>';
     h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;">';
     _MOODS.forEach(function(m){
-      var on=sel===m.id;
+      var on=!customLabel&&sel===m.id;
       h+='<div class="rmpick" data-mid="'+m.id+'" style="text-align:center;padding:8px 2px;border-radius:12px;cursor:pointer;'+(on?'background:#fbf3e5;box-shadow:0 0 0 1.5px #e0b878 inset;':'')+'">'
         +'<div style="display:flex;justify-content:center;'+(on?'transform:scale(1.06);':'')+'">'+_moodFaceSVG(m.id,34)+'</div>'
         +'<div style="font-size:8.5px;color:'+(on?'#a0763a':'#8a8474')+';margin-top:3px;font-weight:'+(on?'700':'400')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+m.label+'</div></div>';
@@ -11460,22 +11514,45 @@ function _openRecMoodPick(k,editMood,container){
     h+='</div>';
     // 한 줄 메모
     h+='<input id="rmNote" placeholder="한 줄 메모 (선택)" value="'+(editMood&&editMood.note?String(editMood.note).replace(/"/g,'&quot;'):'')+'" style="width:100%;border:none;background:#f7f6f1;border-radius:12px;padding:12px 14px;font-size:12px;color:#2b2925;outline:none;box-sizing:border-box;font-family:inherit;margin-top:14px;">';
-    h+='<button id="rmSave" style="width:100%;border:none;background:'+(sel?'#e0a54a':'#e6ddca')+';color:'+(sel?'#fff':'#b0a690')+';font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:'+(sel?'pointer':'default')+';font-family:inherit;margin-top:11px;">'+(editMood?'수정':'기록하기')+'</button>';
+    var canSave=!!(sel||customLabel);
+    h+='<button id="rmSave" style="width:100%;border:none;background:'+(canSave?'#e0a54a':'#e6ddca')+';color:'+(canSave?'#fff':'#b0a690')+';font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:'+(canSave?'pointer':'default')+';font-family:inherit;margin-top:11px;">'+(editMood?'수정':'기록하기')+'</button>';
     if(editMood){
       h+='<button id="rmDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">이 기분 삭제</button>';
     }
     sheet.innerHTML=h;
+    // 프리셋 선택
     sheet.querySelectorAll('.rmpick').forEach(function(el){
-      el.addEventListener('click',function(){sel=el.getAttribute('data-mid');draw();});
+      el.addEventListener('click',function(){sel=el.getAttribute('data-mid');customLabel='';draw();
+        setTimeout(function(){var ci=sheet.querySelector('#rmCustom');if(ci)ci.blur();},0);});
     });
+    // 직접 쓰기: 입력하면 표정 미리보기 갱신 (리렌더 없이)
+    var ci=sheet.querySelector('#rmCustom');
+    if(ci){
+      ci.addEventListener('input',function(){
+        customLabel=ci.value.trim();
+        if(customLabel)sel=null; // 커스텀 쓰면 프리셋 선택 해제
+        var pv=sheet.querySelector('#rmPrevFace');
+        if(pv)pv.innerHTML=_moodFaceSVG(customLabel?_moodFaceFor(customLabel):(sel||'meh'),28);
+        // 저장 버튼 활성화
+        var sb=sheet.querySelector('#rmSave');
+        var cs=!!(sel||customLabel);
+        if(sb){sb.style.background=cs?'#e0a54a':'#e6ddca';sb.style.color=cs?'#fff':'#b0a690';sb.style.cursor=cs?'pointer':'default';}
+        // 프리셋 하이라이트 해제
+        sheet.querySelectorAll('.rmpick').forEach(function(el){el.style.background='none';el.style.boxShadow='none';});
+      });
+    }
     var saveB=sheet.querySelector('#rmSave');
     if(saveB)saveB.addEventListener('click',function(){
-      if(!sel)return;
+      var cl=(sheet.querySelector('#rmCustom').value||'').trim();
+      var moodId,label;
+      if(cl){moodId=_moodFaceFor(cl);label=cl;}
+      else if(sel){moodId=sel;label='';}
+      else return;
       var note=(sheet.querySelector('#rmNote').value||'').trim();
       if(!_mindData.momentMoods)_mindData.momentMoods={};
       if(!_mindData.momentMoods[k])_mindData.momentMoods[k]=[];
-      if(editMood){editMood.mood=sel;editMood.note=note;}
-      else{_mindData.momentMoods[k].push({id:'mm'+Date.now(),mood:sel,time:curTime,note:note,ts:Date.now()});}
+      if(editMood){editMood.mood=moodId;editMood.label=label;editMood.note=note;}
+      else{_mindData.momentMoods[k].push({id:'mm'+Date.now(),mood:moodId,label:label,time:curTime,note:note,ts:Date.now()});}
       if(window._saveState)window._saveState();
       wrap.remove();
       renderLogPage(container);
@@ -13227,16 +13304,38 @@ var _goalFolders=[];
 var _goalDrill=[]; // 드릴다운 경로 (목표 id 스택)
 function _goalNewId(){return 'g'+Date.now()+Math.random().toString(36).slice(2,6);}
 function _goalHasSub(g){return g&&g.sub&&g.sub.length>0;}
-// 목표의 진행률 0~1 (하위가 있으면 하위 평균, 없으면 target/cur 또는 done)
-function _goalProgress(g){
+// 노드의 "무게": 잎이면 목표수(없으면 1), 부모면 하위 무게의 합
+// → 큰 목표 진행률이 실제 분량에 비례해서 계산됨 (예: 30강×3회독×10번 = 900 단위)
+function _goalWeight(g){
   if(_goalHasSub(g)){
-    var sum=0;g.sub.forEach(function(s){sum+=_goalProgress(s);});
-    return g.sub.length?sum/g.sub.length:0;
+    var w=0;g.sub.forEach(function(s){w+=_goalWeight(s);});
+    return w||1;
   }
-  if(g.target&&g.target>0)return Math.min(1,(g.cur||0)/g.target);
+  if(g.target&&g.target>0)return g.target;
+  return 1;
+}
+// 노드까지 채워진 "양" (무게 단위로)
+function _goalFilled(g){
+  if(_goalHasSub(g)){
+    var f=0;g.sub.forEach(function(s){f+=_goalFilled(s);});
+    return f;
+  }
+  if(g.target&&g.target>0)return Math.min(g.target,(g.cur||0));
   return g.done?1:0;
 }
+// 진행률 0~1 (잎의 실제 양까지 가중 반영)
+function _goalProgress(g){
+  var wt=_goalWeight(g);
+  if(!wt)return 0;
+  return Math.min(1,_goalFilled(g)/wt);
+}
 function _goalPct(g){return Math.round(_goalProgress(g)*100);}
+// 아주 작은 진행률도 0%로 안 보이게: 1자리 소수까지
+function _goalPctFine(g){
+  var p=_goalProgress(g)*100;
+  if(p>0&&p<1)return (Math.round(p*10)/10); // 0.2 같은
+  return Math.round(p);
+}
 function _goalIsDone(g){
   if(_goalHasSub(g))return g.sub.every(function(s){return _goalIsDone(s);});
   if(g.target&&g.target>0)return (g.cur||0)>=g.target;
@@ -14033,6 +14132,7 @@ function _goalListRow(g,container){
   var hasSub=_goalHasSub(g);
   var isDone=_goalIsDone(g);
   var pct=_goalPct(g);
+  var pctF=_goalPctFine(g);
   var canDrill=document.getElementById('goalFull')&&document.getElementById('goalFull').style.display!=='none';
   var starBtn='<button class="g-star" aria-label="북마크" style="border:none;background:none;cursor:pointer;padding:0 1px;line-height:1;flex-shrink:0;display:flex;align-items:center;">'+(g.star?'<svg width="12" height="12" viewBox="0 0 24 24" fill="#111" stroke="#111" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>':'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9c9c4" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>')+'</button>';
   var foldBtn='<button class="g-fold" aria-label="폴더" style="border:none;background:none;cursor:pointer;padding:0 1px;line-height:1;flex-shrink:0;"><svg width="11" height="11" viewBox="0 0 24 24" fill="'+(g.folder?'#8a7a3a':'none')+'" stroke="'+(g.folder?'#8a7a3a':'#dcdcd6')+'" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>';
@@ -14045,7 +14145,7 @@ function _goalListRow(g,container){
     // 하위가 있는 목표: 배지 요약 + 진행률 + 드릴 진입
     row.style.cssText='padding:11px 13px;background:'+(isDone?'#f4faf6':'#fff')+';border:1.5px solid '+(isDone?'#d8ecdf':'#f0f0ee')+';border-radius:12px;margin-bottom:7px;position:relative;';
     var subBadges=g.sub.slice(0,4).map(function(s){
-      var sd=_goalIsDone(s),sp=_goalPct(s);
+      var sd=_goalIsDone(s),sp=_goalPctFine(s);
       var bg=sd?'#eaf5ee':sp>0?'#fdf0ec':'#f4f3ee';
       var cl=sd?'#1a7a4a':sp>0?'#e0653e':'#a89e8c';
       var lbl=sd?(s.title+' ✓'):sp>0?(s.title+' '+sp+'%'):s.title;
@@ -14060,10 +14160,10 @@ function _goalListRow(g,container){
         +'</div>'
         +'<span style="color:#c0bcb2;font-size:11px;flex-shrink:0;margin-top:2px;">›</span>'
       +'</div>'
-      +'<div style="height:7px;background:'+(isDone?'#d8ecdf':'#f0f0ee')+';border-radius:3px;margin-top:9px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+barCol+';border-radius:3px;transition:width 0.25s;"></div></div>'
+      +'<div style="height:7px;background:'+(isDone?'#d8ecdf':'#f0f0ee')+';border-radius:3px;margin-top:9px;overflow:hidden;"><div style="height:100%;width:'+Math.max(_goalProgress(g)*100,_goalProgress(g)>0?1.5:0)+'%;background:'+barCol+';border-radius:3px;transition:width 0.25s;"></div></div>'
       +'<div style="display:flex;justify-content:space-between;margin-top:5px;align-items:center;">'
         +'<span style="font-size:8.5px;color:#a89e8c;">'+_goalDeadlineLabel(g)+_goalSubDone(g)+'/'+g.sub.length+' 완료</span>'
-        +'<span style="font-size:9px;font-weight:800;color:'+barCol+';">'+pct+'%</span>'
+        +'<span style="font-size:9px;font-weight:800;color:'+barCol+';">'+pctF+'%</span>'
       +'</div></div>'
       +'<div style="position:absolute;top:10px;right:11px;display:flex;gap:1px;align-items:center;">'+starBtn+foldBtn+xBtn+'</div>';
     var opener=row.querySelector('.g-open');
@@ -14128,6 +14228,80 @@ function _goalDeadlineLabel(g){
   var p=g.deadline.split('-');
   return '📅 '+p[1]+'월 '+p[2]+'일까지 · ';
 }
+// ── 세부 목표 카드 (A 위계: "세부 N" 라벨 + 하위 미리보기/카운터) ──
+function _goalSubCard(s,idx,container){
+  var wrap=document.createElement('div');
+  var hasSub=_goalHasSub(s);
+  var isDone=_goalIsDone(s);
+  var pctFine=_goalPctFine(s);
+  var dd=_goalDaysLeft(s);
+  var barCol=isDone?'#1a7a4a':(dd!==null&&dd<0)?'#c0392b':(dd!==null&&dd<=3)?'#e0653e':'#7a9a4a';
+  wrap.style.cssText='background:#fbfaf7;border:1px solid #ece7db;border-radius:12px;padding:11px 13px;margin:0 0 9px 0;position:relative;';
+  var starBtn='<button class="g-star" aria-label="북마크" style="border:none;background:none;cursor:pointer;padding:0 1px;line-height:1;flex-shrink:0;display:flex;align-items:center;">'+(s.star?'<svg width="11" height="11" viewBox="0 0 24 24" fill="#111" stroke="#111" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>':'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#cfcabd" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>')+'</button>';
+  var xBtn='<button class="g-del" aria-label="삭제" style="border:none;background:none;color:#ddd6c6;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">×</button>';
+  var label='<span style="font-size:8px;font-weight:800;color:#b0a690;letter-spacing:0.5px;">세부 '+idx+'</span>';
+
+  if(hasSub){
+    // 하위가 또 있는 세부: 미리보기 + 드릴
+    var leaves=s.sub.slice(0,3).map(function(c){
+      var cp=_goalPctFine(c),cd=_goalIsDone(c);
+      var cnt=(!_goalHasSub(c)&&c.target)?(' '+(c.cur||0)+'/'+c.target):'';
+      var mk=cd?'✓':(cp>0?cp+'%':'');
+      return '<span style="font-size:8.5px;color:'+(cd?'#1a7a4a':cp>0?'#c2410c':'#a89e8c')+';background:'+(cd?'#eaf5ee':cp>0?'#fdf0e6':'#f2efe6')+';border-radius:6px;padding:2px 6px;white-space:nowrap;">'+_goalEscG(c.title)+cnt+(mk?' '+mk:'')+'</span>';
+    }).join('');
+    var moreN=s.sub.length>3?('<span style="font-size:8.5px;color:#c0bcb2;padding:2px 3px;">+'+(s.sub.length-3)+'</span>'):'';
+    wrap.innerHTML='<div class="g-open" style="cursor:pointer;">'
+      +'<div style="display:flex;align-items:flex-start;gap:6px;">'
+        +'<div style="flex:1;min-width:0;">'+label
+          +'<div style="font-size:12.5px;font-weight:700;color:#2b2925;word-break:break-word;margin-top:2px;">'+_goalEscG(s.title)+_goalDdayBadge(s)+'</div>'
+          +'<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;align-items:center;">'+leaves+moreN+'</div>'
+        +'</div>'
+        +'<span style="color:#c0bcb2;font-size:11px;flex-shrink:0;margin-top:12px;">›</span>'
+      +'</div>'
+      +'<div style="height:6px;background:#f0ece0;border-radius:3px;margin-top:8px;overflow:hidden;"><div style="height:100%;width:'+Math.max(_goalProgress(s)*100,_goalProgress(s)>0?1.5:0)+'%;background:'+barCol+';border-radius:3px;"></div></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:8px;color:#b0a690;">'+_goalSubDone(s)+'/'+s.sub.length+' 완료</span><span style="font-size:10px;font-weight:800;color:'+barCol+';">'+pctFine+'%</span></div>'
+      +'</div>'
+      +'<div style="position:absolute;top:9px;right:10px;display:flex;gap:2px;align-items:center;">'+starBtn+xBtn+'</div>';
+    wrap.querySelector('.g-open').addEventListener('click',function(e){e.stopPropagation();_goalDrill.push(s.id);rerenderGoalPage();});
+  }else if(s.target){
+    // 잎 + 숫자: 인라인 카운터
+    var cnt=s.cur||0;
+    wrap.innerHTML='<div style="display:flex;align-items:center;gap:9px;">'
+      +'<div class="g-open" style="flex:1;min-width:0;cursor:pointer;">'+label
+        +'<div style="font-size:12.5px;font-weight:700;color:#2b2925;word-break:break-word;margin-top:2px;">'+_goalEscG(s.title)+_goalDdayBadge(s)+'</div>'
+        +'<div style="height:6px;background:#f0ece0;border-radius:3px;margin-top:7px;overflow:hidden;"><div style="height:100%;width:'+Math.min(100,Math.round(cnt/s.target*100))+'%;background:'+barCol+';border-radius:3px;"></div></div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">'
+        +'<button class="gc-minus" style="width:30px;height:30px;border-radius:50%;border:1.5px solid #e6ddca;background:#fff;font-size:16px;color:#8a7d68;cursor:pointer;line-height:1;">−</button>'
+        +'<span style="font-size:11px;font-weight:800;color:#b06a2a;min-width:34px;text-align:center;">'+cnt+'/'+s.target+'</span>'
+        +'<button class="gc-plus" style="width:30px;height:30px;border-radius:50%;border:none;background:#c2410c;color:#fff;font-size:18px;cursor:pointer;line-height:1;">+</button>'
+      +'</div>'
+      +starBtn+xBtn+'</div>';
+    wrap.querySelector('.gc-plus').addEventListener('click',function(e){e.stopPropagation();s.cur=Math.min(s.target,(s.cur||0)+1);if(s.cur>=s.target)s.done=true;if(window._saveState)window._saveState();rerenderGoalPage();});
+    wrap.querySelector('.gc-minus').addEventListener('click',function(e){e.stopPropagation();s.cur=Math.max(0,(s.cur||0)-1);s.done=false;if(window._saveState)window._saveState();rerenderGoalPage();});
+    wrap.querySelector('.g-open').addEventListener('click',function(e){e.stopPropagation();_goalDrill.push(s.id);rerenderGoalPage();});
+  }else{
+    // 잎 + 체크
+    wrap.innerHTML='<div style="display:flex;align-items:center;gap:9px;">'
+      +'<div class="g-check" style="width:20px;height:20px;border-radius:50%;border:1.8px solid '+(s.done?'#1a7a4a':'#d5cdb8')+';background:'+(s.done?'#1a7a4a':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">'+(s.done?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':'')+'</div>'
+      +'<div class="g-open" style="flex:1;min-width:0;cursor:pointer;">'+label
+        +'<div style="font-size:12.5px;font-weight:700;color:'+(s.done?'#3d8a5f':'#2b2925')+';'+(s.done?'text-decoration:line-through;':'')+'word-break:break-word;margin-top:2px;">'+_goalEscG(s.title)+_goalDdayBadge(s)+'</div>'
+      +'</div>'
+      +'<span class="g-open" style="color:#c0bcb2;font-size:11px;flex-shrink:0;cursor:pointer;">›</span>'
+      +starBtn+xBtn+'</div>';
+    wrap.querySelector('.g-check').addEventListener('click',function(e){e.stopPropagation();s.done=!s.done;if(window._saveState)window._saveState();rerenderGoalPage();});
+    wrap.querySelectorAll('.g-open').forEach(function(op){op.addEventListener('click',function(e){e.stopPropagation();_goalDrill.push(s.id);rerenderGoalPage();});});
+  }
+  // 공통: 별표 / 삭제
+  var st=wrap.querySelector('.g-star');
+  if(st)st.addEventListener('click',function(e){e.stopPropagation();s.star=!s.star;if(window._saveState)window._saveState();rerenderGoalPage();});
+  wrap.querySelector('.g-del').addEventListener('click',function(e){
+    e.stopPropagation();
+    var lst=_goalCurrentList();var ix=lst.indexOf(s);if(ix>=0)lst.splice(ix,1);
+    if(window._saveState)window._saveState();rerenderGoalPage();
+  });
+  return wrap;
+}
 // ── 드릴다운 화면: 목표 안으로 들어간 상태 ──
 function _goalRenderDrill(container,list){
   var node=_goalByPath(_goalDrill);
@@ -14147,21 +14321,32 @@ function _goalRenderDrill(container,list){
   }).join(' <span style="color:#c0bcb2;">▸</span> ');
   list.appendChild(crumbEl);
 
-  // 현재 목표 요약 카드
-  var pct=_goalPct(node);
+  // 현재 목표 = 큰 목표 카드 (A 위계: 검은 테두리 + 라벨)
+  var pctFine=_goalPctFine(node);
   var dd=_goalDaysLeft(node);
-  var barCol=_goalIsDone(node)?'#1a7a4a':(dd!==null&&dd<0)?'#c0392b':(dd!==null&&dd<=3)?'#e0653e':'#111';
+  var barCol=_goalIsDone(node)?'#1a7a4a':(dd!==null&&dd<0)?'#c0392b':(dd!==null&&dd<=3)?'#e0653e':'#c2410c';
   var head=document.createElement('div');
-  head.style.cssText='background:#fbfaf7;border:1px solid #f0ede6;border-radius:13px;padding:13px;margin-bottom:14px;';
+  head.style.cssText='background:#fff;border:1.5px solid #17150f;border-radius:15px;padding:14px 15px;margin-bottom:14px;';
   var subDoneN=_goalSubDone(node);
-  head.innerHTML='<div style="display:flex;align-items:flex-start;gap:8px;">'
-    +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#111;word-break:break-word;">'+_goalEscG(node.title)+_goalDdayBadge(node)+'</div>'
-    +'<div style="font-size:9.5px;color:#9a948a;margin-top:3px;">'+_goalDeadlineLabel(node)+(node.sub.length?(subDoneN+'/'+node.sub.length+' 완료'):'하위 목표를 추가해보세요')+'</div></div>'
+  var wt=_goalWeight(node),fl=Math.round(_goalFilled(node)*10)/10;
+  var amountTxt=node.sub.length?('총 '+wt+' 중 '+fl):(node.target?((node.cur||0)+' / '+node.target+(node.unit||'')):'');
+  head.innerHTML='<div style="font-size:8.5px;font-weight:800;color:#b06a2a;letter-spacing:1px;margin-bottom:5px;">◆ 큰 목표</div>'
+    +'<div style="display:flex;align-items:flex-start;gap:8px;">'
+    +'<div style="flex:1;min-width:0;"><div class="gbig-title" style="font-size:15px;font-weight:800;color:#17150f;word-break:break-word;cursor:text;outline:none;">'+_goalEscG(node.title)+'</div>'
+    +(node.deadline||node.sub.length?'<div style="font-size:9.5px;color:#9a948a;margin-top:3px;">'+_goalDeadlineLabel(node)+(node.sub.length?(subDoneN+'/'+node.sub.length+' 세부 완료'):'')+_goalDdayBadge(node)+'</div>':'')
+    +'</div>'
     +'<span class="gd-cfg" style="font-size:14px;cursor:pointer;color:#c0bcb2;flex-shrink:0;">⚙️</span></div>'
-    +(node.sub.length?'<div style="height:7px;background:#f0f0ee;border-radius:3px;margin-top:10px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+barCol+';border-radius:3px;"></div></div>'
-      +'<div style="text-align:right;font-size:9px;font-weight:800;color:'+barCol+';margin-top:4px;">'+pct+'%</div>':'');
+    +(node.sub.length?'<div style="height:9px;background:#f0ece0;border-radius:5px;margin-top:11px;overflow:hidden;"><div style="height:100%;width:'+Math.max(_goalProgress(node)*100,_goalProgress(node)>0?1.5:0)+'%;background:linear-gradient(90deg,#e0913e,'+barCol+');border-radius:5px;"></div></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:6px;"><span style="font-size:9.5px;color:#9a948a;">'+amountTxt+'</span><span style="font-size:11px;font-weight:800;color:'+barCol+';">'+pctFine+'%</span></div>':'');
   list.appendChild(head);
   head.querySelector('.gd-cfg').addEventListener('click',function(e){e.stopPropagation();_goalDetailSheet(node,function(){rerenderGoalPage();});});
+  // 큰 목표 제목 인라인 수정
+  var gbt=head.querySelector('.gbig-title');
+  if(gbt){
+    gbt.addEventListener('click',function(e){e.stopPropagation();if(gbt.isContentEditable)return;gbt.contentEditable='true';gbt.focus();try{document.execCommand('selectAll',false,null);}catch(_){}});
+    gbt.addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Enter'){e.preventDefault();gbt.blur();}});
+    gbt.addEventListener('blur',function(){gbt.contentEditable='false';var nt=((gbt.innerText!=null?gbt.innerText:gbt.textContent)||'').trim();if(nt&&nt!==node.title){node.title=nt;if(window._saveState)window._saveState();rerenderGoalPage();}else gbt.textContent=node.title;});
+  }
 
   // 자동 분배 제안 (마감 + 하위 있고, 하위에 마감 없는 게 있을 때, "나중에" 안 누른 경우)
   if(node.deadline&&node.sub.length&&!node._distDismiss){
@@ -14214,11 +14399,11 @@ function _goalRenderDrill(container,list){
     });
   }
 
-  // 하위 목표 목록
+  // 하위 목표 목록 (세부 1, 세부 2 … A 위계)
   if(node.sub.length){
-    var hd=document.createElement('div');hd.style.cssText='font-size:11px;font-weight:700;color:#8a8474;margin-bottom:9px;';hd.textContent='하위 목표';
+    var hd=document.createElement('div');hd.style.cssText='font-size:9px;font-weight:800;color:#b0a690;letter-spacing:1px;margin:2px 2px 10px;';hd.textContent='세부 목표 '+node.sub.length+'개';
     list.appendChild(hd);
-    node.sub.forEach(function(s){list.appendChild(_goalListRow(s,container));});
+    node.sub.forEach(function(s,si){list.appendChild(_goalSubCard(s,si+1,container));});
   }
 
   container.appendChild(list);
