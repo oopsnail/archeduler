@@ -9662,6 +9662,7 @@ function _mindRenderMood(body){
         var mid=c.getAttribute('data-mid');
         if(!_mindData.moods[todayKey])_mindData.moods[todayKey]={};
         _mindData.moods[todayKey].mood=mid;
+        _mindData.moods[todayKey].set=_moodSet;
         if(window._saveState)window._saveState();rerenderMindPage();
       });
     });
@@ -9773,7 +9774,7 @@ function _mindRenderMood(body){
     var bars=days.map(function(d){
       var e=_mindData.moods[_mindKey(d)];var m=e&&e.mood?_moodById(e.mood):null;
       var isToday=_mindKey(d)===todayKey;
-      return '<div style="flex:1;text-align:center;"><div style="height:60px;display:flex;align-items:flex-end;justify-content:center;"><div style="width:20px;height:'+(m?'54px':'8px')+';border-radius:7px;background:'+(m?'#d8b878':'#e5ded0')+';"></div></div><div style="margin-top:5px;display:flex;justify-content:center;height:20px;align-items:center;">'+(m?_moodFaceSVG(m.id,20):'<span style="color:#c9c0ae;">·</span>')+'</div><div style="font-size:9px;color:'+(isToday?'#2d2920':'#b0a690')+';font-weight:'+(isToday?'700':'400')+';margin-top:2px;">'+DOW[d.getDay()]+'</div></div>';
+      return '<div style="flex:1;text-align:center;"><div style="height:60px;display:flex;align-items:flex-end;justify-content:center;"><div style="width:20px;height:'+(m?'54px':'8px')+';border-radius:7px;background:'+(m?'#d8b878':'#e5ded0')+';"></div></div><div style="margin-top:5px;display:flex;justify-content:center;height:20px;align-items:center;">'+(m?_moodFaceSVG(m.id,20,e.set):'<span style="color:#c9c0ae;">·</span>')+'</div><div style="font-size:9px;color:'+(isToday?'#2d2920':'#b0a690')+';font-weight:'+(isToday?'700':'400')+';margin-top:2px;">'+DOW[d.getDay()]+'</div></div>';
     }).join('');
     statCard.innerHTML='<div style="font-size:14px;color:#2d2920;font-weight:700;margin-bottom:14px;">이번 주 마음 흐름</div><div style="display:flex;gap:4px;">'+bars+'</div>';
   }
@@ -9790,7 +9791,7 @@ function _mindRenderMood(body){
       var r=document.createElement('div');
       r.style.cssText='display:flex;align-items:center;gap:11px;background:#fbf9f4;border-radius:14px;padding:12px 14px;margin-bottom:7px;position:relative;cursor:pointer;';
       var noteHTML=(e.note&&!collapsed)?'<div style="font-size:11px;color:#a89e8c;margin-top:2px;">'+e.note+'</div>':(e.note&&collapsed)?'<div style="font-size:11px;color:#a89e8c;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.note+'</div>':'';
-      r.innerHTML='<span style="display:flex;flex-shrink:0;">'+_moodFaceSVG(m.id,30)+'</span>'
+      r.innerHTML='<span style="display:flex;flex-shrink:0;">'+_moodFaceSVG(m.id,30,e.set)+'</span>'
         +'<div style="flex:1;min-width:0;padding-right:20px;"><div style="font-size:12px;color:#2d2920;font-weight:600;">'+m.label+'</div>'+noteHTML+'</div>'
         +'<span style="font-size:10px;color:#b0a690;flex-shrink:0;">'+(pp[1])+'.'+(pp[2])+'</span>';
       // ⋮ 메뉴
@@ -11341,6 +11342,39 @@ var LOG_EMOJIS = [
   ['쇼핑','구매','샀'], '🛍',
 ];
 
+// 기록용 이모지 선택 시트
+var _LOG_EMOJI_PICK=[
+  ['일상','📝','💧','🍽','☕','😴','🚿','🧹','🛒','💊','🌙','☀️','🛏'],
+  ['활동','💪','🏃','🚶','🧘','🚴','🏊','⚽','🎾','🥾','🏋️'],
+  ['공부·일','📚','✏️','💻','💼','📖','🎓','📝','🧠','📊','✒️'],
+  ['취미','🎮','🎬','📺','🎵','🎨','📷','🎸','🎯','🧩','🎧'],
+  ['사람·감정','👥','❤️','🎉','☕','🍻','💬','🤝','🥳','😊','🙏'],
+  ['음식','🍚','🍜','🍔','🍕','🥗','🍎','🍰','🍫','🍺','🧋'],
+  ['건강·기타','🏥','🧴','💤','🌱','🐾','✈️','🚗','💰','⭐','✅']
+];
+function _logEmojiPicker(onPick){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('logEmojiSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='logEmojiSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:70%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:16px 14px 24px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;scrollbar-width:none;';
+  var h='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 12px;"></div>';
+  h+='<div style="font-size:13px;font-weight:800;color:#111;padding:0 4px 10px;">이모지 선택</div>';
+  _LOG_EMOJI_PICK.forEach(function(cat){
+    h+='<div style="font-size:9px;font-weight:800;color:#b0a690;letter-spacing:0.5px;margin:8px 4px 6px;">'+cat[0]+'</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;">';
+    for(var i=1;i<cat.length;i++){
+      h+='<button class="lep" data-em="'+cat[i]+'" style="border:none;background:#faf8f3;border-radius:11px;padding:9px 0;font-size:22px;cursor:pointer;line-height:1;">'+cat[i]+'</button>';
+    }
+    h+='</div>';
+  });
+  sheet.innerHTML=h;
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelectorAll('.lep').forEach(function(b){b.addEventListener('click',function(){var em=b.getAttribute('data-em');wrap.remove();onPick(em);});});
+}
 function guessEmoji(text){
   for(var i=0;i<LOG_EMOJIS.length;i+=2){
     var keywords=LOG_EMOJIS[i];
@@ -11419,7 +11453,7 @@ function _recMoodBar(k,container){
   moods.forEach(function(m){
     var chip=document.createElement('span');
     chip.style.cssText='position:relative;display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;';
-    chip.innerHTML='<span style="width:28px;height:28px;border-radius:50%;border:1px solid #f0e9dd;background:#fff;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,20)+'</span>'
+    chip.innerHTML='<span style="width:28px;height:28px;border-radius:50%;border:1px solid #f0e9dd;background:#fff;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,20,m.set)+'</span>'
       +'<span style="font-size:6.5px;color:#b0a690;margin-top:2px;">'+(m.time||'')+'</span>';
     _bindMoodChip(chip,k,m,container);
     wrap.appendChild(chip);
@@ -11524,7 +11558,7 @@ function _openRecMoodNote(k,m,container){
   sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
   sheet.innerHTML='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>'
     +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:13px;">'
-      +'<span style="width:34px;height:34px;border-radius:50%;border:1px solid #f0e9dd;background:#fbfaf7;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,24)+'</span>'
+      +'<span style="width:34px;height:34px;border-radius:50%;border:1px solid #f0e9dd;background:#fbfaf7;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,24,m.set)+'</span>'
       +'<div><div style="font-size:13px;font-weight:800;color:#2b2925;">'+_escMoodNote((m.label&&m.label.trim())?m.label.trim():((_MOODS.find(function(x){return x.id===m.mood;})||{label:''}).label))+'</div>'
       +'<div style="font-size:10px;color:#a89e8c;">'+(m.time||'')+'</div></div></div>'
     +'<input id="rmnNote" placeholder="이 순간의 메모" value="'+(m.note?_escMoodNote(m.note).replace(/"/g,'&quot;'):'')+'" style="width:100%;border:none;background:#f7f6f1;border-radius:12px;padding:12px 14px;font-size:12px;color:#2b2925;outline:none;box-sizing:border-box;font-family:inherit;">'
@@ -11624,8 +11658,8 @@ function _openRecMoodPick(k,editMood,container){
       var note=(sheet.querySelector('#rmNote').value||'').trim();
       if(!_mindData.momentMoods)_mindData.momentMoods={};
       if(!_mindData.momentMoods[k])_mindData.momentMoods[k]=[];
-      if(editMood){editMood.mood=moodId;editMood.label=label;editMood.note=note;}
-      else{_mindData.momentMoods[k].push({id:'mm'+Date.now(),mood:moodId,label:label,time:curTime,note:note,ts:Date.now()});}
+      if(editMood){editMood.mood=moodId;editMood.label=label;editMood.note=note;editMood.set=_moodSet;}
+      else{_mindData.momentMoods[k].push({id:'mm'+Date.now(),mood:moodId,label:label,time:curTime,note:note,ts:Date.now(),set:_moodSet});}
       if(window._saveState)window._saveState();
       wrap.remove();
       renderLogPage(container);
@@ -11693,7 +11727,7 @@ function renderLogPage(container){
       content.style.cssText='flex:1;padding:6px 0 12px;';
       content.innerHTML=
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
-          '<span style="font-size:16px;">'+log.emoji+'</span>'+
+          '<span class="log-emoji" style="font-size:16px;cursor:pointer;line-height:1;" title="탭해서 이모지 변경">'+log.emoji+'</span>'+
           '<span class="log-txt" style="font-size:12px;font-weight:600;color:#111;outline:none;min-width:40px;word-break:break-word;">'+log.text+'</span>'+
         '</div>'+
         '<div class="log-time" style="font-size:10px;color:#85857f;cursor:pointer;-webkit-user-select:none;user-select:none;" title="탭해서 시간 수정">'+timeLabel+'</div>';
@@ -11728,9 +11762,15 @@ function renderLogPage(container){
         txtEl.contentEditable='false';
         var nt=((txtEl.innerText!=null?txtEl.innerText:txtEl.textContent)||'').trim();
         if(!nt){_dailyLogs[k].splice(i,1);}
-        else{var nd=_logDuration(nt);if(nd!=null)log.dur=nd;log.text=_logStripDur(nt);log.emoji=guessEmoji(nt);}
+        else{var nd=_logDuration(nt);if(nd!=null)log.dur=nd;log.text=_logStripDur(nt);if(!log.emojiManual)log.emoji=guessEmoji(nt);}
         renderLogPage(container);
         try{var bc=document.getElementById('budgetCard');if(bc)renderBudgetPage(bc);}catch(e2){}
+      });
+      // 이모지 탭 → 선택 시트
+      var emEl=content.querySelector('.log-emoji');
+      if(emEl)emEl.addEventListener('click',function(e){
+        e.stopPropagation();
+        _logEmojiPicker(function(em){log.emoji=em;log.emojiManual=true;if(window._saveState)window._saveState();renderLogPage(container);});
       });
 
       // 삭제 버튼
