@@ -13327,7 +13327,7 @@ function _goalDetailSheet(g,onDone){
     var h='<div style="width:36px;height:4px;border-radius:2px;background:#e2e2de;margin:0 auto 14px;"></div>';
     h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">'
       +'<div class="gd-back" style="cursor:pointer;color:#666;font-size:20px;line-height:1;">‹</div>'
-      +'<div style="flex:1;font-size:14px;font-weight:800;color:#111;word-break:break-word;">'+g.title+'</div>'
+      +'<div class="gd-title" style="flex:1;font-size:14px;font-weight:800;color:#111;word-break:break-word;cursor:text;outline:none;" title="탭해서 제목 수정">'+_goalEscG(g.title)+'</div>'
       +'<div class="gd-del" style="cursor:pointer;color:#c9c5bb;font-size:16px;" title="삭제">🗑</div></div>';
     // 진행 링 + 숫자
     h+='<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">'
@@ -13359,6 +13359,22 @@ function _goalDetailSheet(g,onDone){
     h+='<div class="gd-memo" style="padding:12px 0 0;cursor:pointer;"><div style="font-size:12px;color:#85857f;display:flex;align-items:center;gap:9px;margin-bottom:5px;">📝 메모</div><div style="font-size:11px;color:'+(g.memo?'#333':'#c8c3b8')+';line-height:1.5;">'+(g.memo||'탭해서 메모 추가…')+'</div></div>';
     sheet.innerHTML=h;
     sheet.querySelector('.gd-back').addEventListener('click',close);
+    var gdTitle=sheet.querySelector('.gd-title');
+    if(gdTitle){
+      gdTitle.addEventListener('click',function(e){
+        e.stopPropagation();
+        if(gdTitle.isContentEditable)return;
+        gdTitle.contentEditable='true';gdTitle.focus();
+        try{document.execCommand('selectAll',false,null);}catch(_){}
+      });
+      gdTitle.addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Enter'){e.preventDefault();gdTitle.blur();}});
+      gdTitle.addEventListener('blur',function(){
+        gdTitle.contentEditable='false';
+        var nt=((gdTitle.innerText!=null?gdTitle.innerText:gdTitle.textContent)||'').trim();
+        if(nt&&nt!==g.title){g.title=nt;if(window._saveState)window._saveState();if(onDone)onDone();}
+        else{gdTitle.textContent=g.title;}
+      });
+    }
     sheet.querySelector('.gd-del').addEventListener('click',function(){
       var idx=_goals.indexOf(g);if(idx>=0)_goals.splice(idx,1);close();if(onDone)onDone();
     });
@@ -14147,8 +14163,8 @@ function _goalRenderDrill(container,list){
   list.appendChild(head);
   head.querySelector('.gd-cfg').addEventListener('click',function(e){e.stopPropagation();_goalDetailSheet(node,function(){rerenderGoalPage();});});
 
-  // 자동 분배 제안 (마감 + 하위 있고, 하위에 마감 없는 게 있을 때)
-  if(node.deadline&&node.sub.length){
+  // 자동 분배 제안 (마감 + 하위 있고, 하위에 마감 없는 게 있을 때, "나중에" 안 누른 경우)
+  if(node.deadline&&node.sub.length&&!node._distDismiss){
     var plan=_goalDistribute(node);
     var anyNoDeadline=node.sub.some(function(s){return !s.deadline&&!_goalIsDone(s);});
     if(plan&&anyNoDeadline){
@@ -14170,7 +14186,7 @@ function _goalRenderDrill(container,list){
         rerenderGoalPage();
       });
       sug.querySelector('.gd-dist-x').addEventListener('click',function(){
-        node._distDismiss=true;rerenderGoalPage();
+        node._distDismiss=true;if(window._saveState)window._saveState();rerenderGoalPage();
       });
     }
   }
