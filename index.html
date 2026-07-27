@@ -3557,7 +3557,23 @@ function _moodFaceFor(word){
   return 'meh';
 }
 // 라인 아이콘 감정 표정 (색 없음, 원 테두리 + 표정선)
-function _moodFaceSVG(id,size){
+// ===== 감정 이모지 세트 시스템 (카톡 이모티콘처럼 여러 스타일) =====
+// 현재 선택된 세트 id (기분 찍을 때 사용). 저장/복원됨.
+var _moodSet='line';
+// 세트 목록: {id, name, rep(대표 표정 id로 썸네일)}
+var _MOOD_SETS=[
+  {id:'line', name:'선 아이콘', rep:'happy'},
+  {id:'pastel', name:'파스텔', rep:'happy'}
+];
+function _moodSetById(sid){return _MOOD_SETS.find(function(s){return s.id===sid;})||_MOOD_SETS[0];}
+// 세트별 표정 렌더 라우터
+function _moodFaceSVG(id,size,setId){
+  var sid=setId||_moodSet||'line';
+  if(sid==='pastel')return _moodFacePastel(id,size);
+  return _moodFaceLine(id,size);
+}
+// ── 세트: 선 아이콘 (기본) ──
+function _moodFaceLine(id,size){
   var s=size||46;var INK='#3a352c';
   var P={
     happy:'<path d="M15 19 q2 -2.5 4 0" /><path d="M27 19 q2 -2.5 4 0" /><path d="M15 27 q8 7 16 0" />',
@@ -3588,7 +3604,48 @@ function _moodFaceSVG(id,size){
   var parts=P[id]||P.meh;
   return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 46 46" fill="none" stroke="'+INK+'" stroke-width="1.6" stroke-linecap="round"><circle cx="23" cy="23" r="20"/>'+parts+'</svg>';
 }
-var _BUCKET_CATS=[['travel','✈️','여행'],['learn','📚','배움'],['exp','🌟','경험'],['etc','🌱','기타']];
+// ── 세트: 파스텔 (감정별 색 채운 원 + 표정선) ──
+function _moodFacePastel(id,size){
+  var s=size||46;var INK='#5a5346';
+  // 감정별 파스텔 배경색
+  var BG={
+    happy:'#ffe08a',excited:'#ffd9a0',wonderful:'#c9e8c2',joyful:'#ffe08a',love:'#f6c9cf',
+    calm:'#bfe3d6',blessed:'#d9e6bd',confident:'#ffd9a0',cool:'#bcd6ea',refreshed:'#c2e8e0',
+    wonder:'#d8c9ea',inspired:'#ffe0b0',meh:'#c2e0dc',bored:'#d6d2c6',tired:'#c8d3df',
+    sleepy:'#f0e6b0',worried:'#c8d3df',anxious:'#d8c9ea',down:'#b8c4d4',sad:'#c0d2e6',
+    hurt:'#f6c9cf',angry:'#f6b0b0',ill:'#c9e0b8',hard:'#d0c4dc'
+  };
+  var P={
+    happy:'<path d="M15 19 q2 -2.5 4 0" /><path d="M27 19 q2 -2.5 4 0" /><path d="M15 27 q8 7 16 0" />',
+    excited:'<circle cx="17" cy="20" r="1.6" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.6" fill="'+INK+'" stroke="none"/><ellipse cx="23" cy="29" rx="4" ry="5"/>',
+    wonderful:'<path d="M13 18 q3 -3 6 0" /><path d="M27 18 q3 -3 6 0" /><path d="M15 26 q8 8 16 0" />',
+    joyful:'<path d="M14 19 q2.5 -3 5 0" /><path d="M27 19 q2.5 -3 5 0" /><path d="M15 27 q8 6 16 0" /><circle cx="14" cy="26" r="1.7" fill="#e79aa0" stroke="none" opacity="0.6"/><circle cx="32" cy="26" r="1.7" fill="#e79aa0" stroke="none" opacity="0.6"/>',
+    love:'<path d="M13 19 q2 -3 4 0 q2 -3 4 0 q0 3 -4 5.5 q-4 -2.5 -4 -5.5" fill="#e26d78" stroke="none"/><path d="M25 19 q2 -3 4 0 q2 -3 4 0 q0 3 -4 5.5 q-4 -2.5 -4 -5.5" fill="#e26d78" stroke="none"/><path d="M17 28 q6 5 12 0" />',
+    calm:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M17 28 q6 4 12 0" /><circle cx="13" cy="25" r="1.8" fill="#e79aa0" stroke="none" opacity="0.5"/><circle cx="33" cy="25" r="1.8" fill="#e79aa0" stroke="none" opacity="0.5"/>',
+    blessed:'<path d="M14 21 q2.5 -2 5 0" /><path d="M27 21 q2.5 -2 5 0" /><path d="M17 28 q6 4 12 0" /><path d="M15 12 q8 -3 16 0" opacity="0.5"/>',
+    confident:'<path d="M14 19 q2.5 -2 5 0" /><path d="M27 19 q2.5 -2 5 0" /><path d="M16 27 q7 4 14 0" />',
+    cool:'<rect x="12" y="17" width="8" height="5" rx="2" fill="'+INK+'" stroke="none"/><rect x="26" y="17" width="8" height="5" rx="2" fill="'+INK+'" stroke="none"/><line x1="20" y1="19" x2="26" y2="19"/><path d="M17 29 h12" stroke-linecap="round"/>',
+    refreshed:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M17 27 q6 5 12 0" /><path d="M23 9 v3 M18 10 l1.5 2.5 M28 10 l-1.5 2.5" opacity="0.5"/>',
+    wonder:'<circle cx="17" cy="20" r="1.6" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.6" fill="'+INK+'" stroke="none"/><circle cx="23" cy="29" r="2.5"/>',
+    inspired:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M17 27 q6 4 12 0" /><circle cx="31" cy="11" r="2.5" fill="#f0c04a" stroke="none"/>',
+    meh:'<circle cx="17" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><line x1="16" y1="28" x2="30" y2="28" stroke-linecap="round"/>',
+    bored:'<path d="M14 20 h5" stroke-linecap="round"/><path d="M27 20 h5" stroke-linecap="round"/><line x1="17" y1="29" x2="29" y2="29" stroke-linecap="round"/>',
+    tired:'<path d="M14 21 h5" stroke-linecap="round"/><path d="M27 21 h5" stroke-linecap="round"/><circle cx="23" cy="30" r="2.5"/>',
+    sleepy:'<path d="M14 21 q2.5 2 5 0" /><path d="M27 21 q2.5 2 5 0" /><path d="M20 29 h6" stroke-linecap="round"/><path d="M30 13 h4 l-4 4 h4" stroke-width="1.2" opacity="0.6"/>',
+    worried:'<path d="M14 18 q2.5 -1.5 5 0" /><path d="M27 18 q2.5 -1.5 5 0" /><circle cx="17" cy="22" r="1.4" fill="'+INK+'" stroke="none"/><circle cx="29" cy="22" r="1.4" fill="'+INK+'" stroke="none"/><path d="M17 30 q6 -3 12 0" />',
+    anxious:'<path d="M14 19 l5 2" stroke-linecap="round"/><path d="M32 19 l-5 2" stroke-linecap="round"/><path d="M16 29 q3 -3 6.5 0 q3.5 3 6.5 0" />',
+    down:'<path d="M14 22 q2.5 2 5 0" /><path d="M27 22 q2.5 2 5 0" /><path d="M17 30 q6 -4 12 0" />',
+    sad:'<circle cx="17" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><circle cx="29" cy="20" r="1.5" fill="'+INK+'" stroke="none"/><path d="M17 30 q6 -5 12 0" /><path d="M15 24 q-1 3 0 5" stroke="#6bb3e0" opacity="0.7"/>',
+    hurt:'<path d="M14 19 l5 3 l-5 0" stroke-linejoin="round"/><path d="M32 19 l-5 3 l5 0" stroke-linejoin="round"/><path d="M17 30 q6 -4 12 0" />',
+    angry:'<path d="M14 17 l6 3" stroke-linecap="round"/><path d="M32 17 l-6 3" stroke-linecap="round"/><circle cx="18" cy="23" r="1.4" fill="'+INK+'" stroke="none"/><circle cx="28" cy="23" r="1.4" fill="'+INK+'" stroke="none"/><path d="M16 31 q7 -5 14 0" />',
+    ill:'<path d="M14 20 q2.5 -2 5 0" /><path d="M27 20 q2.5 -2 5 0" /><path d="M16 29 q3 2 6 0 q3 -2 6 0" /><path d="M31 20 q2 3 0 5" stroke="#8ab86a" opacity="0.7"/>',
+    hard:'<path d="M14 18 l5 3" stroke-linecap="round"/><path d="M32 18 l-5 3" stroke-linecap="round"/><path d="M16 29 q3 3 6.5 0 q3.5 -3 6.5 0" />'
+  };
+  var bg=BG[id]||'#e0ddd2';
+  var parts=P[id]||P.meh;
+  // 살짝 진한 테두리색(배경색보다 어둡게 느껴지도록 INK 원 테두리)
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 46 46"><circle cx="23" cy="23" r="20" fill="'+bg+'" stroke="'+INK+'" stroke-width="1.6"/><g fill="none" stroke="'+INK+'" stroke-width="1.6" stroke-linecap="round">'+parts+'</g></svg>';
+}
 var _MIND_QUOTES=[
   '지금 이 순간, 당신은 충분히 잘하고 있어요',
   '숨을 고르는 것만으로도 괜찮아져요',
@@ -11503,12 +11560,24 @@ function _openRecMoodPick(k,editMood,container){
       +'<span id="rmPrevFace" style="width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:50%;border:1px solid #ece4d4;">'+_moodFaceSVG(previewId,28)+'</span>'
       +'<input id="rmCustom" placeholder="감정을 직접 써도 돼요 (예: 멜랑꼴리)" value="'+(customLabel?String(customLabel).replace(/"/g,'&quot;'):'')+'" style="flex:1;min-width:0;border:none;background:none;font-size:13px;font-weight:600;color:#2b2925;outline:none;font-family:inherit;">'
       +'</div>';
-    h+='<div style="font-size:9px;color:#b0a690;font-weight:700;letter-spacing:0.5px;margin-bottom:8px;">또는 골라보세요</div>';
+    // 이모지 세트 탭 (카톡 이모티콘처럼: 대표 아이콘 → 그 세트 펼침)
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+    h+='<span style="font-size:9px;color:#b0a690;font-weight:700;letter-spacing:0.5px;">또는 골라보세요</span>';
+    if(_MOOD_SETS.length>1){
+      h+='<div style="display:flex;gap:5px;">';
+      _MOOD_SETS.forEach(function(st){
+        var on=_moodSet===st.id;
+        h+='<button class="rmset" data-sid="'+st.id+'" title="'+st.name+'" style="width:32px;height:32px;border-radius:9px;border:none;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;background:'+(on?'#fbf3e5':'#f0ece0')+';box-shadow:'+(on?'0 0 0 1.5px #e0b878 inset':'none')+';">'
+          +'<span style="display:flex;">'+_moodFaceSVG(st.rep,22,st.id)+'</span></button>';
+      });
+      h+='</div>';
+    }
+    h+='</div>';
     h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;">';
     _MOODS.forEach(function(m){
       var on=!customLabel&&sel===m.id;
       h+='<div class="rmpick" data-mid="'+m.id+'" style="text-align:center;padding:8px 2px;border-radius:12px;cursor:pointer;'+(on?'background:#fbf3e5;box-shadow:0 0 0 1.5px #e0b878 inset;':'')+'">'
-        +'<div style="display:flex;justify-content:center;'+(on?'transform:scale(1.06);':'')+'">'+_moodFaceSVG(m.id,34)+'</div>'
+        +'<div style="display:flex;justify-content:center;'+(on?'transform:scale(1.06);':'')+'">'+_moodFaceSVG(m.id,34,_moodSet)+'</div>'
         +'<div style="font-size:8.5px;color:'+(on?'#a0763a':'#8a8474')+';margin-top:3px;font-weight:'+(on?'700':'400')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+m.label+'</div></div>';
     });
     h+='</div>';
@@ -11520,6 +11589,10 @@ function _openRecMoodPick(k,editMood,container){
       h+='<button id="rmDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">이 기분 삭제</button>';
     }
     sheet.innerHTML=h;
+    // 세트 전환
+    sheet.querySelectorAll('.rmset').forEach(function(el){
+      el.addEventListener('click',function(){_moodSet=el.getAttribute('data-sid');if(window._saveState)window._saveState();draw();});
+    });
     // 프리셋 선택
     sheet.querySelectorAll('.rmpick').forEach(function(el){
       el.addEventListener('click',function(){sel=el.getAttribute('data-mid');customLabel='';draw();
@@ -13313,15 +13386,17 @@ function _goalTierLabel(depth,num){
 }
 // 노드의 "무게": 잎이면 목표수(없으면 1), 부모면 하위 무게의 합
 // → 큰 목표 진행률이 실제 분량에 비례해서 계산됨 (예: 30강×3회독×10번 = 900 단위)
+// 노드의 "무게": max(자기 목표량, 자식 무게 합)
+// → 설계 "책100" 아래 작업 "책10" 하나만 있어도, 설계 무게는 100으로 잡혀
+//    청사진(1000) 기준 진행률이 실제 분량대로 작게 나옴
 function _goalWeight(g){
-  if(_goalHasSub(g)){
-    var w=0;g.sub.forEach(function(s){w+=_goalWeight(s);});
-    return w||1;
-  }
-  if(g.target&&g.target>0)return g.target;
-  return 1;
+  var childSum=0;
+  if(_goalHasSub(g))g.sub.forEach(function(s){childSum+=_goalWeight(s);});
+  var own=(g.target&&g.target>0)?g.target:0;
+  var w=Math.max(own,childSum);
+  return w||1;
 }
-// 노드까지 채워진 "양" (무게 단위로)
+// 노드까지 채워진 "실량" (잎들의 실제 진행량 합)
 function _goalFilled(g){
   if(_goalHasSub(g)){
     var f=0;g.sub.forEach(function(s){f+=_goalFilled(s);});
@@ -17621,6 +17696,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       news:_newsData,
       index:_idxData,
       mind:_mindData,
+      moodSet:_moodSet,
       sent:_sentData,
       tt:_ttData,
       seasonRegion:_seasonRegion,
@@ -17673,6 +17749,7 @@ document.getElementById("tlDim").classList.remove("show");document.getElementByI
       if(d.news&&typeof d.news==='object'&&Array.isArray(d.news.regions)){_newsData.regions=d.news.regions;}
       if(d.index&&typeof d.index==='object'){_idxData.fragments=d.index.fragments||[];_idxData.topics=d.index.topics||[];_idxData.links=d.index.links||[];}
       if(d.mind&&typeof d.mind==='object'){_mindData.moods=d.mind.moods||{};_mindData.bucket=d.mind.bucket||[];_mindData.meditations=d.mind.meditations||[];_mindData.momentMoods=d.mind.momentMoods||{};}
+      if(d.moodSet&&_MOOD_SETS.some(function(s){return s.id===d.moodSet;}))_moodSet=d.moodSet;
       if(d.sent&&typeof d.sent==='object'){_sentData.sentences=d.sent.sentences||[];_sentData.copied=d.sent.copied||{};}
       if(d.tt&&typeof d.tt==='object'){_ttData.blocks=d.tt.blocks||{};_ttData.actual=d.tt.actual||{};_ttData.classes=d.tt.classes||[];}
       if(d.seasonRegion)_seasonRegion=d.seasonRegion;
