@@ -3422,6 +3422,136 @@ function _cycleMigrate(){
   }
 }
 var _CYCLE_COLORS=['#e84a80','#9b59b6','#3a7bd5','#1a9e6a','#e67e22','#e0653e','#16a085'];
+// ===== 체중·키 사람별 시스템 =====
+var _weightPerson=null; // 선택된 사람 id (null이면 첫 사람)
+function _wpMigrate(){
+  if(!_healthData.cyclePeople)_healthData.cyclePeople=[];
+  // cyclePeople이 비어있으면 '나' 하나 생성 (체중용으로도 씀)
+  if(_healthData.cyclePeople.length===0){
+    _healthData.cyclePeople.push({id:'me',name:'나',emoji:'🧑',color:'#3a7bd5',periods:[]});
+  }
+  // 각 사람에 weights/heights/targetWeight 필드 보장
+  _healthData.cyclePeople.forEach(function(p){
+    if(!p.weights)p.weights={};
+    if(!p.heights)p.heights={};
+    if(p.targetWeight===undefined)p.targetWeight=null;
+  });
+  // 구버전 _healthData.weights(전역) → 'me' 또는 첫 사람에게 이전
+  if(_healthData.weights&&Object.keys(_healthData.weights).length){
+    var me=_healthData.cyclePeople.find(function(p){return p.id==='me';})||_healthData.cyclePeople[0];
+    Object.keys(_healthData.weights).forEach(function(dk){
+      if(me.weights[dk]===undefined)me.weights[dk]=_healthData.weights[dk];
+    });
+    _healthData.weights={}; // 이전 완료
+  }
+  // 구버전 targetWeight(전역) → 첫 사람
+  if(_healthData.targetWeight!=null){
+    var me2=_healthData.cyclePeople.find(function(p){return p.id==='me';})||_healthData.cyclePeople[0];
+    if(me2.targetWeight==null)me2.targetWeight=_healthData.targetWeight;
+    _healthData.targetWeight=null;
+  }
+}
+function _wpCurrent(){
+  _wpMigrate();
+  var ppl=_healthData.cyclePeople;
+  var p=ppl.find(function(x){return x.id===_weightPerson;});
+  if(!p){p=ppl[0];_weightPerson=p.id;}
+  return p;
+}
+function _wpSortedKeys(person,which){ // which='weights'|'heights'
+  var obj=person[which]||{};
+  return Object.keys(obj).filter(function(k){return typeof obj[k]==='number';})
+    .sort(function(a,b){var pa=a.split('-').map(Number),pb=b.split('-').map(Number);return new Date(pa[0],pa[1]-1,pa[2])-new Date(pb[0],pb[1]-1,pb[2]);});
+}
+function _wpLatest(person,which){
+  var ks=_wpSortedKeys(person,which);
+  return ks.length?person[which][ks[ks.length-1]]:null;
+}
+function _wpBMI(person){
+  var w=_wpLatest(person,'weights'),h=_wpLatest(person,'heights');
+  if(w&&h&&h>0){var m=h/100;return w/(m*m);}
+  return null;
+}
+function _wpBMICat(bmi){
+  if(bmi==null)return null;
+  if(bmi<18.5)return {label:'저체중',color:'#3a7bd5',bg:'#eaf2fb'};
+  if(bmi<23)return {label:'정상',color:'#1a7a4a',bg:'#e5f3ea'};
+  if(bmi<25)return {label:'과체중',color:'#e0913e',bg:'#fdf0e0'};
+  return {label:'비만',color:'#c0392b',bg:'#fbeae8'};
+}
+function _htmlEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// 사람 선택 바 (아바타 원 + 이름). selId=현재 선택, onPick(id) 콜백
+function _wpPeopleBar(selId,onPick){
+  _wpMigrate();
+  var bar=document.createElement('div');
+  bar.style.cssText='display:flex;gap:11px;align-items:flex-start;overflow-x:auto;padding:2px 0 6px;margin-bottom:12px;scrollbar-width:none;';
+  _healthData.cyclePeople.forEach(function(p){
+    var on=p.id===selId;
+    var cell=document.createElement('div');
+    cell.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;';
+    cell.innerHTML='<div style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;background:'+(on?'#e5f3ea':'#f0ece0')+';border:2.5px solid '+(on?'#1a7a4a':'transparent')+';box-sizing:border-box;">'+(p.emoji||'🧑')+'</div>'
+      +'<div style="font-size:10px;font-weight:'+(on?'800':'700')+';color:'+(on?'#1a7a4a':'#a89e8c')+';max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_htmlEsc(p.name)+'</div>';
+    cell.addEventListener('click',function(){onPick(p.id);});
+    bar.appendChild(cell);
+  });
+  var add=document.createElement('div');
+  add.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;';
+  add.innerHTML='<div style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:#f7f6f1;color:#c0b8a8;border:1.5px dashed #d8d0c0;box-sizing:border-box;">＋</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#c0b8a8;">추가</div>';
+  add.addEventListener('click',function(){_wpOpenPersonSheet(null);});
+  bar.appendChild(add);
+  return bar;
+}
+// 사람 추가/수정 시트 (체중 탭용, cyclePeople 공유)
+var _WP_EMOJIS=['🧑','👩','👨','🧒','👶','👧','👦','👴','👵','🐶','🐱','💪','🌸'];
+function _wpOpenPersonSheet(person){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('wpPersonSheet');if(old)old.remove();
+  var editing=!!person;
+  var selEmo=editing?(person.emoji||'🧑'):'🧑';
+  var wrap=document.createElement('div');wrap.id='wpPersonSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  function draw(){
+    var h='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>';
+    h+='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:12px;">'+(editing?'사람 정보 수정':'사람 추가')+'</div>';
+    h+='<input id="wpName" placeholder="이름 (예: 첫째)" value="'+(editing?_htmlEsc(person.name):'')+'" style="width:100%;border:1px solid #e8e5dd;border-radius:12px;padding:12px;font-size:14px;outline:none;font-family:inherit;margin-bottom:12px;box-sizing:border-box;">';
+    h+='<div style="font-size:9px;color:#b0a690;font-weight:700;margin-bottom:7px;">아이콘</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:16px;">';
+    _WP_EMOJIS.forEach(function(em){
+      var on=em===selEmo;
+      h+='<button class="wpEm" data-em="'+em+'" style="border:none;background:'+(on?'#17150f':'#f4f1ea')+';border-radius:11px;padding:8px 0;font-size:20px;cursor:pointer;">'+em+'</button>';
+    });
+    h+='</div>';
+    h+='<button id="wpSaveP" style="width:100%;border:none;background:#17150f;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">'+(editing?'저장':'추가')+'</button>';
+    if(editing&&_healthData.cyclePeople.length>1)h+='<button id="wpDelP" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:11px;cursor:pointer;font-family:inherit;">이 사람 삭제</button>';
+    sheet.innerHTML=h;
+    sheet.querySelectorAll('.wpEm').forEach(function(b){b.addEventListener('click',function(){selEmo=b.getAttribute('data-em');draw();});});
+    sheet.querySelector('#wpSaveP').addEventListener('click',function(){
+      var nm=(sheet.querySelector('#wpName').value||'').trim();
+      if(!nm){sheet.querySelector('#wpName').focus();return;}
+      if(editing){person.name=nm;person.emoji=selEmo;}
+      else{
+        var col=_CYCLE_COLORS[_healthData.cyclePeople.length%_CYCLE_COLORS.length];
+        var np={id:'wp'+Date.now(),name:nm,emoji:selEmo,color:col,periods:[],weights:{},heights:{},targetWeight:null};
+        _healthData.cyclePeople.push(np);_weightPerson=np.id;
+      }
+      if(window._saveState)window._saveState();wrap.remove();renderHealthPage(_healthContainer());
+    });
+    var dp=sheet.querySelector('#wpDelP');
+    if(dp)dp.addEventListener('click',function(){
+      _healthData.cyclePeople=_healthData.cyclePeople.filter(function(x){return x.id!==person.id;});
+      if(_weightPerson===person.id)_weightPerson=null;
+      if(window._saveState)window._saveState();wrap.remove();renderHealthPage(_healthContainer());
+    });
+  }
+  draw();
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  setTimeout(function(){try{sheet.querySelector('#wpName').focus();}catch(e){}},60);
+}
 var _healthTab='workout'; // 'workout' | 'diet' | 'stats'
 var _healthStatsTab='workout'; // (deprecated)
 var _healthMode='today'; // 'today' | 'stats' (각 탭 내부 토글)
@@ -3716,16 +3846,21 @@ function renderHealthPage(container){
   container.innerHTML='';
   container.style.cssText=(container.style.cssText||'')+'display:flex;flex-direction:column;';
 
-  // 하위탭 (상단 고정)
+  // 하위탭 (상단 고정) — 밑줄 텍스트 스타일
   var st=document.createElement('div');
-  st.style.cssText='display:flex;gap:6px;padding:14px 16px 8px;flex-shrink:0;';
-  var _subtabs=[['workout','💪 운동'],['diet','🍽 식단'],['weight','⚖️ 체중']];
-  if(_cycleEnabled)_subtabs.push(['cycle','🌸 생리']);
+  st.style.cssText='display:flex;gap:15px;padding:14px 16px 0;flex-shrink:0;border-bottom:1px solid #eee7d8;';
+  var _subtabs=[['workout','운동'],['diet','식단'],['weight','신체']];
+  if(_cycleEnabled)_subtabs.push(['cycle','생리']);
   _subtabs.forEach(function(t){
     var on=_healthTab===t[0];
     var b=document.createElement('button');
-    b.style.cssText='flex:1;text-align:center;font-size:'+(_cycleEnabled?'11px':'12px')+';font-weight:700;padding:8px 2px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;'+(on?'background:#1a7a4a;color:#fff;':'background:#f0eee8;color:#8a867c;');
+    b.style.cssText='background:none;border:none;font-size:15px;font-weight:800;padding:8px 0 11px;cursor:pointer;position:relative;font-family:inherit;color:'+(on?'#17150f':'#b3ab9c')+';';
     b.textContent=t[1];
+    if(on){
+      var ul=document.createElement('span');
+      ul.style.cssText='position:absolute;left:0;right:0;bottom:-1px;height:2.5px;background:#1a7a4a;border-radius:2px;';
+      b.appendChild(ul);
+    }
     b.addEventListener('click',function(){_healthTab=t[0];renderHealthPage(container);});
     st.appendChild(b);
   });
@@ -3805,28 +3940,28 @@ function _renderCyclePage(body){
   function fmt(dt){return (dt.getMonth()+1)+'월 '+dt.getDate()+'일';}
   function dday(dt){return Math.round((dt-today)/(1000*60*60*24));}
   var people=_healthData.cyclePeople;
-  // 사람 선택 칩 (+ 모두 보기)
+  // 사람 선택 (아바타 원 + 모두 보기)
   var chipRow=document.createElement('div');
-  chipRow.style.cssText='display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 0 12px;';
-  var allChip=document.createElement('button');
+  chipRow.style.cssText='display:flex;gap:11px;align-items:flex-start;overflow-x:auto;scrollbar-width:none;padding:2px 0 12px;';
+  function avCell(emoji,name,on,ringColor,onClick){
+    var cell=document.createElement('div');
+    cell.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;';
+    cell.innerHTML='<div style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;background:'+(on?'#eef0f3':'#f0ece0')+';border:2.5px solid '+(on?ringColor:'transparent')+';box-sizing:border-box;">'+emoji+'</div>'
+      +'<div style="font-size:10px;font-weight:'+(on?'800':'700')+';color:'+(on?ringColor:'#a89e8c')+';max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_htmlEsc(name)+'</div>';
+    cell.addEventListener('click',onClick);
+    return cell;
+  }
   var allOn=_cyclePerson===null;
-  allChip.textContent='👥 모두';
-  allChip.style.cssText='flex-shrink:0;font-size:11px;font-weight:700;padding:7px 13px;border-radius:15px;border:none;cursor:pointer;font-family:inherit;'+(allOn?'background:#20304a;color:#fff;':'background:#f0eee8;color:#8a867c;');
-  allChip.addEventListener('click',function(){_cyclePerson=null;renderHealthPage(_healthContainer());});
-  chipRow.appendChild(allChip);
+  chipRow.appendChild(avCell('👥','모두',allOn,'#20304a',function(){_cyclePerson=null;renderHealthPage(_healthContainer());}));
   people.forEach(function(p){
     var on=_cyclePerson===p.id;
-    var c=document.createElement('button');
-    c.innerHTML=p.emoji+' '+p.name;
-    c.style.cssText='flex-shrink:0;font-size:11px;font-weight:700;padding:7px 13px;border-radius:15px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;'+(on?'background:'+p.color+';color:#fff;':'background:#f0eee8;color:#8a867c;');
-    c.addEventListener('click',function(){_cyclePerson=p.id;renderHealthPage(_healthContainer());});
-    chipRow.appendChild(c);
+    chipRow.appendChild(avCell(p.emoji||'🌸',p.name,on,p.color||'#e84a80',function(){_cyclePerson=p.id;renderHealthPage(_healthContainer());}));
   });
-  var addChip=document.createElement('button');
-  addChip.textContent='＋';
-  addChip.style.cssText='flex-shrink:0;font-size:13px;font-weight:700;padding:7px 12px;border-radius:15px;border:1px dashed #d8d5cd;background:none;color:#a8a29a;cursor:pointer;';
-  addChip.addEventListener('click',function(){_openAddCyclePerson();});
-  chipRow.appendChild(addChip);
+  var addCell=document.createElement('div');
+  addCell.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;';
+  addCell.innerHTML='<div style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:#f7f6f1;color:#c0b8a8;border:1.5px dashed #d8d0c0;box-sizing:border-box;">＋</div><div style="font-size:10px;font-weight:700;color:#c0b8a8;">추가</div>';
+  addCell.addEventListener('click',function(){_openAddCyclePerson();});
+  chipRow.appendChild(addCell);
   body.appendChild(chipRow);
 
   if(_cyclePerson===null){
@@ -4055,171 +4190,158 @@ function _wMovingAvg(keys,i){
   return n?sum/n:_healthData.weights[keys[i]];
 }
 function _renderWeightPage(body){
-  var keys=_wSortedKeys();
+  var person=_wpCurrent();
+  var ppl=_healthData.cyclePeople;
   var todayK=_healthKey();
-  var todayW=_healthData.weights[todayK];
-  var last=keys.length?_healthData.weights[keys[keys.length-1]]:null;
-  // 어제(직전 기록) 대비
-  var prevVal=null;
-  if(keys.length>=2)prevVal=_healthData.weights[keys[keys.length-2]];
-  var curVal=todayW!==undefined?todayW:last;
-  var diff=(curVal!==null&&curVal!==undefined&&prevVal!==null)?(curVal-prevVal):null;
 
-  // ---- 카드 1: 현재 + 추이 그래프 ----
-  var card=document.createElement('div');
-  card.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:14px;margin-bottom:10px;';
-  var head=document.createElement('div');
-  head.style.cssText='display:flex;align-items:flex-end;justify-content:space-between;';
-  var diffHTML='';
-  if(diff!==null&&Math.abs(diff)>=0.005){
-    var down=diff<0;
-    diffHTML='<div style="text-align:right;"><div style="font-size:11px;font-weight:800;color:'+(down?'#1a7a4a':'#c17a7a')+';">'+(down?'▼':'▲')+' '+Math.abs(diff).toFixed(2)+'kg</div><div style="font-size:8.5px;color:#b0aaa0;margin-top:2px;">직전 기록 대비</div></div>';
-  }else if(diff!==null){
-    diffHTML='<div style="text-align:right;"><div style="font-size:11px;font-weight:800;color:#9a948a;">– 유지</div><div style="font-size:8.5px;color:#b0aaa0;margin-top:2px;">직전 기록 대비</div></div>';
+  // ---- 사람 선택 (아바타 원) ----
+  body.appendChild(_wpPeopleBar(person.id,function(pid){_weightPerson=pid;renderHealthPage(_healthContainer());}));
+
+  var wKeys=_wpSortedKeys(person,'weights');
+  var hKeys=_wpSortedKeys(person,'heights');
+  var curW=_wpLatest(person,'weights');
+  var curH=_wpLatest(person,'heights');
+  var bmi=_wpBMI(person);
+  var cat=_wpBMICat(bmi);
+
+  // ---- 현재값 3박스 (체중/키/BMI) ----
+  var stats=document.createElement('div');
+  stats.style.cssText='display:flex;gap:8px;margin-bottom:13px;';
+  function sbox(lab,val,unit,extra){
+    return '<div style="flex:1;background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:12px 6px;text-align:center;">'
+      +'<div style="font-size:9px;color:#9a948a;font-weight:700;margin-bottom:5px;">'+lab+'</div>'
+      +'<div style="font-size:20px;font-weight:800;color:#17150f;line-height:1;">'+val+'</div>'
+      +(unit?'<div style="font-size:8.5px;color:#b0a690;font-weight:700;margin-top:3px;">'+unit+'</div>':'')
+      +(extra||'')+'</div>';
   }
-  head.innerHTML='<div><div style="font-size:10px;color:#9a948a;margin-bottom:3px;">'+(todayW!==undefined?'오늘 몸무게':'최근 몸무게')+'</div>'
-    +'<div style="display:flex;align-items:baseline;gap:5px;"><span style="font-size:30px;font-weight:800;color:#111;line-height:1;">'+(curVal!==null&&curVal!==undefined?curVal.toFixed(2):'--')+'</span><span style="font-size:12px;color:#9a948a;">kg</span></div></div>'
-    +diffHTML;
-  card.appendChild(head);
+  var bmiExtra=cat?'<span style="display:inline-block;font-size:8px;font-weight:800;padding:2px 6px;border-radius:6px;margin-top:4px;background:'+cat.bg+';color:'+cat.color+';">'+cat.label+'</span>':'<div style="font-size:8px;color:#c0bcb2;margin-top:4px;">키 필요</div>';
+  stats.innerHTML=sbox('체중',curW!=null?curW.toFixed(1):'--','kg')
+    +sbox('키',curH!=null?curH.toFixed(0):'--','cm')
+    +sbox('BMI',bmi!=null?bmi.toFixed(1):'--','',bmiExtra);
+  body.appendChild(stats);
 
-  // 그래프 (최근 30일)
-  if(keys.length>=2){
-    var show=keys.slice(-30);
-    var offset=keys.length-show.length;
-    var vals=show.map(function(k){return _healthData.weights[k];});
-    var avgs=show.map(function(k,i){return _wMovingAvg(keys,offset+i);});
-    var tgtW=(typeof _healthData.targetWeight==='number')?_healthData.targetWeight:null;
-    var allv=vals.concat(avgs);
-    if(tgtW!==null)allv=allv.concat([tgtW]); // 목표선도 범위에 포함
-    var mn=Math.min.apply(null,allv),mx=Math.max.apply(null,allv);
-    if(mx-mn<1){var mid=(mx+mn)/2;mn=mid-0.5;mx=mid+0.5;}
-    var pad=(mx-mn)*0.18;mn-=pad;mx+=pad;
-    var W=300,H=84;
-    function px(i){return show.length<=1?W:(i/(show.length-1))*W;}
-    function py(v){return H-((v-mn)/(mx-mn))*H;}
-    var linePts=vals.map(function(v,i){return px(i).toFixed(1)+','+py(v).toFixed(1);}).join(' L');
-    var avgPts=avgs.map(function(v,i){return px(i).toFixed(1)+','+py(v).toFixed(1);}).join(' L');
-    var areaD='M'+linePts+' L'+W+','+H+' L0,'+H+' Z';
-    var tgtLine='';
-    if(tgtW!==null){
-      var ty=py(tgtW).toFixed(1);
-      tgtLine='<line x1="0" y1="'+ty+'" x2="'+W+'" y2="'+ty+'" stroke="#e0653e" stroke-width="1.5" stroke-dasharray="5 4"/>'
-        +'<text x="'+(W-2)+'" y="'+(parseFloat(ty)>12?parseFloat(ty)-4:parseFloat(ty)+9).toFixed(1)+'" font-size="8" fill="#e0653e" text-anchor="end" font-weight="700">목표 '+(Math.round(tgtW*10)/10)+'</text>';
-    }
-    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:'+H+'px;display:block;margin:10px 0 4px;">'
-      +'<defs><linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a7a4a" stop-opacity="0.16"/><stop offset="100%" stop-color="#1a7a4a" stop-opacity="0"/></linearGradient></defs>'
-      +'<path d="'+areaD+'" fill="url(#wgrad)"/>'
-      +tgtLine
-      +'<path d="M'+avgPts+'" fill="none" stroke="#c8bfa8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>'
-      +'<path d="M'+linePts+'" fill="none" stroke="#1a7a4a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>'
-      +'<circle cx="'+px(show.length-1).toFixed(1)+'" cy="'+py(vals[vals.length-1]).toFixed(1)+'" r="3.5" fill="#1a7a4a"/>'
-      +'</svg>';
-    var g=document.createElement('div');
-    g.innerHTML=svg
-      +'<div style="display:flex;justify-content:space-between;font-size:7.5px;color:#b0aaa0;">'
-        +'<span>'+(show[0].split('-')[1])+'.'+(show[0].split('-')[2])+'</span>'
-        +'<span>'+(show[show.length-1].split('-')[1])+'.'+(show[show.length-1].split('-')[2])+'</span></div>'
-      +'<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;flex-wrap:wrap;">'
-        +'<span style="display:flex;align-items:center;gap:4px;font-size:8.5px;color:#9a948a;"><span style="width:12px;height:2px;background:#1a7a4a;opacity:0.55;border-radius:1px;"></span>매일</span>'
-        +'<span style="display:flex;align-items:center;gap:4px;font-size:8.5px;color:#9a948a;"><span style="width:12px;height:2.5px;background:#c8bfa8;border-radius:2px;"></span>7일 평균</span>'
-        +(tgtW!==null?'<span style="display:flex;align-items:center;gap:4px;font-size:8.5px;color:#9a948a;"><span style="width:13px;height:0;border-top:2px dashed #e0653e;"></span>목표</span>':'')
-      +'</div>';
-    card.appendChild(g);
-  }else{
-    var hint=document.createElement('div');
-    hint.style.cssText='text-align:center;padding:18px 0 12px;color:#b0aaa0;font-size:11px;line-height:1.6;';
-    hint.innerHTML='이틀 이상 기록하면<br>변화 그래프가 그려져요';
-    card.appendChild(hint);
+  // ---- 체중 그래프 ----
+  var tgtW=(typeof person.targetWeight==='number')?person.targetWeight:null;
+  body.appendChild(_wpGraphCard('체중 추이',person,'weights','kg','#1a7a4a',tgtW));
+  // ---- 키 그래프 (2개 이상일 때만) ----
+  if(hKeys.length>=2){
+    body.appendChild(_wpGraphCard('키 추이',person,'heights','cm','#3a7bd5',null));
   }
-  // 기록 버튼
-  var btnRow=document.createElement('div');btnRow.style.cssText='margin-top:11px;';
-  var addBtn=document.createElement('button');
-  addBtn.style.cssText='width:100%;font-size:11.5px;font-weight:700;color:#fff;background:#1a7a4a;border:none;border-radius:10px;padding:11px;cursor:pointer;font-family:inherit;';
-  addBtn.textContent=todayW!==undefined?'오늘 기록 수정 ('+todayW.toFixed(2)+'kg)':'＋ 오늘 몸무게 기록';
-  addBtn.addEventListener('click',function(){_openWeightSheet(todayK);});
-  btnRow.appendChild(addBtn);
-  card.appendChild(btnRow);
 
-  // ---- 목표 체중 (A안: 남은 kg 3칸 + 설정) ----
-  var tgt=(typeof _healthData.targetWeight==='number')?_healthData.targetWeight:null;
-  if(tgt!==null && curVal!==null && curVal!==undefined){
-    var remain=curVal-tgt; // +면 감량 필요, -면 증량 필요
-    var lose=remain>0; // 감량 목표
-    var remainAbs=Math.abs(remain);
-    // 이번 달 변화 (이번 달 첫 기록 대비 현재)
+  // ---- 목표 체중 요약 ----
+  var card2=document.createElement('div');
+  card2.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:14px;padding:13px 14px;margin-bottom:10px;';
+  if(tgtW!=null&&curW!=null){
+    var remain=curW-tgtW;var lose=remain>0;var remainAbs=Math.abs(remain);
     var now2=new Date();var mkPrefix=now2.getFullYear()+'-'+(now2.getMonth()+1)+'-';
-    var monthKeys=keys.filter(function(k){return k.indexOf(mkPrefix)===0;});
+    var monthKeys=wKeys.filter(function(k){return k.indexOf(mkPrefix)===0;});
     var monthChange=null;
-    if(monthKeys.length>=2){monthChange=_healthData.weights[monthKeys[monthKeys.length-1]]-_healthData.weights[monthKeys[0]];}
-    var sumRow=document.createElement('div');
-    sumRow.style.cssText='display:flex;gap:8px;margin-top:11px;';
+    if(monthKeys.length>=2)monthChange=person.weights[monthKeys[monthKeys.length-1]]-person.weights[monthKeys[0]];
     function tbox(v,label,col){return '<div style="flex:1;background:#faf9f5;border-radius:10px;padding:9px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;line-height:1;color:'+col+';">'+v+'</div><div style="font-size:8px;color:#9a948a;margin-top:3px;">'+label+'</div></div>';}
     var remainTxt=(remainAbs<0.05)?'달성!':((lose?'-':'+')+remainAbs.toFixed(1));
     var remainCol=(remainAbs<0.05)?'#1a7a4a':'#e0653e';
-    var mcTxt=(monthChange===null)?'—':((monthChange<0?'':'+')+monthChange.toFixed(1));
-    var mcCol=(monthChange===null)?'#9a948a':(monthChange<0?'#1a7a4a':'#c17a7a');
-    sumRow.innerHTML=tbox(remainTxt,lose?'목표까지(kg)':'목표까지(kg)',remainCol)
-      +tbox(mcTxt,'이번 달 변화',mcCol)
-      +tbox(tgt.toFixed(1),'목표(kg)','#3aa0d9');
-    card.appendChild(sumRow);
-    // 목표 수정 (작게)
-    var editG=document.createElement('div');
-    editG.style.cssText='text-align:center;font-size:9.5px;color:#b0aaa0;margin-top:9px;cursor:pointer;';
-    editG.textContent='🎯 목표 체중 수정';
+    var mcTxt=(monthChange==null)?'—':((monthChange<0?'':'+')+monthChange.toFixed(1));
+    var mcCol=(monthChange==null)?'#9a948a':(monthChange<0?'#1a7a4a':'#c17a7a');
+    var sr=document.createElement('div');sr.style.cssText='display:flex;gap:8px;';
+    sr.innerHTML=tbox(remainTxt,'목표까지(kg)',remainCol)+tbox(mcTxt,'이번 달 변화',mcCol)+tbox(tgtW.toFixed(1),'목표(kg)','#3aa0d9');
+    card2.appendChild(sr);
+    var editG=document.createElement('div');editG.style.cssText='text-align:center;font-size:9.5px;color:#b0aaa0;margin-top:9px;cursor:pointer;';editG.textContent='🎯 목표 체중 수정';
     editG.addEventListener('click',function(){_openTargetWeightSheet();});
-    card.appendChild(editG);
+    card2.appendChild(editG);
   }else{
-    // 목표 없을 때: 조용한 설정 버튼
-    var setG=document.createElement('div');
-    setG.style.cssText='font-size:10.5px;color:#b0966a;font-weight:700;background:#fbf3e5;border-radius:10px;padding:10px;text-align:center;cursor:pointer;margin-top:8px;';
+    var setG=document.createElement('div');setG.style.cssText='font-size:10.5px;color:#b0966a;font-weight:700;background:#fbf3e5;border-radius:10px;padding:11px;text-align:center;cursor:pointer;';
     setG.textContent='🎯 목표 체중 설정하기';
     setG.addEventListener('click',function(){_openTargetWeightSheet();});
-    card.appendChild(setG);
+    card2.appendChild(setG);
   }
-  body.appendChild(card);
+  body.appendChild(card2);
 
-  // ---- 카드 2: 최근 기록 목록 ----
-  if(keys.length){
-    var hd=document.createElement('div');
-    hd.style.cssText='font-size:11px;color:#9a948a;font-weight:700;margin:12px 2px 8px;';
-    hd.textContent='기록';
+  // ---- 기록 버튼 (체중·키 함께) ----
+  var addBtn=document.createElement('button');
+  addBtn.style.cssText='width:100%;font-size:13px;font-weight:700;color:#fff;background:#17150f;border:none;border-radius:14px;padding:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;';
+  addBtn.textContent='＋ 오늘 기록 (체중·키)';
+  addBtn.addEventListener('click',function(){_openWeightSheet(todayK);});
+  body.appendChild(addBtn);
+
+  // ---- 사람 편집(이름/삭제) 작은 링크 ----
+  var edP=document.createElement('div');
+  edP.style.cssText='text-align:center;font-size:9.5px;color:#c0bcb2;cursor:pointer;margin-bottom:6px;';
+  edP.textContent='· '+_htmlEsc(person.name)+' 정보 수정 ·';
+  edP.addEventListener('click',function(){_wpOpenPersonSheet(person);});
+  body.appendChild(edP);
+
+  // ---- 최근 기록 목록 ----
+  if(wKeys.length){
+    var hd=document.createElement('div');hd.style.cssText='font-size:11px;color:#9a948a;font-weight:700;margin:8px 2px 8px;';hd.textContent='기록';
     body.appendChild(hd);
-    var recent=keys.slice(-30).reverse();
-    var rv=recent.map(function(k){return _healthData.weights[k];});
-    var rmn=Math.min.apply(null,rv),rmx=Math.max.apply(null,rv);
-    var span=(rmx-rmn)||1;
+    var recent=wKeys.slice(-30).reverse();
+    var rv=recent.map(function(k){return person.weights[k];});
+    var rmn=Math.min.apply(null,rv),rmx=Math.max.apply(null,rv);var span=(rmx-rmn)||1;
+    var WD=['일','월','화','수','목','금','토'];
     recent.forEach(function(k,i){
-      var v=_healthData.weights[k];
+      var v=person.weights[k];var hv=person.heights[k];
       var dt=_wKeyToDate(k);
-      var W=['일','월','화','수','목','금','토'];
-      // 직전(더 오래된) 기록 대비
-      var older=recent[i+1]!==undefined?_healthData.weights[recent[i+1]]:null;
-      var dv=older!==null?(v-older):null;
+      var older=recent[i+1]!==undefined?person.weights[recent[i+1]]:null;
+      var dv=older!=null?(v-older):null;
       var pct=30+((v-rmn)/span)*60;
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:center;gap:9px;background:#faf9f5;border-radius:9px;padding:9px 10px;margin-bottom:5px;cursor:pointer;';
-      var dvHTML='';
-      if(dv!==null&&Math.abs(dv)>=0.005){
-        dvHTML='<span style="font-size:9px;color:'+(dv<0?'#1a7a4a':'#c17a7a')+';width:32px;text-align:right;flex-shrink:0;font-weight:700;">'+(dv<0?'▼':'▲')+Math.abs(dv).toFixed(2)+'</span>';
-      }else{
-        dvHTML='<span style="font-size:9px;color:#c0bcb2;width:32px;text-align:right;flex-shrink:0;">–</span>';
-      }
-      row.innerHTML='<span style="font-size:10px;color:#9a948a;width:46px;flex-shrink:0;">'+(dt.getMonth()+1)+'.'+dt.getDate()+' '+W[dt.getDay()]+'</span>'
+      var dvHTML=(dv!=null&&Math.abs(dv)>=0.005)?'<span style="font-size:9px;color:'+(dv<0?'#1a7a4a':'#c17a7a')+';width:32px;text-align:right;flex-shrink:0;font-weight:700;">'+(dv<0?'▼':'▲')+Math.abs(dv).toFixed(2)+'</span>':'<span style="font-size:9px;color:#c0bcb2;width:32px;text-align:right;flex-shrink:0;">–</span>';
+      row.innerHTML='<span style="font-size:10px;color:#9a948a;width:46px;flex-shrink:0;">'+(dt.getMonth()+1)+'.'+dt.getDate()+' '+WD[dt.getDay()]+'</span>'
         +'<div style="flex:1;min-width:0;height:5px;background:#eceae3;border-radius:3px;"><div style="width:'+pct.toFixed(0)+'%;height:100%;background:'+(i===0?'#1a7a4a':'#88ce9f')+';border-radius:3px;"></div></div>'
-        +'<span style="font-size:11.5px;font-weight:800;color:#111;flex-shrink:0;">'+v.toFixed(2)+'</span>'
+        +'<span style="font-size:12px;font-weight:800;color:#17150f;flex-shrink:0;">'+v.toFixed(1)+'<span style="font-size:8px;color:#b0a690;">kg</span></span>'
+        +(hv!=null?'<span style="font-size:9px;color:#9a948a;flex-shrink:0;">'+hv.toFixed(0)+'cm</span>':'')
         +dvHTML;
       row.addEventListener('click',function(){_openWeightSheet(k);});
       body.appendChild(row);
     });
   }
 }
+// 체중·키 그래프 카드
+function _wpGraphCard(title,person,which,unit,color,tgt){
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:15px;padding:13px 12px 8px;margin-bottom:10px;';
+  var keys=_wpSortedKeys(person,which);
+  var hdr=document.createElement('div');hdr.style.cssText='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;';
+  hdr.innerHTML='<span style="font-size:11px;font-weight:800;color:#3a352c;">'+title+'</span><span style="font-size:9px;color:#b0a690;">'+(keys.length?'최근 '+Math.min(keys.length,30)+'회':'')+'</span>';
+  card.appendChild(hdr);
+  if(keys.length<2){
+    var hint=document.createElement('div');hint.style.cssText='text-align:center;padding:14px 0 10px;color:#c0bcb2;font-size:10px;line-height:1.6;';
+    hint.innerHTML='이틀 이상 기록하면<br>그래프가 그려져요';
+    card.appendChild(hint);return card;
+  }
+  var show=keys.slice(-30);
+  var vals=show.map(function(k){return person[which][k];});
+  var allv=vals.slice();if(tgt!=null)allv=allv.concat([tgt]);
+  var mn=Math.min.apply(null,allv),mx=Math.max.apply(null,allv);
+  if(mx-mn<1){var mid=(mx+mn)/2;mn=mid-0.5;mx=mid+0.5;}
+  var pad=(mx-mn)*0.18;mn-=pad;mx+=pad;
+  var W=300,H=76;
+  function px(i){return show.length<=1?W:(i/(show.length-1))*W;}
+  function py(v){return H-((v-mn)/(mx-mn))*H;}
+  var linePts=vals.map(function(v,i){return px(i).toFixed(1)+','+py(v).toFixed(1);}).join(' L');
+  var areaD='M'+linePts+' L'+W+','+H+' L0,'+H+' Z';
+  var tgtLine='';
+  if(tgt!=null){var ty=py(tgt).toFixed(1);tgtLine='<line x1="0" y1="'+ty+'" x2="'+W+'" y2="'+ty+'" stroke="#e0653e" stroke-width="1.5" stroke-dasharray="5 4"/><text x="'+(W-2)+'" y="'+(parseFloat(ty)>12?parseFloat(ty)-4:parseFloat(ty)+9).toFixed(1)+'" font-size="8" fill="#e0653e" text-anchor="end" font-weight="700">목표 '+(Math.round(tgt*10)/10)+'</text>';}
+  var gid='wg_'+which;
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:'+H+'px;display:block;margin:6px 0 4px;">'
+    +'<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color+'" stop-opacity="0.16"/><stop offset="100%" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>'
+    +'<path d="'+areaD+'" fill="url(#'+gid+')"/>'+tgtLine
+    +'<path d="M'+linePts+'" fill="none" stroke="'+color+'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+    +'<circle cx="'+px(show.length-1).toFixed(1)+'" cy="'+py(vals[vals.length-1]).toFixed(1)+'" r="3.5" fill="'+color+'"/></svg>';
+  var g=document.createElement('div');
+  g.innerHTML=svg+'<div style="display:flex;justify-content:space-between;font-size:7.5px;color:#b0aaa0;"><span>'+(show[0].split('-')[1])+'.'+(show[0].split('-')[2])+'</span><span>'+(show[show.length-1].split('-')[1])+'.'+(show[show.length-1].split('-')[2])+'</span></div>';
+  card.appendChild(g);
+  return card;
+}
 // 체중 입력/수정 시트
 function _openTargetWeightSheet(){
   var host=document.querySelector('.phone')||document.body;
   var old=document.getElementById('targetWeightSheet');if(old)old.remove();
-  var cur=(typeof _healthData.targetWeight==='number')?_healthData.targetWeight:null;
+  var _wp=_wpCurrent();
+  var cur=(typeof _wp.targetWeight==='number')?_wp.targetWeight:null;
   // 현재 몸무게 기준값 (플레이스홀더용)
-  var ks=_wSortedKeys();var recentW=ks.length?_healthData.weights[ks[ks.length-1]]:null;
+  var recentW=_wpLatest(_wp,'weights');
   var wrap=document.createElement('div');wrap.id='targetWeightSheet';
   wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
   var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
@@ -4247,7 +4369,7 @@ function _openTargetWeightSheet(){
   sheet.querySelector('#twSave').addEventListener('click',function(){
     var v=parseFloat(inp.value);
     if(isNaN(v)||v<=0||v>400){inp.focus();return;}
-    _healthData.targetWeight=Math.round(v*10)/10;
+    _wp.targetWeight=Math.round(v*10)/10;
     if(window._saveState)window._saveState();
     wrap.remove();
     try{showToast('목표 체중을 정했어요','add','ti-check');}catch(e){}
@@ -4255,7 +4377,7 @@ function _openTargetWeightSheet(){
   });
   var delB=sheet.querySelector('#twDel');
   if(delB)delB.addEventListener('click',function(){
-    _healthData.targetWeight=null;
+    _wp.targetWeight=null;
     if(window._saveState)window._saveState();
     wrap.remove();renderHealthPage(_healthContainer());
   });
@@ -4263,54 +4385,67 @@ function _openTargetWeightSheet(){
 function _openWeightSheet(dateKey){
   var host=document.querySelector('.phone')||document.body;
   var old=document.getElementById('weightSheet');if(old)old.remove();
-  var cur=_healthData.weights[dateKey];
+  var person=_wpCurrent();
+  var curW=person.weights[dateKey];
+  var curH=person.heights[dateKey];
   var p=dateKey.split('-');
   var wrap=document.createElement('div');wrap.id='weightSheet';
   wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
   var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
   dim.addEventListener('click',function(){wrap.remove();});
   var sheet=document.createElement('div');
-  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;';
-  sheet.innerHTML='<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:3px;">'+p[1]+'월 '+p[2]+'일 몸무게</div>'
-    +'<div style="font-size:10px;color:#9a948a;margin-bottom:14px;">소수점 둘째 자리까지 적어요</div>'
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 18px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  var lastH=_wpLatest(person,'heights');
+  sheet.innerHTML='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>'
+    +'<div style="font-size:14px;font-weight:800;color:#111;margin-bottom:3px;">'+(person.emoji||'🧑')+' '+_htmlEsc(person.name)+' · '+p[1]+'월 '+p[2]+'일</div>'
+    +'<div style="font-size:10px;color:#9a948a;margin-bottom:14px;">체중은 필수, 키는 바뀔 때만 적어도 돼요</div>'
+    +'<div style="font-size:9px;color:#b0a690;font-weight:700;margin-bottom:6px;">체중</div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'
       +'<button id="wMinus" style="width:42px;height:42px;border-radius:12px;border:0.5px solid #e8e5dd;background:#f7f6f1;font-size:18px;color:#6b6455;cursor:pointer;font-family:inherit;flex-shrink:0;">−</button>'
       +'<div style="flex:1;display:flex;align-items:baseline;justify-content:center;gap:4px;background:#f7f6f1;border-radius:12px;padding:9px;">'
-        +'<input id="wVal" type="number" step="0.01" inputmode="decimal" value="'+(cur!==undefined?cur.toFixed(2):'')+'" placeholder="0.00" style="width:112px;border:none;background:none;font-size:26px;font-weight:800;color:#111;text-align:center;outline:none;font-family:inherit;">'
+        +'<input id="wVal" type="number" step="0.01" inputmode="decimal" value="'+(curW!==undefined?curW.toFixed(2):'')+'" placeholder="0.00" style="width:112px;border:none;background:none;font-size:26px;font-weight:800;color:#111;text-align:center;outline:none;font-family:inherit;">'
         +'<span style="font-size:12px;color:#9a948a;">kg</span></div>'
       +'<button id="wPlus" style="width:42px;height:42px;border-radius:12px;border:0.5px solid #e8e5dd;background:#f7f6f1;font-size:18px;color:#6b6455;cursor:pointer;font-family:inherit;flex-shrink:0;">＋</button>'
     +'</div>'
-    +'<button id="wSave" style="width:100%;border:none;background:#1a7a4a;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">저장</button>'
-    +(cur!==undefined?'<button id="wDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">이 기록 삭제</button>':'');
+    +'<div style="font-size:9px;color:#b0a690;font-weight:700;margin-bottom:6px;">키 <span style="color:#c0bcb2;font-weight:400;">(선택)</span></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">'
+      +'<button id="hMinus" style="width:42px;height:42px;border-radius:12px;border:0.5px solid #e8e5dd;background:#f7f6f1;font-size:18px;color:#6b6455;cursor:pointer;font-family:inherit;flex-shrink:0;">−</button>'
+      +'<div style="flex:1;display:flex;align-items:baseline;justify-content:center;gap:4px;background:#f7f6f1;border-radius:12px;padding:9px;">'
+        +'<input id="hVal" type="number" step="0.1" inputmode="decimal" value="'+(curH!==undefined?curH.toFixed(1):'')+'" placeholder="'+(lastH!=null?lastH.toFixed(1):'0.0')+'" style="width:112px;border:none;background:none;font-size:22px;font-weight:800;color:#111;text-align:center;outline:none;font-family:inherit;">'
+        +'<span style="font-size:12px;color:#9a948a;">cm</span></div>'
+      +'<button id="hPlus" style="width:42px;height:42px;border-radius:12px;border:0.5px solid #e8e5dd;background:#f7f6f1;font-size:18px;color:#6b6455;cursor:pointer;font-family:inherit;flex-shrink:0;">＋</button>'
+    +'</div>'
+    +'<button id="wSave" style="width:100%;border:none;background:#17150f;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">저장</button>'
+    +((curW!==undefined||curH!==undefined)?'<button id="wDel" style="width:100%;border:none;background:none;color:#c0392b;font-size:11px;font-weight:600;padding:10px;cursor:pointer;font-family:inherit;">이 날 기록 삭제</button>':'');
   wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
-  var inp=sheet.querySelector('#wVal');
-  setTimeout(function(){try{inp.focus();}catch(e){}},60);
-  function step(d){
-    var v=parseFloat(inp.value);
-    if(isNaN(v)){
-      var ks=_wSortedKeys();
-      v=ks.length?_healthData.weights[ks[ks.length-1]]:60;
-    }
-    inp.value=(Math.round((v+d)*100)/100).toFixed(2);
-  }
-  sheet.querySelector('#wMinus').addEventListener('click',function(){step(-0.1);});
-  sheet.querySelector('#wPlus').addEventListener('click',function(){step(0.1);});
+  var winp=sheet.querySelector('#wVal'),hinp=sheet.querySelector('#hVal');
+  setTimeout(function(){try{winp.focus();}catch(e){}},60);
+  function stepW(d){var v=parseFloat(winp.value);if(isNaN(v)){var l=_wpLatest(person,'weights');v=l!=null?l:60;}winp.value=(Math.round((v+d)*100)/100).toFixed(2);}
+  function stepH(d){var v=parseFloat(hinp.value);if(isNaN(v)){v=lastH!=null?lastH:160;}hinp.value=(Math.round((v+d)*10)/10).toFixed(1);}
+  sheet.querySelector('#wMinus').addEventListener('click',function(){stepW(-0.1);});
+  sheet.querySelector('#wPlus').addEventListener('click',function(){stepW(0.1);});
+  sheet.querySelector('#hMinus').addEventListener('click',function(){stepH(-0.5);});
+  sheet.querySelector('#hPlus').addEventListener('click',function(){stepH(0.5);});
   sheet.querySelector('#wSave').addEventListener('click',function(){
-    var v=parseFloat(inp.value);
-    if(isNaN(v)||v<=0||v>400){inp.focus();return;}
-    if(!_healthData.weights)_healthData.weights={};
-    _healthData.weights[dateKey]=Math.round(v*100)/100;
+    var v=parseFloat(winp.value);
+    var hv=parseFloat(hinp.value);
+    var okW=!(isNaN(v)||v<=0||v>400);
+    var okH=!(isNaN(hv)||hv<=0||hv>300);
+    if(!okW&&!okH){winp.focus();return;}
+    if(!person.weights)person.weights={};
+    if(!person.heights)person.heights={};
+    if(okW)person.weights[dateKey]=Math.round(v*100)/100;
+    if(okH)person.heights[dateKey]=Math.round(hv*10)/10;
     if(window._saveState)window._saveState();
     wrap.remove();
-    try{showToast('몸무게를 기록했어요','add','ti-check');}catch(e){}
+    try{showToast('기록했어요','add','ti-check');}catch(e){}
     renderHealthPage(_healthContainer());
   });
   var delBtn=sheet.querySelector('#wDel');
   if(delBtn)delBtn.addEventListener('click',function(){
-    delete _healthData.weights[dateKey];
+    delete person.weights[dateKey];delete person.heights[dateKey];
     if(window._saveState)window._saveState();
-    wrap.remove();
-    renderHealthPage(_healthContainer());
+    wrap.remove();renderHealthPage(_healthContainer());
   });
 }
 
@@ -11702,7 +11837,7 @@ function renderLogPage(container){
     list.innerHTML='<div style="text-align:center;padding:40px 0;color:#9a9a93;font-size:12px;">오늘 한 일을 기록해보세요<br><span style="font-size:10px;">예: 헬스 1시간, 독서 30분</span></div>';
   } else {
     // 타임라인 (점 + 끊김 없는 연결선)
-    logs.forEach(function(log,i){
+    logs.slice().reverse().forEach(function(log,i){
       var row=document.createElement('div');
       row.style.cssText='display:flex;gap:10px;position:relative;';
 
@@ -11761,7 +11896,7 @@ function renderLogPage(container){
       txtEl.addEventListener('blur',function(){
         txtEl.contentEditable='false';
         var nt=((txtEl.innerText!=null?txtEl.innerText:txtEl.textContent)||'').trim();
-        if(!nt){_dailyLogs[k].splice(i,1);}
+        if(!nt){var _ix=_dailyLogs[k].indexOf(log);if(_ix>=0)_dailyLogs[k].splice(_ix,1);}
         else{var nd=_logDuration(nt);if(nd!=null)log.dur=nd;log.text=_logStripDur(nt);if(!log.emojiManual)log.emoji=guessEmoji(nt);}
         renderLogPage(container);
         try{var bc=document.getElementById('budgetCard');if(bc)renderBudgetPage(bc);}catch(e2){}
@@ -11779,7 +11914,7 @@ function renderLogPage(container){
       del.style.cssText='border:none;background:none;color:#ddd;font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0;';
       del.textContent='✕';
       del.addEventListener('click',function(){
-        _dailyLogs[k].splice(i,1);
+        var _ix2=_dailyLogs[k].indexOf(log);if(_ix2>=0)_dailyLogs[k].splice(_ix2,1);
         renderLogPage(container);
       });
 
