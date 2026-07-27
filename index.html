@@ -13376,6 +13376,121 @@ var _goalFolders=[];
 // sub가 있으면 진행률은 하위에서 자동 합산.
 var _goalDrill=[]; // 드릴다운 경로 (목표 id 스택)
 function _goalNewId(){return 'g'+Date.now()+Math.random().toString(36).slice(2,6);}
+// ===== 문장 → 청사진/설계/작업 자동 분해 =====
+// 반환: {title, sub:[{title, target, sub:[...]}]} 또는 null(분해 불가)
+function _goalAutoDecompose(text){
+  var t=text.trim();
+  var mk=function(title,extra){var o={title:title};if(extra)for(var k in extra)o[k]=extra[k];return o;};
+  function num(x){var n=parseInt(String(x).replace(/,/g,''));return isNaN(n)?null:n;}
+  // 공통: "각각 K번/K회/K개씩" → 작업 target
+  var perM=t.match(/각(?:각|자)?\s*(\d+)\s*(?:번|회|개|쪽|페이지|문제)/)||t.match(/(\d+)\s*(?:번|회)\s*씩/);
+  var perTarget=perM?num(perM[1]):null;
+
+  // 패턴 1: "N강|장|챕터|과|편|권|문제 ... M회독|회|바퀴"
+  var unitM=t.match(/(\d+)\s*(강|장|챕터|과|편|권|课|문제|페이지|쪽|일)/);
+  var roundM=t.match(/(\d+)\s*(회독|회|바퀴|번|차)/);
+  if(unitM&&roundM&&unitM.index!==roundM.index){
+    var unitN=num(unitM[1]),unitName=unitM[2];
+    var roundN=num(roundM[1]),roundName=roundM[2];
+    if(unitN>0&&unitN<=500&&roundN>0&&roundN<=50){
+      var design=[];
+      for(var r=1;r<=roundN;r++){
+        var works=[];
+        for(var u=1;u<=unitN;u++){
+          works.push(mk(u+unitName,perTarget?{target:perTarget,cur:0}:null));
+        }
+        design.push(mk(r+(roundName==='회독'?'회독':roundName), {sub:works}));
+      }
+      return {title:t, sub:design};
+    }
+  }
+
+  // 패턴 2: "N일|주|달 동안 (매일|하루 K번)" → 기간을 일 단위 작업으로
+  var spanM=t.match(/(\d+)\s*(일|주|주일|개월|달|주간)/);
+  var dailyM=t.match(/매일|하루|day/i);
+  // 매일 K개/번/쪽/문제/단어 → 하루 target
+  var dailyTargetM=t.match(/(?:매일|하루)\s*(\d+)/)||t.match(/(\d+)\s*(?:개|번|쪽|페이지|문제|단어|줄|세트)\s*씩/);
+  var dailyTarget=dailyTargetM?num(dailyTargetM[1]):perTarget;
+  if(spanM&&(dailyM||perTarget||dailyTarget)){
+    var spanN=num(spanM[1]),spanUnit=spanM[2];
+    var days=spanN*(/(주|주일|주간)/.test(spanUnit)?7:/(개월|달)/.test(spanUnit)?30:1);
+    if(days>0&&days<=400){
+      var works2=[];
+      for(var dd=1;dd<=days;dd++)works2.push(mk(dd+'일차',dailyTarget?{target:dailyTarget,cur:0}:null));
+      return {title:t, sub:works2};
+    }
+  }
+
+  // 패턴 3: 쉼표/그리고/·/줄바꿈으로 나열된 항목들 → 설계로
+  var parts=t.split(/\s*(?:,|、|그리고|·|\/|\n)\s*/).map(function(x){return x.trim();}).filter(Boolean);
+  if(parts.length>=2&&parts.length<=30){
+    return {title:parts[0].length<14?t:'목표', sub:parts.map(function(p){
+      var tg=_goalParse(p);
+      return mk(p, tg?{target:tg,cur:0}:null);
+    })};
+  }
+
+  // 패턴 4: "N개|가지 ... (M단계|파트|주제)" → 단계별
+  var stepM=t.match(/(\d+)\s*(단계|파트|part|주제|챕터|섹션)/i);
+  if(stepM){
+    var stepN=num(stepM[1]),stepName=stepM[2];
+    if(stepN>0&&stepN<=50){
+      var steps=[];
+      for(var si=1;si<=stepN;si++)steps.push(mk(si+(/단계/.test(stepName)?'단계':stepName),perTarget?{target:perTarget,cur:0}:null));
+      return {title:t, sub:steps};
+    }
+  }
+
+  // 패턴 5: 단일 "N번|회|개|권|장 ..." → 청사진에 target만 (하위 없음)
+  return null;
+}
+// 분해 결과를 실제 목표 트리로 (id 부여)
+function _goalBuildFromPlan(plan){
+  function build(node){
+    var g={id:_goalNewId(),title:node.title,done:false,target:node.target||null,cur:0,unit:'',sub:[]};
+    if(node.sub&&node.sub.length)g.sub=node.sub.map(build);
+    return g;
+  }
+  return build(plan);
+}
+// 분해 미리보기 시트
+function _goalDecomposePreview(plan,onConfirm){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('goalDecompSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='goalDecompSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.4);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;max-height:80%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 24px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;scrollbar-width:none;';
+  // 카운트 요약
+  var nDesign=plan.sub?plan.sub.length:0;
+  var nWork=0;if(plan.sub)plan.sub.forEach(function(d){nWork+=(d.sub?d.sub.length:0);});
+  var h='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>';
+  h+='<div style="font-size:8.5px;font-weight:800;color:#b06a2a;letter-spacing:1px;margin-bottom:4px;">✨ 자동 분해 미리보기</div>';
+  h+='<div style="font-size:15px;font-weight:800;color:#17150f;margin-bottom:3px;word-break:break-word;">'+_goalEscG(plan.title)+'</div>';
+  h+='<div style="font-size:10px;color:#9a948a;margin-bottom:14px;">설계 '+nDesign+'개'+(nWork?' · 작업 '+nWork+'개':'')+'</div>';
+  // 트리 미리보기 (설계 몇 개 + 작업 샘플)
+  h+='<div style="background:#faf9f5;border-radius:12px;padding:12px;margin-bottom:14px;max-height:280px;overflow-y:auto;scrollbar-width:none;">';
+  (plan.sub||[]).slice(0,8).forEach(function(d,di){
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:'+((d.sub&&d.sub.length)?'4px':'6px')+';">'
+      +'<span style="font-size:7px;font-weight:800;color:#b0a06a;background:#f3ead4;border-radius:5px;padding:2px 6px;flex-shrink:0;">설계 '+(di+1)+'</span>'
+      +'<span style="font-size:12px;font-weight:700;color:#3a352c;">'+_goalEscG(d.title)+'</span></div>';
+    if(d.sub&&d.sub.length){
+      var sample=d.sub.slice(0,4).map(function(wnode){return _goalEscG(wnode.title)+(wnode.target?(' ·'+wnode.target):'');}).join(', ');
+      h+='<div style="font-size:9.5px;color:#a89e8c;margin:0 0 8px 12px;line-height:1.5;">'+sample+(d.sub.length>4?(' … 외 '+(d.sub.length-4)+'개'):'')+'</div>';
+    }
+  });
+  if((plan.sub||[]).length>8)h+='<div style="font-size:9.5px;color:#c0bcb2;text-align:center;">… 외 '+(plan.sub.length-8)+'개 설계</div>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;">'
+    +'<button id="gdCancel" style="flex:1;border:1px solid #e0d8c4;background:#fff;color:#9a8a6a;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">그냥 목표로</button>'
+    +'<button id="gdOk" style="flex:2;border:none;background:#c2410c;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;">이대로 만들기</button></div>';
+  sheet.innerHTML=h;
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  sheet.querySelector('#gdOk').addEventListener('click',function(){wrap.remove();onConfirm(true);});
+  sheet.querySelector('#gdCancel').addEventListener('click',function(){wrap.remove();onConfirm(false);});
+}
 function _goalHasSub(g){return g&&g.sub&&g.sub.length>0;}
 // 계층 이름: 깊이(0=청사진, 1=설계, 2+=작업)에 따라
 // depth = 드릴 깊이(0부터). num = 부모 기준 순번(1부터)
@@ -14194,7 +14309,7 @@ function renderGoalPage(container){
   var bar=document.createElement('div');
   bar.style.cssText='margin:8px 14px 12px;flex-shrink:0;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e8e8e5;border-radius:21px;padding:5px 5px 5px 15px;box-shadow:0 3px 14px rgba(0,0,0,0.08);';
   var inp=document.createElement('input');
-  inp.placeholder=isAllG?'새 목표 (예: 책 10권 읽기)':isStarG?'북마크 목표 추가':'"'+_goalView+'"에 목표 추가';
+  inp.placeholder=isAllG?'목표 입력 (예: 30강 책 3회독)':isStarG?'북마크 목표 추가':'"'+_goalView+'"에 목표 추가';
   inp.style.cssText='flex:1;border:none;background:transparent;font-size:11px;outline:none;font-family:inherit;min-width:0;color:#111;';
   var btn=document.createElement('button');
   btn.setAttribute('aria-label','목표 추가');
@@ -14203,12 +14318,35 @@ function renderGoalPage(container){
   function commit(){
     var t=inp.value.trim();
     if(!t)return;
-    var target=_goalParse(t);
-    _goals.push({id:_goalNewId(),title:t,done:false,target:target,cur:0,kw:target?_goalKws(t):[],star:isStarG,folder:(!isAllG&&!isStarG)?_goalView:null,sub:[]});
-    if(window._saveState)window._saveState();
-    renderGoalPage(container);
-    var ni=container.querySelector('input');
-    if(ni)ni.focus();
+    // 문장 자동 분해 시도 (전체 목표 화면에서만)
+    var plan=(isAllG)?_goalAutoDecompose(t):null;
+    function addPlain(){
+      var target=_goalParse(t);
+      _goals.push({id:_goalNewId(),title:t,done:false,target:target,cur:0,kw:target?_goalKws(t):[],star:isStarG,folder:(!isAllG&&!isStarG)?_goalView:null,sub:[]});
+      if(window._saveState)window._saveState();
+      renderGoalPage(container);
+      var ni2=container.querySelector('input');if(ni2)ni2.focus();
+    }
+    if(plan&&plan.sub&&plan.sub.length){
+      inp.value='';
+      _goalDecomposePreview(plan,function(ok){
+        if(ok){
+          var built=_goalBuildFromPlan(plan);
+          built.star=isStarG;built.folder=(!isAllG&&!isStarG)?_goalView:null;
+          _goals.push(built);
+          if(window._saveState)window._saveState();
+          renderGoalPage(container);
+        }else{
+          // 그냥 단순 목표로
+          var target=_goalParse(t);
+          _goals.push({id:_goalNewId(),title:t,done:false,target:target,cur:0,kw:target?_goalKws(t):[],star:isStarG,folder:(!isAllG&&!isStarG)?_goalView:null,sub:[]});
+          if(window._saveState)window._saveState();
+          renderGoalPage(container);
+        }
+      });
+      return;
+    }
+    addPlain();
   }
   btn.addEventListener('click',commit);
   inp.addEventListener('keydown',function(e){if(e.key==='Enter')commit();});
