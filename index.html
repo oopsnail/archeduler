@@ -4139,8 +4139,12 @@ function _healthRenderHistory(body){
   else _histCycleNote(body);
 }
 function _histWorkout(body,todayK){
+  var _todayMid=new Date();_todayMid.setHours(0,0,0,0);
   var keys=Object.keys(_healthData.workouts||{}).filter(function(k){
-    var arr=_healthData.workouts[k];return arr&&arr.length;
+    var arr=_healthData.workouts[k];if(!arr||!arr.length)return false;
+    // 미래 날짜(내일 이후)는 기록에 안 보이게
+    var p=k.split('-');var kd=new Date(+p[0],+p[1]-1,+p[2]);kd.setHours(0,0,0,0);
+    return kd<=_todayMid;
   }).sort(function(a,b){
     var pa=a.split('-'),pb=b.split('-');
     return new Date(+pb[0],+pb[1]-1,+pb[2])-new Date(+pa[0],+pa[1]-1,+pa[2]);
@@ -4200,8 +4204,11 @@ function _histWorkout(body,todayK){
 }
 function _histDiet(body,todayK){
   var MEALS=[['breakfast','🌅','아침'],['lunch','☀️','점심'],['dinner','🌙','저녁'],['snack','🍎','간식']];
+  var _todayMidD=new Date();_todayMidD.setHours(0,0,0,0);
   var keys=Object.keys(_healthData.meals||{}).filter(function(k){
     var m=_healthData.meals[k];if(!m)return false;
+    var p=k.split('-');var kd=new Date(+p[0],+p[1]-1,+p[2]);kd.setHours(0,0,0,0);
+    if(kd>_todayMidD)return false; // 미래 제외
     return MEALS.some(function(mm){return m[mm[0]]&&m[mm[0]].text;});
   }).sort(function(a,b){
     var pa=a.split('-'),pb=b.split('-');
@@ -4673,6 +4680,7 @@ var _calTable=[
 function _vDayKey(dt){return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();}
 // ===== 운동 통계 (주간 중심) =====
 function _statsWorkoutWeekly(body){
+  if(typeof window._woHeatOpen==='undefined')window._woHeatOpen=null; // 펼친 달 'YYYY-M' 또는 null
   var today=new Date((typeof _homeDate!=='undefined'&&_homeDate)?_homeDate:new Date());
   var WD=['일','월','화','수','목','금','토'];
   // 이번 주(월~일)
@@ -4703,55 +4711,117 @@ function _statsWorkoutWeekly(body){
   bar.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
   var barsHtml=days.map(function(o){
     var h=Math.round(o.doneN/maxC*100);
+    if(o.isFuture){
+      // 미래(내일 이후)는 막대 없이 요일만 흐리게
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
+        +'<div style="font-size:8px;color:#9a948a;font-weight:700;height:11px;"></div>'
+        +'<div style="width:100%;height:60px;"></div>'
+        +'<div style="font-size:8px;color:#d0ccc2;font-weight:400;">'+WD[o.dt.getDay()]+'</div></div>';
+    }
     return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
       +'<div style="font-size:8px;color:#9a948a;font-weight:700;height:11px;">'+(o.doneN||'')+'</div>'
-      +'<div style="width:100%;height:60px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.doneN?8:0)+'%;background:'+(o.isToday?'linear-gradient(180deg,#e0653e,#c2410c)':o.isFuture?'#eef0ec':'linear-gradient(180deg,#2a9d5f,#1a7a4a)')+';border-radius:4px 4px 0 0;min-height:'+(o.doneN?'4px':'0')+';"></div></div>'
+      +'<div style="width:100%;height:60px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+Math.max(h,o.doneN?8:0)+'%;background:'+(o.isToday?'linear-gradient(180deg,#e0653e,#c2410c)':'linear-gradient(180deg,#2a9d5f,#1a7a4a)')+';border-radius:4px 4px 0 0;min-height:'+(o.doneN?'4px':'0')+';"></div></div>'
       +'<div style="font-size:8px;color:'+(o.isToday?'#e0653e':'#9a948a')+';font-weight:'+(o.isToday?'800':'400')+';">'+WD[o.dt.getDay()]+'</div></div>';
   }).join('');
   bar.innerHTML='<div style="font-size:11px;font-weight:700;color:#111;margin-bottom:8px;">이번 주 운동량</div>'
     +'<div style="display:flex;gap:6px;align-items:flex-end;">'+barsHtml+'</div>';
   body.appendChild(bar);
-  // 운동 잔디밭 (최근 12주, 요일 × 주 격자)
+  // 운동 잔디밭 (루틴 히트맵 스타일: 시작일부터 한 줄, 탭하면 그 달 전체)
   var trend=document.createElement('div');
   trend.style.cssText='background:#fff;border:0.5px solid #ececE4;border-radius:13px;padding:13px;margin:6px 0;';
-  var GWEEKS=12,anyW=false,grassDays=0;
   var _tMid=new Date();_tMid.setHours(0,0,0,0);
-  var todayKeyG=_vDayKey(_tMid);
-  var colsHtml='';
-  for(var wi=GWEEKS-1;wi>=0;wi--){
-    var wStart=new Date(monday);wStart.setDate(monday.getDate()-wi*7);
-    var cells='';
-    for(var di=0;di<7;di++){
-      var gd=new Date(wStart);gd.setDate(wStart.getDate()+di);gd.setHours(0,0,0,0);
-      var gk=_vDayKey(gd);
-      var gn=(_healthData.workouts[gk]||[]).filter(function(w){return w.done;}).length;
-      if(gn>0){anyW=true;grassDays++;}
-      var isFut=gd>_tMid;
-      var gcol=isFut?'#f8f8f5':gn===0?'#eef0ec':gn===1?'#c5e8d2':gn===2?'#88ce9f':'#1a7a4a';
-      var isTd=(gk===todayKeyG);
-      cells+='<div title="'+gk+' · 완료 '+gn+'개" style="width:100%;height:11px;border-radius:2px;background:'+gcol+';'+(isTd?'box-shadow:inset 0 0 0 1.5px #e0653e;':'')+'"></div>';
-    }
-    colsHtml+='<div style="display:flex;flex-direction:column;gap:3px;">'+cells+'</div>';
+  // 첫 운동 기록일 찾기 (미래 제외)
+  var doneKeys=Object.keys(_healthData.workouts||{}).filter(function(kk){
+    var p=kk.split('-');var kd=new Date(+p[0],+p[1]-1,+p[2]);kd.setHours(0,0,0,0);
+    if(kd>_tMid)return false; // 미래 제외
+    return (_healthData.workouts[kk]||[]).some(function(w){return w.done;});
+  });
+  var grassDays=doneKeys.length;
+  function _woCount(dt){var kk=_vDayKey(dt);return (_healthData.workouts[kk]||[]).filter(function(w){return w.done;}).length;}
+  function _woCol(n){return n===0?'#eef0ec':n===1?'#c5e8d2':n===2?'#88ce9f':'#1a7a4a';}
+  // 시작일 = 첫 기록일, 없으면 오늘. 미래는 그리지 않음(오늘까지만)
+  var startDate;
+  if(doneKeys.length){
+    var minMs=Infinity;
+    doneKeys.forEach(function(kk){var p=kk.split('-');var dd=new Date(+p[0],+p[1]-1,+p[2]);if(dd.getTime()<minMs)minMs=dd.getTime();});
+    startDate=new Date(minMs);
+  }else{startDate=new Date(_tMid);}
+  startDate.setHours(0,0,0,0);
+  var totalDays=Math.round((_tMid-startDate)/86400000)+1; // 시작일~오늘 (포함)
+  if(totalDays<1)totalDays=1;
+  var head=document.createElement('div');
+  head.style.cssText='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;';
+  head.innerHTML='<span style="font-size:11px;font-weight:700;color:#111;">운동 잔디밭</span>'
+    +'<span style="font-size:9px;color:#9a948a;">시작일부터 '+grassDays+'일</span>';
+  trend.appendChild(head);
+  // 한 줄 스트립 (시작일 → 오늘, 최근이 오른쪽). 14칸 폭 격자로 여러 줄 자연 배치
+  var strip=document.createElement('div');
+  strip.style.cssText='display:grid;grid-template-columns:repeat(14,1fr);gap:3px;';
+  // 최근 약 4주(28칸)까지만 스트립에 (그 이상은 달 펼치기로), 시작일이 더 최근이면 그만큼만
+  var stripSpan=Math.min(28,totalDays);
+  for(var si=stripSpan-1;si>=0;si--)(function(si){
+    var gd=new Date(_tMid);gd.setDate(_tMid.getDate()-si);gd.setHours(0,0,0,0);
+    var n=_woCount(gd);
+    var isTd=(_vDayKey(gd)===_vDayKey(_tMid));
+    var cell=document.createElement('div');
+    cell.style.cssText='aspect-ratio:1;border-radius:3px;background:'+_woCol(n)+';'+(isTd?'box-shadow:inset 0 0 0 1.4px #e0653e;':'')+'cursor:pointer;';
+    cell.title=_vDayKey(gd)+' · 완료 '+n+'개';
+    cell.addEventListener('click',function(){
+      var mk=gd.getFullYear()+'-'+(gd.getMonth()+1);
+      window._woHeatOpen=(window._woHeatOpen===mk)?null:mk;
+      renderHealthPage(_healthContainer());
+    });
+    strip.appendChild(cell);
+  })(si);
+  trend.appendChild(strip);
+  // 범례
+  var leg=document.createElement('div');
+  leg.style.cssText='display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:9px;';
+  leg.innerHTML='<span style="font-size:7px;color:#b0aaa0;">적음</span>'
+    +'<span style="width:9px;height:9px;border-radius:2px;background:#eef0ec;"></span>'
+    +'<span style="width:9px;height:9px;border-radius:2px;background:#c5e8d2;"></span>'
+    +'<span style="width:9px;height:9px;border-radius:2px;background:#88ce9f;"></span>'
+    +'<span style="width:9px;height:9px;border-radius:2px;background:#1a7a4a;"></span>'
+    +'<span style="font-size:7px;color:#b0aaa0;">많음</span>';
+  trend.appendChild(leg);
+  var hint=document.createElement('div');
+  hint.style.cssText='font-size:8px;color:#c0bcb2;text-align:center;margin-top:6px;';
+  hint.textContent='칸을 탭하면 그 달 전체가 열려요';
+  trend.appendChild(hint);
+  // 펼친 달 달력
+  if(window._woHeatOpen){
+    var mp=window._woHeatOpen.split('-');var yy=+mp[0],mo2=+mp[1]-1;
+    var first=new Date(yy,mo2,1).getDay(),daysN=new Date(yy,mo2+1,0).getDate();
+    var mlabel=document.createElement('div');
+    mlabel.style.cssText='font-size:9px;font-weight:700;color:#72726c;margin-top:13px;border-top:0.5px solid #f0efe9;padding-top:11px;';
+    mlabel.textContent=(mo2+1)+'월 운동 기록';
+    trend.appendChild(mlabel);
+    var wk=document.createElement('div');
+    wk.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:6px;';
+    ['일','월','화','수','목','금','토'].forEach(function(w){
+      var sp=document.createElement('span');sp.style.cssText='text-align:center;font-size:7px;color:#85857f;';sp.textContent=w;wk.appendChild(sp);
+    });
+    trend.appendChild(wk);
+    var mg=document.createElement('div');
+    mg.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:3px;';
+    for(var b=0;b<first;b++)mg.appendChild(document.createElement('span'));
+    for(var dd=1;dd<=daysN;dd++)(function(dd){
+      var cellDate=new Date(yy,mo2,dd);cellDate.setHours(0,0,0,0);
+      var future=cellDate>_tMid;
+      var beforeStart=cellDate<startDate;
+      var n=_woCount(cellDate);
+      var isTd=(_vDayKey(cellDate)===_vDayKey(_tMid));
+      var sp=document.createElement('span');
+      var bg=(future||beforeStart)?'#f8f8f5':_woCol(n);
+      sp.style.cssText='aspect-ratio:1;border-radius:4px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;color:'+(n>=2?'#fff':'#9a948a')+';'+(isTd?'box-shadow:inset 0 0 0 1.4px #e0653e;':'')+((future||beforeStart)?'opacity:0.5;':'');
+      sp.textContent=(future||beforeStart)?'':dd;
+      sp.title=_vDayKey(cellDate)+' · 완료 '+n+'개';
+      mg.appendChild(sp);
+    })(dd);
+    trend.appendChild(mg);
   }
-  var dayLabels=['월','','수','','금','','일'].map(function(l){
-    return '<span style="font-size:6.5px;color:#b0aaa0;height:11px;line-height:11px;">'+l+'</span>';
-  }).join('');
-  trend.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;">'
-      +'<span style="font-size:11px;font-weight:700;color:#111;">운동 잔디밭</span>'
-      +'<span style="font-size:9px;color:#9a948a;">최근 12주 · '+grassDays+'일</span></div>'
-    +'<div style="display:flex;gap:3px;">'
-      +'<div style="display:flex;flex-direction:column;gap:3px;margin-right:2px;">'+dayLabels+'</div>'
-      +'<div style="flex:1;display:grid;grid-template-columns:repeat('+GWEEKS+',1fr);gap:3px;">'+colsHtml+'</div>'
-    +'</div>'
-    +'<div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:9px;">'
-      +'<span style="font-size:7px;color:#b0aaa0;">적음</span>'
-      +'<span style="width:9px;height:9px;border-radius:2px;background:#eef0ec;"></span>'
-      +'<span style="width:9px;height:9px;border-radius:2px;background:#c5e8d2;"></span>'
-      +'<span style="width:9px;height:9px;border-radius:2px;background:#88ce9f;"></span>'
-      +'<span style="width:9px;height:9px;border-radius:2px;background:#1a7a4a;"></span>'
-      +'<span style="font-size:7px;color:#b0aaa0;">많음</span></div>';
   body.appendChild(trend);
-  if(!anyW && weekTotal===0){
+  if(!grassDays && weekTotal===0){
     var emp=document.createElement('div');emp.style.cssText='text-align:center;font-size:10px;color:#b0aaa0;margin-top:10px;';
     emp.textContent='운동을 완료하면 여기에 기록이 쌓여요';body.appendChild(emp);
   }
@@ -11146,26 +11216,129 @@ function _recMoodsFor(k){
 function _recMoodBar(k,container){
   var moods=_recMoodsFor(k).slice().sort(function(a,b){return (a.ts||0)-(b.ts||0);});
   var bar=document.createElement('div');
-  bar.style.cssText='display:flex;align-items:center;gap:8px;padding:2px 16px 12px;flex-shrink:0;flex-wrap:wrap;';
+  bar.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:2px 16px 12px;flex-shrink:0;flex-wrap:wrap;';
   // 찍은 기분들 (작은 표정 + 시각)
   var wrap=document.createElement('div');
-  wrap.style.cssText='display:flex;gap:7px;align-items:center;flex-wrap:wrap;';
+  wrap.style.cssText='display:flex;gap:7px;align-items:flex-start;flex-wrap:wrap;';
   moods.forEach(function(m){
     var chip=document.createElement('span');
-    chip.style.cssText='display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;';
+    chip.style.cssText='position:relative;display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;';
     chip.innerHTML='<span style="width:28px;height:28px;border-radius:50%;border:1px solid #f0e9dd;background:#fff;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,20)+'</span>'
       +'<span style="font-size:6.5px;color:#b0a690;margin-top:2px;">'+(m.time||'')+'</span>';
-    chip.addEventListener('click',function(){_openRecMoodEdit(k,m,container);});
+    _bindMoodChip(chip,k,m,container);
     wrap.appendChild(chip);
   });
   bar.appendChild(wrap);
   // ＋ 지금 기분 버튼
   var add=document.createElement('span');
-  add.style.cssText='font-size:10.5px;color:#b0966a;font-weight:700;background:#fbf3e5;border-radius:14px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+  add.style.cssText='font-size:10.5px;color:#b0966a;font-weight:700;background:#fbf3e5;border-radius:14px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;';
   add.textContent='＋ 지금 기분';
   add.addEventListener('click',function(){_openRecMoodPick(k,null,container);});
   bar.appendChild(add);
   return bar;
+}
+// 칩 상호작용: 짧게=메모 말풍선(없으면 ＋추가), 길게=수정/삭제
+function _bindMoodChip(chip,k,m,container){
+  var timer=null,longFired=false,startX=0,startY=0,moved=false;
+  function clearBubbles(){var b=document.getElementById('moodBubble');if(b)b.remove();}
+  function showBubble(){
+    clearBubbles();
+    var host=document.querySelector('.phone')||document.body;
+    if(getComputedStyle(host).position==='static')host.style.position='relative';
+    var rect=chip.getBoundingClientRect();
+    var hrect=host.getBoundingClientRect();
+    var bub=document.createElement('div');
+    bub.id='moodBubble';
+    var hasMemo=m.note&&m.note.trim();
+    bub.style.cssText='position:absolute;z-index:3500;max-width:180px;background:'+(hasMemo?'#2b2926':'#fff')+';color:'+(hasMemo?'#f0ece2':'#b0966a')+';border-radius:12px;padding:'+(hasMemo?'9px 12px':'0')+';font-size:11px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.18);word-break:break-word;'+(hasMemo?'border:none;':'border:1.5px dashed #e0c89a;');
+    if(hasMemo){
+      bub.innerHTML=_escMoodNote(m.note);
+    }else{
+      // ＋ 메모 추가 버튼
+      bub.style.padding='0';
+      var plus=document.createElement('div');
+      plus.style.cssText='display:flex;align-items:center;gap:5px;padding:8px 13px;cursor:pointer;font-weight:700;';
+      plus.innerHTML='<span style="font-size:14px;">＋</span><span>메모 추가</span>';
+      plus.addEventListener('click',function(ev){ev.stopPropagation();clearBubbles();_openRecMoodNote(k,m,container);});
+      bub.appendChild(plus);
+    }
+    host.appendChild(bub);
+    // 위치: 칩 위 중앙
+    var cx=rect.left-hrect.left+rect.width/2;
+    var top=rect.top-hrect.top;
+    bub.style.left='0px';bub.style.top='0px';
+    var bw=bub.offsetWidth,bh=bub.offsetHeight;
+    var left=cx-bw/2;
+    if(left<8)left=8;
+    if(left+bw>hrect.width-8)left=hrect.width-8-bw;
+    bub.style.left=left+'px';
+    bub.style.top=(top-bh-8)+'px';
+    // 꼬리 (말풍선 하단 중앙, 아래를 가리킴)
+    var tail=document.createElement('div');
+    tail.style.cssText='position:absolute;bottom:-6px;left:'+(cx-left-5)+'px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid '+(hasMemo?'#2b2926':'#fff')+';';
+    bub.appendChild(tail);
+    // 바깥 탭하면 닫기
+    setTimeout(function(){
+      document.addEventListener('click',function closer(e){
+        if(bub.contains(e.target))return;
+        bub.remove();document.removeEventListener('click',closer);
+      });
+    },0);
+  }
+  var usedTouch=false;
+  chip.addEventListener('touchstart',function(e){
+    usedTouch=true;
+    longFired=false;moved=false;
+    var t=e.touches[0];startX=t.clientX;startY=t.clientY;
+    timer=setTimeout(function(){longFired=true;if(navigator.vibrate)try{navigator.vibrate(12);}catch(_){}clearBubbles();_openRecMoodEdit(k,m,container);},500);
+  },{passive:true});
+  chip.addEventListener('touchmove',function(e){
+    var t=e.touches[0];if(Math.abs(t.clientX-startX)>8||Math.abs(t.clientY-startY)>8){moved=true;clearTimeout(timer);}
+  },{passive:true});
+  chip.addEventListener('touchend',function(e){
+    clearTimeout(timer);
+    if(longFired){e.preventDefault();return;}
+    if(moved)return;
+    e.preventDefault();showBubble();
+  });
+  // 데스크톱(마우스): 짧은클릭=말풍선, 길게=수정
+  var mdTimer=null,mdLong=false;
+  chip.addEventListener('mousedown',function(e){
+    if(e.button!==0||usedTouch)return;mdLong=false;
+    mdTimer=setTimeout(function(){mdLong=true;clearBubbles();_openRecMoodEdit(k,m,container);},500);
+  });
+  chip.addEventListener('mouseup',function(e){
+    clearTimeout(mdTimer);
+    if(usedTouch||mdLong)return;
+    showBubble();
+  });
+  chip.addEventListener('mouseleave',function(){clearTimeout(mdTimer);});
+  chip.addEventListener('contextmenu',function(e){e.preventDefault();clearBubbles();_openRecMoodEdit(k,m,container);});
+}
+function _escMoodNote(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// 메모만 추가/수정하는 가벼운 시트
+function _openRecMoodNote(k,m,container){
+  var host=document.querySelector('.phone')||document.body;
+  var old=document.getElementById('recMoodNoteSheet');if(old)old.remove();
+  var wrap=document.createElement('div');wrap.id='recMoodNoteSheet';
+  wrap.style.cssText='position:absolute;inset:0;z-index:3600;display:flex;align-items:flex-end;';
+  var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
+  dim.addEventListener('click',function(){wrap.remove();});
+  var sheet=document.createElement('div');
+  sheet.style.cssText='position:relative;width:100%;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  sheet.innerHTML='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>'
+    +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:13px;">'
+      +'<span style="width:34px;height:34px;border-radius:50%;border:1px solid #f0e9dd;background:#fbfaf7;display:flex;align-items:center;justify-content:center;">'+_moodFaceSVG(m.mood,24)+'</span>'
+      +'<div><div style="font-size:13px;font-weight:800;color:#2b2925;">'+(_MOODS.find(function(x){return x.id===m.mood;})||{label:''}).label+'</div>'
+      +'<div style="font-size:10px;color:#a89e8c;">'+(m.time||'')+'</div></div></div>'
+    +'<input id="rmnNote" placeholder="이 순간의 메모" value="'+(m.note?_escMoodNote(m.note).replace(/"/g,'&quot;'):'')+'" style="width:100%;border:none;background:#f7f6f1;border-radius:12px;padding:12px 14px;font-size:12px;color:#2b2925;outline:none;box-sizing:border-box;font-family:inherit;">'
+    +'<button id="rmnSave" style="width:100%;border:none;background:#e0a54a;color:#fff;font-size:13px;font-weight:700;padding:14px;border-radius:14px;cursor:pointer;font-family:inherit;margin-top:11px;">저장</button>';
+  wrap.appendChild(dim);wrap.appendChild(sheet);host.appendChild(wrap);
+  var inp=sheet.querySelector('#rmnNote');
+  setTimeout(function(){try{inp.focus();}catch(e){}},80);
+  function save(){m.note=(inp.value||'').trim();if(window._saveState)window._saveState();wrap.remove();renderLogPage(container);}
+  sheet.querySelector('#rmnSave').addEventListener('click',save);
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter')save();});
 }
 // 기분 고르기 시트 (24개 감정 + 시각 자동 + 한 줄 메모)
 function _openRecMoodPick(k,editMood,container){
