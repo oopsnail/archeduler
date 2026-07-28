@@ -1687,6 +1687,12 @@ function _isMissed(e,y,m,d){
   var now=new Date();
   var evDate=new Date(y,m,d);
   var todayD=new Date(_ty,_tm,_td);
+  // 기간 일정: 종료일이 오늘 이후면 아직 진행 중 → 지남 아님
+  if(e.endDate&&e.endDate.y!=null){
+    var endD=new Date(e.endDate.y,e.endDate.m,e.endDate.d);
+    if(endD>=todayD)return false;
+    return true; // 종료일도 지났으면 지남
+  }
   if(evDate<todayD)return true; // 지난 날짜의 미완료
   if(evDate>todayD)return false; // 미래
   // 오늘: 시간이 지났는지
@@ -1746,7 +1752,7 @@ function getRangeBarsForDay(y,m,day){
         else if(isEnd)pos='end';
         else if(dow===0)pos='weekstart'; // 주 시작(일요일)에 왼쪽 둥글게
         // 이름 표시: 시작일이거나, 주 시작(일요일)이면 다시 보여줌
-        const showName=isStart||dow===0;
+        const showName=true; // 모든 날에 이름 표시 (어느 칸을 봐도 무슨 일정인지)
         // 현재 칸부터 종료일까지 남은 일수(현재 포함) — 이름 막대가 실제 기간을 넘지 않게
         const _curDt=new Date(y,m,day), _endDt=new Date(ev.endDate.y,ev.endDate.m,ev.endDate.d);
         const remainDays=Math.round((_endDt-_curDt)/(1000*60*60*24))+1;
@@ -1816,16 +1822,14 @@ function mkDay(cls,num,evs,y,m,day,isDim){const d=document.createElement('div');
       bar.style.cursor='pointer';bar.style.pointerEvents='auto';
       bar.addEventListener('click',function(ev2){ev2.stopPropagation();try{openDetail(rb.ev,rb.sy,rb.sm,rb.sd);}catch(e){}});
     }
-    // 이름은 시작/주시작 셀에서만, 막대 위에 겹쳐서 여러 칸으로 흘러넘치게(배경 없이)
+    // 이름을 각 칸마다 표시 (어느 날을 봐도 무슨 일정인지 보이게)
     if(rb.showName){
-      var _extra=Math.min(daysLeftInWeek,(rb.remainDays||1)-1);
       const lbl=document.createElement('div');
       lbl.className='rb-name-float';
       lbl.textContent=rb.name;
       lbl.style.color=_rbc[1];
       lbl.style.top=(24+i*13)+'px';
-      // 이름이 걸칠 수 있는 최대 폭 = (이번 칸 + 이어지는 칸 수)
-      lbl.style.width='calc('+(_extra+1)*100+'% + '+(_extra*3)+'px)';
+      lbl.style.right='2px'; // 이 칸 안에서만 (넘치면 …)
       lbl.style.pointerEvents='none';
       d.appendChild(lbl);
     }
