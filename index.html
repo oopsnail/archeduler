@@ -4638,7 +4638,7 @@ function _renderWeightPage(body){
       +(extra||'')+'</div>';
   }
   var bmiExtra=cat?'<span style="display:inline-block;font-size:8px;font-weight:800;padding:2px 6px;border-radius:6px;margin-top:4px;background:'+cat.bg+';color:'+cat.color+';">'+cat.label+'</span>':'<div style="font-size:8px;color:#c0bcb2;margin-top:4px;">키 필요</div>';
-  stats.innerHTML=sbox('체중',curW!=null?curW.toFixed(1):'--','kg')
+  stats.innerHTML=sbox('체중',curW!=null?curW.toFixed(2):'--','kg')
     +sbox('키',curH!=null?curH.toFixed(0):'--','cm')
     +sbox('BMI',bmi!=null?bmi.toFixed(1):'--','',bmiExtra);
   body.appendChild(stats);
@@ -4661,12 +4661,12 @@ function _renderWeightPage(body){
     var monthChange=null;
     if(monthKeys.length>=2)monthChange=person.weights[monthKeys[monthKeys.length-1]]-person.weights[monthKeys[0]];
     function tbox(v,label,col){return '<div style="flex:1;background:#faf9f5;border-radius:10px;padding:9px 6px;text-align:center;"><div style="font-size:15px;font-weight:800;line-height:1;color:'+col+';">'+v+'</div><div style="font-size:8px;color:#9a948a;margin-top:3px;">'+label+'</div></div>';}
-    var remainTxt=(remainAbs<0.05)?'달성!':((lose?'-':'+')+remainAbs.toFixed(1));
-    var remainCol=(remainAbs<0.05)?'#1a7a4a':'#e0653e';
-    var mcTxt=(monthChange==null)?'—':((monthChange<0?'':'+')+monthChange.toFixed(1));
+    var remainTxt=(remainAbs<0.005)?'달성!':((lose?'-':'+')+remainAbs.toFixed(2));
+    var remainCol=(remainAbs<0.005)?'#1a7a4a':'#e0653e';
+    var mcTxt=(monthChange==null)?'—':((monthChange<0?'':'+')+monthChange.toFixed(2));
     var mcCol=(monthChange==null)?'#9a948a':(monthChange<0?'#1a7a4a':'#c17a7a');
     var sr=document.createElement('div');sr.style.cssText='display:flex;gap:8px;';
-    sr.innerHTML=tbox(remainTxt,'목표까지(kg)',remainCol)+tbox(mcTxt,'이번 달 변화',mcCol)+tbox(tgtW.toFixed(1),'목표(kg)','#3aa0d9');
+    sr.innerHTML=tbox(remainTxt,'목표까지(kg)',remainCol)+tbox(mcTxt,'이번 달 변화',mcCol)+tbox(tgtW.toFixed(2),'목표(kg)','#3aa0d9');
     card2.appendChild(sr);
     var editG=document.createElement('div');editG.style.cssText='text-align:center;font-size:9.5px;color:#b0aaa0;margin-top:9px;cursor:pointer;';editG.textContent='🎯 목표 체중 수정';
     editG.addEventListener('click',function(){_openTargetWeightSheet();});
