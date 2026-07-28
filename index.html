@@ -2454,7 +2454,18 @@ document.getElementById('detailBody').addEventListener('click',(e)=>{
 });
 function renderEvs(){
   const k=key(selectedYear,selectedMonth,selectedDay);
-  let evs=events[k]||[];
+  let evs=(events[k]||[]).slice();
+  // 이 날에 걸쳐있는 기간 일정도 포함 (시작일이 아니어도 보이게)
+  var _selDt=new Date(selectedYear,selectedMonth,selectedDay);
+  Object.keys(events).forEach(function(ek){
+    if(ek===k)return; // 시작일 키는 이미 포함됨
+    (events[ek]||[]).forEach(function(e){
+      if(!e.endDate||e.endDate.y==null)return;
+      var sp=ek.split('-');var sdt=new Date(+sp[0],+sp[1]-1,+sp[2]);
+      var edt=new Date(e.endDate.y,e.endDate.m,e.endDate.d);
+      if(sdt<=_selDt&&_selDt<=edt){e._spanFrom=ek;evs.push(e);}
+    });
+  });
   if(_calCatFilter)evs=evs.filter(_catMatch);
   if(_recordMode)evs=[]; // 기록 모드: 일정은 타임라인에 안 나오게 (기록만)
   const isT=selectedYear===_ty&&selectedMonth===_tm&&selectedDay===_td;
@@ -3027,6 +3038,142 @@ document.getElementById('homeDateTap').addEventListener('click',openHomeCal);
 document.getElementById('hcalDim').addEventListener('click',closeHomeCal);
 // ===== 브리핑 모드 =====
 let _newsMode=false;
+// ===== 추천 습관 알고리즘 =====
+// 사용자 데이터(일정·루틴·기록·체크·인덱스·기분)를 분석해 맞춤 습관을 제안
+function _recommendHabit(){
+  var recs=[];
+  var todayKey=(function(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+  // --- 1. 루틴 분석: 최근 성공률·연속·중단 ---
+  try{
+    (_routines||[]).forEach(function(r){
+      var keys=Object.keys(r.history||{});
+      var doneCount=keys.filter(function(k){return r.history[k]===true;}).length;
+      // 최근 7일 성공 여부
+      var recent7=0,recentDone=0;
+      for(var i=0;i<7;i++){var dk=_dayKeyOffset(i);if(_rState(r,dk)!=='na'){recent7++;if(r.history[dk]===true)recentDone++;}}
+      var rate=recent7?recentDone/recent7:0;
+      if(r.type==='good'){
+        if(doneCount>=7&&rate>=0.7){
+          recs.push({score:80+doneCount,emoji:'🔥',title:'"'+r.text+'" 습관이 자리잡고 있어요',body:'최근 꾸준히 이어가고 있어요. 여기에 작은 습관 하나를 더 붙여보면 어떨까요? 이미 하는 일 직후에 새 습관을 이어붙이면 성공률이 높아져요.',tag:'루틴 확장'});
+        }else if(recent7>=3&&rate<0.4){
+          recs.push({score:70,emoji:'🌱',title:'"'+r.text+"\"을(를) 다시 가볍게",body:'최근 며칠 놓쳤네요. 목표를 절반으로 줄여 부담을 낮춰보세요. 작게라도 매일 이어가는 게 완벽하게 가끔 하는 것보다 오래가요.',tag:'루틴 회복'});
+        }
+      }else if(r.type==='bad'){
+        var failFree=0;for(var j=0;j<14;j++){var dk2=_dayKeyOffset(j);if(r.history[dk2]===true)failFree++;}
+        if(failFree>=5)recs.push({score:75,emoji:'💪',title:'"'+r.text+"\" 잘 참고 있어요",body:'최근 잘 지켜지고 있어요. 참기 힘든 시간대에 대체 행동(물 마시기·산책)을 미리 정해두면 더 쉬워져요.',tag:'절제 유지'});
+      }
+    });
+  }catch(e){}
+  // --- 2. 일정 태그 빈도: 자주 하는 활동 → 루틴화 제안 ---
+  try{
+    var tagCount={},nameCount={};
+    Object.keys(events||{}).forEach(function(k){
+      (events[k]||[]).forEach(function(e){
+        if(e.endDate)return;
+        if(e.tag)tagCount[e.tag]=(tagCount[e.tag]||0)+1;
+        var nm=(e.name||'').trim();if(nm)nameCount[nm]=(nameCount[nm]||0)+1;
+      });
+    });
+    // 같은 이름 일정이 3회 이상 → 루틴으로
+    Object.keys(nameCount).forEach(function(nm){
+      if(nameCount[nm]>=3){
+        var already=(_routines||[]).some(function(r){return r.text.indexOf(nm)>=0||nm.indexOf(r.text)>=0;});
+        if(!already)recs.push({score:60+nameCount[nm],emoji:'🔁',title:'"'+nm+"\", 루틴으로 만들어볼까요?",body:'"'+nm+'" 일정을 여러 번 반복했어요('+nameCount[nm]+'회). 루틴 탭에 등록하면 매일 체크하며 흐름을 이어갈 수 있어요.',tag:'루틴 제안'});
+      }
+    });
+    // 가장 많은 태그 관련
+    var topTag=Object.keys(tagCount).sort(function(a,b){return tagCount[b]-tagCount[a];})[0];
+    if(topTag&&tagCount[topTag]>=4){
+      recs.push({score:55,emoji:'🎯',title:'"'+topTag+'"에 에너지를 많이 쓰고 있어요',body:'요즘 "'+topTag+'" 관련 일이 많아요. 이 영역에 짧은 회고 습관(하루 3분 기록)을 더하면 방향을 더 또렷하게 잡을 수 있어요.',tag:'집중 영역'});
+    }
+  }catch(e){}
+  // --- 3. 기록(로그) 분석: 자주 남기는 활동 ---
+  try{
+    var logWords={},logDays=0;
+    Object.keys(_dailyLogs||{}).forEach(function(k){
+      var arr=(_dailyLogs[k]||[]).filter(function(l){return !l.budget;});
+      if(arr.length)logDays++;
+      arr.forEach(function(l){var t=(l.text||'').trim();if(t.length>=2)logWords[t]=(logWords[t]||0)+1;});
+    });
+    if(logDays>=3)recs.push({score:50,emoji:'📔',title:'기록하는 습관이 붙고 있어요',body:'며칠째 하루를 기록하고 있어요. 자기 전 "오늘 잘한 일 하나" 한 줄을 더하면, 뿌듯함이 쌓여 내일의 동기가 돼요.',tag:'기록 습관'});
+  }catch(e){}
+  // --- 4. 기분 데이터: 저조한 흐름이면 회복 습관 ---
+  try{
+    var moods=(_mindData&&_mindData.moods)||{};
+    var lowCount=0,moodDays=0;
+    Object.keys(moods).forEach(function(k){
+      moodDays++;
+      var mid=moods[k]&&moods[k].mood;
+      if(mid&&/(sad|tired|angry|anxious|down|지침|슬픔|화남|불안|우울)/i.test(String(mid)))lowCount++;
+    });
+    if(moodDays>=3&&lowCount>=moodDays*0.5){
+      recs.push({score:65,emoji:'🌿',title:'조금 지쳐 보이는 날들이었어요',body:'최근 기분이 가라앉는 날이 많았어요. 아침 햇빛 5분 쬐기나 가벼운 산책 같은 작은 회복 습관을 하루에 하나 넣어보세요.',tag:'마음 회복'});
+    }
+  }catch(e){}
+  // --- 5. 인덱스/메모 축적 → 되돌아보기 습관 ---
+  try{
+    var idxN=((_idxData&&_idxData.fragments)||[]).length;
+    if(idxN>=5)recs.push({score:45,emoji:'🔖',title:'모아둔 생각이 '+idxN+'개나 돼요',body:'인덱스에 담아둔 조각들이 쌓였어요. 주 1회 "다시 읽는 시간"을 정해두면, 흩어진 생각이 연결되며 아이디어가 자라나요.',tag:'회고 습관'});
+  }catch(e){}
+  // --- 기본 추천 (데이터 부족 시) ---
+  if(!recs.length){
+    var defaults=[
+      {emoji:'💧',title:'아침 물 한 잔으로 시작하기',body:'일어나자마자 물 한 잔. 몸을 깨우는 가장 쉬운 습관이에요. 이미 하는 일(양치·기상) 직후에 붙이면 자연스럽게 자리잡아요.',tag:'추천 습관'},
+      {emoji:'📝',title:'하루 3줄 기록하기',body:'자기 전 오늘 있었던 일 3줄. 기록 탭에 남겨보세요. 짧아도 매일 쌓이면 나를 이해하는 지도가 돼요.',tag:'추천 습관'},
+      {emoji:'🚶',title:'점심 후 10분 걷기',body:'식후 짧은 산책은 소화와 집중력에 좋아요. 루틴 탭에 등록하고 매일 체크해보세요.',tag:'추천 습관'}
+    ];
+    var pick=defaults[_epochDayNum()%defaults.length];pick.score=10;recs.push(pick);
+  }
+  // 점수순 + 날짜 시드로 약간 섞기 (매일 조금씩 다르게)
+  recs.sort(function(a,b){return b.score-a.score;});
+  var top=recs.slice(0,3);
+  var seed=(window.__habitSeedOverride!=null)?window.__habitSeedOverride:_epochDayNum();
+  return top[seed%top.length];
+}
+function _renderHabitCard(container){
+  var rec=_recommendHabit();
+  if(!rec)return;
+  var card=document.createElement('div');
+  card.style.cssText='background:linear-gradient(135deg,#1a2e1f,#24352a);border-radius:16px;padding:16px 16px 15px;margin-bottom:14px;position:relative;overflow:hidden;';
+  card.innerHTML='<div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;">'
+      +'<span style="font-size:8px;font-weight:800;color:#8fd0a5;letter-spacing:1.5px;">오늘의 추천 습관</span>'
+      +'<span style="font-size:7.5px;color:#5f7a68;background:rgba(143,208,165,0.14);padding:2px 6px;border-radius:5px;font-weight:700;">'+_esc(rec.tag||'')+'</span>'
+    +'</div>'
+    +'<div style="display:flex;gap:11px;align-items:flex-start;">'
+      +'<div style="font-size:26px;line-height:1;flex-shrink:0;">'+rec.emoji+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+        +'<div style="font-family:\'Gowun Batang\',serif;font-size:14px;font-weight:700;color:#f0ede4;line-height:1.4;margin-bottom:6px;">'+_esc(rec.title)+'</div>'
+        +'<div style="font-size:11px;color:#b4c2b8;line-height:1.65;">'+_esc(rec.body)+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:13px;">'
+      +'<button class="habit-add-btn" style="flex:1;border:none;background:#8fd0a5;color:#12281a;font-size:10.5px;font-weight:800;padding:9px;border-radius:10px;cursor:pointer;font-family:inherit;">루틴에 추가</button>'
+      +'<button class="habit-refresh-btn" style="border:0.5px solid rgba(143,208,165,0.4);background:transparent;color:#8fd0a5;font-size:10.5px;font-weight:700;padding:9px 13px;border-radius:10px;cursor:pointer;font-family:inherit;">다른 추천</button>'
+    +'</div>';
+  container.appendChild(card);
+  card.querySelector('.habit-add-btn').addEventListener('click',function(){
+    try{
+      // 제목에서 따옴표 안 내용 또는 핵심을 루틴 텍스트로
+      var mt=rec.title.match(/[""]([^""]+)[""]/);
+      var txt=mt?mt[1]:rec.title.replace(/,.*$/,'').slice(0,20);
+      _routines.push({text:txt,type:'good',created:(function(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})(),history:{}});
+      if(window._saveState)window._saveState();
+      showToast('루틴에 "'+txt+'" 추가됨','add','ti-check');
+    }catch(e){showToast('추가에 실패했어요','add','ti-x');}
+  });
+  card.querySelector('.habit-refresh-btn').addEventListener('click',function(){
+    _habitRefreshSeed=(_habitRefreshSeed||0)+1;
+    window.__habitSeedOverride=_epochDayNum()+_habitRefreshSeed;
+    var parent=card.parentNode;var idx=[].indexOf.call(parent.children,card);
+    card.remove();
+    var tmp=document.createElement('div');_renderHabitCard(tmp);
+    window.__habitSeedOverride=null;
+    var newCard=tmp.firstChild;
+    if(newCard){if(parent.children[idx])parent.insertBefore(newCard,parent.children[idx]);else parent.appendChild(newCard);}
+  });
+}
+var _habitRefreshSeed=0;
+
 function _koreanTimeLead(t){
   if(!t)return '';
   var m=t.match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
@@ -3434,6 +3581,8 @@ function renderNewsPage(container){
       showToast('오늘의 브리핑이 발행됐어요 📰','add','ti-news');
     });
   }else{
+    // 추천 습관 카드 (데이터 분석 기반) — 맨 위에
+    try{_renderHabitCard(bodyEl);}catch(e){}
     // 자정이 지난 오늘: 어제 하루 요약을 맨 위에
     if(isToday){
       var yst=new Date(y,m,d); yst.setDate(yst.getDate()-1);
@@ -3445,9 +3594,11 @@ function renderNewsPage(container){
     var k=key(y,m,d);
     var evs=(events[k]||[]).filter(function(e){return e.type!=='budget';});
     if(!evs.length){
-      bodyEl.innerHTML+='<div style="background:#fdfbf6;border:0.5px solid #ece7da;border-radius:14px;padding:26px 14px;text-align:center;">'
-        +'<div style="font-size:11px;font-weight:800;color:#1a1a1a;font-family:Georgia,serif;">오늘은 지면이 한산합니다</div>'
-        +'<div style="font-size:9px;color:#7d7d77;margin-top:5px;">실린 기사가 없어요 — 일정을 추가해 보세요</div></div>';
+      var _emptyNews=document.createElement('div');
+      _emptyNews.style.cssText='background:#fdfbf6;border:0.5px solid #ece7da;border-radius:14px;padding:26px 14px;text-align:center;';
+      _emptyNews.innerHTML='<div style="font-size:11px;font-weight:800;color:#1a1a1a;font-family:Georgia,serif;">오늘은 지면이 한산합니다</div>'
+        +'<div style="font-size:9px;color:#7d7d77;margin-top:5px;">실린 기사가 없어요 — 일정을 추가해 보세요</div>';
+      bodyEl.appendChild(_emptyNews);
     }else{
       renderNewsBody(bodyEl,evs,y,m,d,isToday);
     }
@@ -9471,8 +9622,21 @@ function _sentRenderToday(body){
   body.appendChild(lb);
   var card=document.createElement('div');
   card.innerHTML=_sentCardHTML(s);
-  card.style.cssText='margin-bottom:8px;cursor:pointer;';
-  card.addEventListener('click',function(){_openSentSheet(s);});
+  card.style.cssText='margin-bottom:8px;cursor:pointer;touch-action:pan-y;';
+  card.addEventListener('click',function(){if(card._swiped){card._swiped=false;return;}_openSentSheet(s);});
+  // 스와이프로 문장 넘기기 (왼쪽=다음, 오른쪽=이전)
+  (function(){
+    var sx=0,sy=0,dragging=false,moved=false;
+    function start(e){var p=e.touches?e.touches[0]:e;sx=p.clientX;sy=p.clientY;dragging=true;moved=false;card.style.transition='none';}
+    function move(e){if(!dragging)return;var p=e.touches?e.touches[0]:e;var dx=p.clientX-sx,dy=p.clientY-sy;if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>6){moved=true;card.style.transform='translateX('+dx+'px)';card.style.opacity=(1-Math.min(Math.abs(dx)/400,0.35)).toFixed(2);if(e.cancelable)e.preventDefault();}}
+    function end(e){if(!dragging)return;dragging=false;var p=e.changedTouches?e.changedTouches[0]:e;var dx=p.clientX-sx;card.style.transition='transform 0.2s ease,opacity 0.2s ease';if(Math.abs(dx)>50){card._swiped=true;if(dx<0){_sentTodayPos=(_sentTodayPos+1)%picks.length;}else{_sentTodayPos=(_sentTodayPos-1+picks.length)%picks.length;}card.style.transform='translateX('+(dx<0?-window.innerWidth:window.innerWidth)+'px)';card.style.opacity='0';setTimeout(function(){rerenderSentPage();},160);}else{card.style.transform='';card.style.opacity='';if(moved)card._swiped=true;}}
+    card.addEventListener('touchstart',start,{passive:true});
+    card.addEventListener('touchmove',move,{passive:false});
+    card.addEventListener('touchend',end);
+    card.addEventListener('mousedown',start);
+    document.addEventListener('mousemove',function(e){if(dragging)move(e);});
+    document.addEventListener('mouseup',function(e){if(dragging)end(e);});
+  })();
   body.appendChild(card);
   // 액션 줄
   var act=document.createElement('div');
@@ -9515,13 +9679,34 @@ function _sentRenderToday(body){
   body.appendChild(hd);
   recent.forEach(function(x){
     var r=document.createElement('div');
-    r.style.cssText='background:#fdfbf4;border:0.5px solid #e6dfcd;border-radius:12px;padding:12px 14px;margin-bottom:6px;cursor:pointer;';
+    r.style.cssText='background:#fdfbf4;border:0.5px solid #e6dfcd;border-radius:12px;margin-bottom:6px;overflow:hidden;';
     var f=_sentFont(x.font);
-    r.innerHTML='<div style="font-family:'+f.css+';font-size:'+(12.5*(f.size||1)).toFixed(1)+'px;color:#33302a;line-height:1.7;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">'+_esc(x.text)+'</div>'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;">'
-      +'<span style="font-size:9.5px;color:#a89e8c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_esc(x.book||'—')+'</span>'
-      +'<span style="font-size:9px;color:#c0b8a2;flex-shrink:0;">'+_esc((x.date||'').split('-').slice(1).join('.'))+'</span></div>';
-    r.addEventListener('click',function(){_openSentSheet(x);});
+    var fsz=(12.5*(f.size||1)).toFixed(1);
+    var dateTxt=_esc((x.date||'').split('-').slice(1).join('.'));
+    // 접힌 줄: 한 줄 (텍스트 … + 날짜 + 화살표)
+    var head=document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer;';
+    head.innerHTML='<span style="font-family:'+f.css+';font-size:'+fsz+'px;color:#33302a;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_esc(x.text)+'</span>'
+      +'<span style="font-size:9px;color:#c0b8a2;flex-shrink:0;">'+dateTxt+'</span>'
+      +'<span class="sent-caret" style="font-size:11px;color:#b5aa90;flex-shrink:0;transition:transform 0.2s;">▾</span>';
+    // 펼친 영역
+    var panel=document.createElement('div');
+    panel.style.cssText='max-height:0;overflow:hidden;transition:max-height 0.28s ease;';
+    panel.innerHTML='<div style="padding:0 14px 12px;">'
+      +'<div style="font-family:'+f.css+';font-size:'+fsz+'px;color:#33302a;line-height:1.75;white-space:pre-wrap;word-break:keep-all;padding-top:2px;border-top:0.5px solid #ece5d5;margin-top:2px;padding-top:10px;">'+_esc(x.text)+'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">'
+        +'<span style="font-size:9.5px;color:#a89e8c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">'+_esc(x.book||'—')+(x.author?(' · '+_esc(x.author)):'')+(x.page?(' · p.'+_esc(x.page)):'')+'</span>'
+        +'<button class="sent-more" style="flex-shrink:0;border:0.5px solid #e6dfcd;background:#fff;color:#8a7f66;font-size:10px;font-weight:700;padding:6px 12px;border-radius:9px;cursor:pointer;font-family:inherit;">상세 ›</button>'
+      +'</div>'
+      +'</div>';
+    r.appendChild(head);r.appendChild(panel);
+    var open=false;
+    head.addEventListener('click',function(){
+      open=!open;
+      panel.style.maxHeight=open?(panel.scrollHeight+20)+'px':'0';
+      var caret=head.querySelector('.sent-caret');if(caret)caret.style.transform=open?'rotate(180deg)':'';
+    });
+    panel.querySelector('.sent-more').addEventListener('click',function(ev){ev.stopPropagation();_openSentSheet(x);});
     body.appendChild(r);
   });
 }
@@ -9808,9 +9993,10 @@ function _openSentSheet(s){
   var dim=document.createElement('div');dim.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,0.35);';
   dim.addEventListener('click',function(){wrap.remove();});
   var sheet=document.createElement('div');
-  sheet.style.cssText='position:relative;width:100%;background:#fdfbf4;border-radius:22px 22px 0 0;padding:18px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;';
+  sheet.style.cssText='position:relative;width:100%;background:#fdfbf4;border-radius:22px 22px 0 0;padding:10px 16px 26px;z-index:1;animation:goalSheetUp 0.22s ease;box-sizing:border-box;max-height:88%;overflow-y:auto;-webkit-overflow-scrolling:touch;';
   var cnt=(_sentData.copied||{})[s.id]||0;
-  sheet.innerHTML='<div id="sdCard" style="margin-bottom:14px;">'+_sentCardHTML(s)+'</div>'
+  sheet.innerHTML='<div style="width:36px;height:4px;border-radius:2px;background:#e2ddce;margin:0 auto 14px;"></div>'
+    +'<div id="sdCard" style="margin-bottom:14px;">'+_sentCardHTML(s)+'</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:8px;">'
       +'<button class="sd-b" id="sdEdit" style="flex:1;border:0.5px solid #e6dfcd;background:#fff;color:#6b6455;font-size:11.5px;font-weight:700;padding:11px 4px;border-radius:11px;cursor:pointer;font-family:inherit;">다듬기</button>'
       +'<button class="sd-b" id="sdLike" style="flex:1;border:0.5px solid #e6dfcd;background:'+(s.liked?'#fdeeee':'#fff')+';color:'+(s.liked?'#c0392b':'#6b6455')+';font-size:11.5px;font-weight:700;padding:11px 4px;border-radius:11px;cursor:pointer;font-family:inherit;">'+(s.liked?'♥ 마음에 듦':'♡ 마음에 들면')+'</button>'
@@ -11543,7 +11729,20 @@ function renderHomeView(){
   document.getElementById('homeDateWk').textContent=WKF3[_homeDate.getDay()]+'요일';
   document.getElementById('homeDateYm').textContent=`${y}년 ${m+1}월`;
   const k=key(y,m,d);
-  const evs=events[k]||[];
+  const evs=(events[k]||[]).slice();
+  // 이 날에 걸쳐있는 기간 일정도 포함
+  (function(){
+    var _hdt=new Date(y,m,d);
+    Object.keys(events).forEach(function(ek){
+      if(ek===k)return;
+      (events[ek]||[]).forEach(function(e){
+        if(!e.endDate||e.endDate.y==null)return;
+        var sp=ek.split('-');var sdt=new Date(+sp[0],+sp[1]-1,+sp[2]);
+        var edt=new Date(e.endDate.y,e.endDate.m,e.endDate.d);
+        if(sdt<=_hdt&&_hdt<=edt){e._spanFrom=ek;evs.push(e);}
+      });
+    });
+  })();
   const total=evs.length;
   const done=evs.filter(e=>e.done).length;
   const pct=total?Math.round(done/total*100):0;
