@@ -129,7 +129,7 @@
   .ev-lbl{font-size:9px;font-weight:600;color:#85857f;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;}
   .evrow{display:flex;align-items:center;gap:9px;padding:5px 0;border-bottom:0.5px solid #f0f0ee;}
   .evrow:last-child{border-bottom:none;}
-  .evrow.isnew{background:#edfaf3;border-radius:9px;padding:5px 8px;border-bottom:none;margin-bottom:3px;animation:popIn 0.2s ease;}
+  .evrow.isnew{background:#edfaf3;border-radius:9px;padding:5px 8px;margin:0 -8px 3px;border-bottom:none;animation:popIn 0.2s ease;}
   @keyframes popIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
   .evbar{width:3px;border-radius:2px;align-self:stretch;min-height:22px;flex-shrink:0;}
   .evname{font-size:10px;font-weight:500;color:#111;}.evrow.isnew .evname{color:#1a7a4a;}
@@ -2474,6 +2474,14 @@ function renderEvs(){
   rows.innerHTML='';
   var dayLogs=_recordMode?((_dailyLogs[k]||[]).filter(function(lg){return !lg.budget;})):[];
   if(!evs.length&&!dayLogs.length){const noev=document.createElement('div');noev.className='noev';noev.textContent=_recordMode?'기록 없음':'일정 없음';rows.appendChild(noev);return;}
+  // 방금 추가(isNew) 강조는 잠깐만 — 렌더 후 2.5초 뒤 자동 해제
+  if(evs.some(function(e){return e.isNew;})){
+    setTimeout(function(){
+      var changed=false;
+      evs.forEach(function(e){if(e.isNew){e.isNew=false;changed=true;}});
+      if(changed){try{renderEvs();}catch(_e){}try{renderHomeView();}catch(_e){}}
+    },2500);
+  }
   evs.forEach(e=>{
     const wrap=document.createElement('div');
     wrap.style.cssText='position:relative;overflow:hidden;';
