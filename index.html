@@ -13049,6 +13049,7 @@ let _routines=[];
   ];
 })();
 let _routineOpen=-1;
+let _routineCalOffset=0; // 0=이번달, -1=지난달 ...
 function _rState(r,k){
   var kd=k.split('-').map(Number),cd=r.created.split('-').map(Number);
   if(new Date(kd[0],kd[1]-1,kd[2])<new Date(cd[0],cd[1]-1,cd[2]))return 'na';
@@ -13219,14 +13220,31 @@ function renderRoutinePage(container){
       })(i);
       card.appendChild(strip);
 
-      // 확장: 이번 달 달력 블록
+      // 확장: 선택한 달 달력 블록 (지난달도 볼 수 있게)
       if(open){
-        var now2=new Date(),yy=now2.getFullYear(),mo2=now2.getMonth();
-        var first=new Date(yy,mo2,1).getDay(),days=new Date(yy,mo2+1,0).getDate(),td2=now2.getDate();
-        var mlabel=document.createElement('div');
-        mlabel.style.cssText='font-size:8px;font-weight:700;color:#72726c;margin-top:10px;';
-        mlabel.textContent=(mo2+1)+'월 기록';
-        card.appendChild(mlabel);
+        var baseNow=new Date();
+        var viewD=new Date(baseNow.getFullYear(),baseNow.getMonth()+_routineCalOffset,1);
+        var yy=viewD.getFullYear(),mo2=viewD.getMonth();
+        var first=new Date(yy,mo2,1).getDay(),days=new Date(yy,mo2+1,0).getDate();
+        var isThisMonth=(_routineCalOffset===0);
+        var td2=isThisMonth?baseNow.getDate():99; // 이번달이 아니면 미래 제한 없음(과거달은 다 기록가능)
+        // 월 이동 헤더 (◀ 2026년 7월 ▶)
+        var navBar=document.createElement('div');
+        navBar.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-top:10px;';
+        var prevB=document.createElement('button');
+        prevB.style.cssText='border:none;background:#f2f2ee;color:#72726c;width:22px;height:22px;border-radius:7px;cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+        prevB.textContent='‹';
+        prevB.addEventListener('click',function(ev){ev.stopPropagation();_routineCalOffset--;rerenderRoutinePage();});
+        var mlabel2=document.createElement('div');
+        mlabel2.style.cssText='font-size:9px;font-weight:800;color:#57544c;';
+        mlabel2.textContent=yy+'년 '+(mo2+1)+'월';
+        var nextB=document.createElement('button');
+        var atCur=(_routineCalOffset>=0);
+        nextB.style.cssText='border:none;background:'+(atCur?'#f7f7f4':'#f2f2ee')+';color:'+(atCur?'#d0d0ca':'#72726c')+';width:22px;height:22px;border-radius:7px;cursor:'+(atCur?'default':'pointer')+';font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+        nextB.textContent='›';
+        if(!atCur)nextB.addEventListener('click',function(ev){ev.stopPropagation();_routineCalOffset++;rerenderRoutinePage();});
+        navBar.appendChild(prevB);navBar.appendChild(mlabel2);navBar.appendChild(nextB);
+        card.appendChild(navBar);
         var wk=document.createElement('div');
         wk.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:4px;';
         ['일','월','화','수','목','금','토'].forEach(function(w){
@@ -13251,6 +13269,16 @@ function renderRoutinePage(container){
           mg.appendChild(cell);
         })(dd);
         card.appendChild(mg);
+        // 달력 좌우 스와이프 → 지난달/다음달
+        (function(){
+          var sx=0,sy=0,drag=false;
+          function ts(e){var p=e.touches?e.touches[0]:e;sx=p.clientX;sy=p.clientY;drag=true;}
+          function tm(e){if(!drag)return;var p=e.touches?e.touches[0]:e;if(Math.abs(p.clientX-sx)>Math.abs(p.clientY-sy)&&Math.abs(p.clientX-sx)>10){if(e.cancelable)e.preventDefault();}}
+          function te(e){if(!drag)return;drag=false;var p=e.changedTouches?e.changedTouches[0]:e;var dx=p.clientX-sx;if(Math.abs(dx)<40)return;if(dx>0){_routineCalOffset--;rerenderRoutinePage();}else{if(_routineCalOffset<0){_routineCalOffset++;rerenderRoutinePage();}}}
+          mg.addEventListener('touchstart',function(e){e.stopPropagation();ts(e);},{passive:true});
+          mg.addEventListener('touchmove',function(e){tm(e);},{passive:false});
+          mg.addEventListener('touchend',function(e){e.stopPropagation();te(e);});
+        })();
         var hint=document.createElement('div');
         hint.style.cssText='font-size:7px;color:#9a9a93;margin-top:4px;';
         hint.textContent='칸을 탭해 기록 · '+(r.type==='bad'?'빨강 = 잘 참은 날':'초록 = 실천한 날')+' · ✕ = 실패';
@@ -13259,6 +13287,7 @@ function renderRoutinePage(container){
       card.addEventListener('click',function(){
         var willOpen=!open;
         _routineOpen=open?-1:ridx;
+        _routineCalOffset=0; // 열 때마다 이번달부터
         rerenderRoutinePage();
         if(willOpen){
           setTimeout(function(){
